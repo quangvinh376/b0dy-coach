@@ -372,6 +372,20 @@
   .note .mi{position:absolute;right:0;bottom:0;width:24px;height:24px;fill:none;stroke:var(--slate);stroke-width:1.5;stroke-linecap:square;stroke-linejoin:miter}
 
   /* ============ toast + vạch đang xử lý (giống app) ============ */
+  /* ============ vuốt xuống để làm mới (kiểu Threads: nội dung trượt xuống, vòng tròn vẽ dần theo lực kéo, đủ ngưỡng → xoay) ============ */
+  .ptr{position:absolute;left:50%;top:calc(max(20px,env(safe-area-inset-top,0px)) + 14px);width:28px;height:28px;margin-left:-14px;
+       opacity:0;transform:scale(.6);transform-origin:center;pointer-events:none;z-index:40;transition:opacity .18s ease,transform .18s ease}
+  .ptr.show{transition:none}
+  .ptr svg{width:28px;height:28px;display:block;transform:rotate(-90deg)}
+  .ptr .bg{fill:none;stroke:rgba(250,250,250,.14);stroke-width:2}
+  .ptr .fg{fill:none;stroke:var(--paper);stroke-width:2;stroke-linecap:butt;stroke-dasharray:69.1;stroke-dashoffset:69.1;transition:stroke .15s ease}
+  .ptr.armed .fg,.ptr.load .fg{stroke:var(--acid)}
+  .ptr.load svg{animation:ptrspin .8s linear infinite}
+  .ptr.load .fg{stroke-dashoffset:52;transition:stroke-dashoffset .25s ease}
+  .ptr.done .fg{stroke-dashoffset:0;transition:stroke-dashoffset .25s ease}
+  @keyframes ptrspin{to{transform:rotate(270deg)}}
+  .screen.ptr-anim>*{transition:transform .38s cubic-bezier(.22,.85,.22,1)}
+  @media (display-mode: standalone){ .ptr{top:calc(max(4px,env(safe-area-inset-top,0px)) + 14px)} }
   .toast{position:absolute;left:20px;right:20px;bottom:max(20px,env(safe-area-inset-bottom)); /* absolute trong body (body đã fixed + kéo dài) */
          background:var(--paper);color:var(--ink);padding:16px 18px;font-size:15px;display:none;z-index:70}
   .toast.show{display:block;animation:toastIn .28s cubic-bezier(.2,.8,.3,1)}
@@ -673,6 +687,7 @@
 </section>
 
 <div class="toast" id="toast"></div>
+<div class="ptr" id="ptr"><svg viewBox="0 0 28 28"><circle class="bg" cx="14" cy="14" r="11"/><circle class="fg" cx="14" cy="14" r="11"/></svg></div>
 
 <script>
 /* =====================================================================
@@ -681,7 +696,7 @@
    Không có API hoặc ?demo → chạy bằng data mẫu (không gọi mạng).
    ===================================================================== */
 var $=function(id){return document.getElementById(id)};
-var APP_VER='v1.4';
+var APP_VER='v1.5';
 /* ngày: nội bộ dùng ISO 'yyyy-MM-dd'; hiển thị 'dd/MM/yy' */
 function isoToday(d){ d=d||new Date(); return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2); }
 function vn(iso){ if(!iso) return ''; var p=String(iso).split('-'); return p.length===3 ? p[2]+'/'+p[1]+'/'+p[0].slice(2) : iso; }
@@ -786,6 +801,7 @@ function refreshData(quiet){
     buildClients(res); saveCache(res); state.dataTs=Date.now();
     if(cur) state.client=findClient(cur)||state.client;
     if(state.screen==='s-list') renderList(false);
+    else if(state.client && {'s-profile':1,'s-confirm':1,'s-history':1}[state.screen] && HOOK[state.screen]){ HOOK[state.screen](); var sc=$(state.screen); sc.querySelectorAll('.scroll').forEach(fogUpdate); mqStopAll(); mqInit(sc); }
   }).catch(function(){ state._refreshing=null; if(!quiet) toast('MÁY CHỦ CHẬM — dùng dữ liệu đã lưu'); });
   return state._refreshing;
 }
@@ -1577,6 +1593,69 @@ HOOK['s-done']=function(){
 function finish(){
   state.session=null; state.ex=null; state.rpe=0; state.doneNo=0; $('sm-note').value=''; saveSession();
   go('s-list','back'); refreshData(true); flush();
+}
+
+/* =====================================================================
+   VUỐT XUỐNG ĐỂ LÀM MỚI — dữ liệu (coach) + kiểm tra bản mới của app (không cần tắt app)
+   Chỉ bắt khi: chạm bắt đầu ở đầu vùng cuộn (scrollTop 0) hoặc nơi không cuộn; kéo xuống là chính.
+   Lực kéo qua hàm mềm 120·(1−e^(−dy/160)); ngưỡng 60px (≈120px ngón tay). Không đụng thước KG/REP.
+   ===================================================================== */
+var PTR={y0:0, x0:0, on:false, d:0, T:60, busy:false, el:null, hold:44, dir:0};
+function ptrProgress(p){ var fg=$('ptr').querySelector('.fg'); fg.style.strokeDashoffset=(69.1*(1-Math.min(1,p))).toFixed(1); }
+function ptrMove(d, anim){
+  var sc=state.screen&&$(state.screen); if(!sc) return;
+  sc.classList.toggle('ptr-anim', !!anim);
+  for(var i=0;i<sc.children.length;i++) sc.children[i].style.transform = d ? 'translateY('+d.toFixed(1)+'px)' : '';
+  var ptr=$('ptr'), p=Math.min(1, d/PTR.T);
+  ptr.style.opacity=d?String(Math.min(1, d/24)):'0'; ptr.style.transform='scale('+(0.6+0.4*p).toFixed(3)+')';
+}
+function ptrEligible(t){
+  if(!t || t.closest('.ruler, input, textarea, .ptr')) return false;
+  var sc=t.closest('.scroll'); if(sc && sc.scrollTop>0) return false;
+  return true;
+}
+document.addEventListener('touchstart', function(e){
+  if(PTR.busy || e.touches.length!==1) return;
+  PTR.on=ptrEligible(e.target); PTR.y0=e.touches[0].clientY; PTR.x0=e.touches[0].clientX; PTR.d=0; PTR.dir=0;
+}, {passive:true});
+document.addEventListener('touchmove', function(e){
+  if(!PTR.on || PTR.busy) return;
+  var dy=e.touches[0].clientY-PTR.y0, dx=e.touches[0].clientX-PTR.x0;
+  if(!PTR.dir){ if(Math.abs(dy)<6 && Math.abs(dx)<6) return; PTR.dir = (dy>0 && Math.abs(dy)>Math.abs(dx)) ? 1 : -1; if(PTR.dir<0){ PTR.on=false; return; } $('ptr').classList.add('show'); $('ptr').classList.remove('done'); }
+  if(dy<=0){ PTR.d=0; ptrMove(0,false); return; }
+  e.preventDefault();
+  PTR.d=120*(1-Math.exp(-dy/160));
+  ptrMove(PTR.d,false); ptrProgress(PTR.d/PTR.T);
+  var armed=PTR.d>=PTR.T; if(armed!==$('ptr').classList.contains('armed')){ $('ptr').classList.toggle('armed',armed); if(armed&&navigator.vibrate) navigator.vibrate(8); }
+}, {passive:false});
+function ptrEnd(){
+  if(!PTR.on) return; PTR.on=false;
+  var ptr=$('ptr'); ptr.classList.remove('show');
+  if(PTR.d>=PTR.T){ ptrRefresh(); return; }
+  ptr.classList.remove('armed'); ptrMove(0,true); ptrProgress(0);
+}
+document.addEventListener('touchend', ptrEnd, {passive:true});
+document.addEventListener('touchcancel', ptrEnd, {passive:true});
+/* làm mới: dữ liệu + bản app. Có bản mới → tải lại trang (PIN/buổi đang ghi đều nằm trong storage, không mất). */
+function checkUpdate(){
+  if(DEMO) return Promise.resolve(false);
+  try{ if(navigator.serviceWorker&&navigator.serviceWorker.getRegistration) navigator.serviceWorker.getRegistration().then(function(r){ if(r) r.update(); }).catch(function(){}); }catch(e){}
+  return fetch(location.pathname+'?u='+Date.now(), {cache:'no-store'}).then(function(r){ return r.text(); })
+    .then(function(t){ var m=t.match(/APP_VER='([^']*)'/); return !!(m && m[1]!==APP_VER); }).catch(function(){ return false; });
+}
+function ptrRefresh(){
+  var ptr=$('ptr'); PTR.busy=true; ptr.classList.add('load'); ptr.classList.remove('armed'); ptrMove(PTR.hold,true);
+  var t0=Date.now(), jobs=[checkUpdate(), state.pin&&!state.loading ? refreshData(true).catch(function(){}) : Promise.resolve(), flush().catch(function(){})];
+  Promise.all(jobs).then(function(r){
+    var wait=Math.max(0, 650-(Date.now()-t0));           /* xoay tối thiểu 0,65s cho mắt kịp thấy */
+    setTimeout(function(){
+      if(r[0]){ ptr.classList.remove('load'); ptr.classList.add('done'); setTimeout(function(){ location.reload(); }, 220); return; }
+      ptr.classList.remove('load'); ptr.classList.add('done');
+      setTimeout(function(){ ptrMove(0,true); ptr.style.opacity='0'; ptr.style.transform='scale(.6)'; PTR.busy=false; PTR.d=0;
+        setTimeout(function(){ ptr.classList.remove('done'); ptrProgress(0); }, 250);
+        if(state.pin && state.screen!=='s-pin') notifyHere('✓ ĐÃ LÀM MỚI · '+nowHM()); }, 260);
+    }, wait);
+  });
 }
 
 /* ---------------- khởi động ---------------- */
