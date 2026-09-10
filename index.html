@@ -33,7 +33,11 @@
 
   /* ============ HỆ CHUYỂN ĐỘNG — y nguyên app check-in ============ */
   .screen{position:absolute;inset:0;display:none;flex-direction:column;
-          padding:max(20px,env(safe-area-inset-top)) 20px max(16px,env(safe-area-inset-bottom))}
+          /* đáy: 21px trên vùng home indicator (34) = 55 như Figma A3 */
+          padding:max(20px,env(safe-area-inset-top)) 20px max(16px,calc(env(safe-area-inset-bottom,0px) + 21px))}
+  /* PWA iOS (black-translucent): khung nhìn cao = màn hình − thanh trạng thái (đo 15 Pro: 793/852) nhưng vẽ từ
+     mép trên → hở 59pt ở đáy. Kéo body dài thêm đúng inset trên để phủ hết màn hình. */
+  @media (display-mode: standalone){ body{bottom:auto;height:calc(100% + env(safe-area-inset-top,0px))} }
   .screen.on{display:flex}
   .screen.enter-fwd{animation:inF .46s cubic-bezier(.22,.85,.22,1) both}
   .screen.enter-back{animation:inB .46s cubic-bezier(.22,.85,.22,1) both}
@@ -362,7 +366,7 @@
   .note .mi{position:absolute;right:0;bottom:0;width:24px;height:24px;fill:none;stroke:var(--slate);stroke-width:1.5;stroke-linecap:square;stroke-linejoin:miter}
 
   /* ============ toast + vạch đang xử lý (giống app) ============ */
-  .toast{position:fixed;left:20px;right:20px;bottom:max(20px,env(safe-area-inset-bottom));
+  .toast{position:absolute;left:20px;right:20px;bottom:max(20px,env(safe-area-inset-bottom)); /* absolute trong body (body đã fixed + kéo dài) */
          background:var(--paper);color:var(--ink);padding:16px 18px;font-size:15px;display:none;z-index:70}
   .toast.show{display:block;animation:toastIn .28s cubic-bezier(.2,.8,.3,1)}
   @keyframes toastIn{from{opacity:0;transform:translateY(24px)}to{opacity:1;transform:none}}
@@ -671,7 +675,7 @@
    Không có API hoặc ?demo → chạy bằng data mẫu (không gọi mạng).
    ===================================================================== */
 var $=function(id){return document.getElementById(id)};
-var APP_VER='v1.3';
+var APP_VER='v1.3.1';
 /* ngày: nội bộ dùng ISO 'yyyy-MM-dd'; hiển thị 'dd/MM/yy' */
 function isoToday(d){ d=d||new Date(); return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2); }
 function vn(iso){ if(!iso) return ''; var p=String(iso).split('-'); return p.length===3 ? p[2]+'/'+p[1]+'/'+p[0].slice(2) : iso; }
