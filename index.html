@@ -227,7 +227,9 @@
   .enter-fwd .ring .pg,.enter-back .ring .pg{animation:ringIn 1s .5s cubic-bezier(.3,.7,.2,1) both}
   @keyframes ringIn{from{stroke-dashoffset:150.8}}
   /* hàng số đo 26px, zebra */
-  .rows{margin-top:30px}
+  .rows{margin-top:30px;flex:1;min-height:0}
+  .card.tap{cursor:pointer;transition:background .12s ease}
+  .card.tap:active{background:rgba(250,250,250,.11)}
   .row{display:flex;justify-content:space-between;align-items:center;height:26px;padding:5px 18px;
        font-family:var(--mono);font-size:12px;font-variant-numeric:tabular-nums}
   .row:nth-child(even){background:rgba(250,250,250,.04)}
@@ -283,7 +285,7 @@
   .ki{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.75;stroke-linecap:square}
 
   /* ============ A5 — lưới số đo + bàn phím số ============ */
-  .grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;align-content:start}
+  .grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px;align-content:start}
   .mt{height:74px;background:rgba(250,250,250,.07);padding:14px 18px 12px;display:flex;flex-direction:column;justify-content:space-between;
       text-align:left;box-shadow:inset 0 0 0 0 var(--acid);transition:box-shadow .2s ease}
   .mt.on{box-shadow:inset 0 0 0 2px var(--acid)}
@@ -304,9 +306,10 @@
   .titlerow .right{flex:none;padding-top:10px}
   .sec{font-family:var(--mono);font-size:11px;letter-spacing:.14em;color:var(--slate);margin:20px 0 12px}
   .sec:first-child{margin-top:16px}
-  .exgrid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  /* minmax(0,1fr): tên bài dài không được nong cột rộng hơn → luôn 50:50 */
+  .exgrid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px}
   .exgrid.first{margin-top:16px}
-  .ex{height:140px;background:rgba(250,250,250,.07);padding:18px;display:flex;flex-direction:column;text-align:left;
+  .ex{min-width:0;height:140px;background:rgba(250,250,250,.07);padding:18px;display:flex;flex-direction:column;text-align:left;
       color:var(--paper);transition:transform .12s ease}
   .ex:active{transform:scale(.98)}
   .ex .nm{font-size:17px;letter-spacing:-.01em;line-height:1.35}
@@ -471,12 +474,12 @@
 <!-- ================= A4 · Hồ sơ khách ================= -->
 <section class="screen" id="s-profile">
   <div class="top tight"><span class="brand"><svg class="lg" viewBox="0 0 132 43"><use href="#b0dy"/></svg><span class="em">/</span><span class="crumb mq"><span>HỒ SƠ KHÁCH HÀNG</span></span></span></div>
-  <div class="body scroll" id="p-scroll">
-    <div class="st">
+  <div class="body st">
       <h1 class="mq"><span id="p-name">—</span></h1>
       <div class="date" id="p-date"></div>
-      <div class="card" style="margin-top:28px">
-        <button class="hd" onclick="go('s-metric','fwd')"><span class="label" id="p-mlabel">CÂN NẶNG</span><svg class="ci"><use href="#i-chev"/></svg></button>
+      <!-- cả card chỉ số chính bấm được (không chỉ mũi tên) -->
+      <div class="card tap" style="margin-top:28px" role="button" tabindex="0" onclick="go('s-metric','fwd')">
+        <div class="hd"><span class="label" id="p-mlabel">CÂN NẶNG</span><svg class="ci"><use href="#i-chev"/></svg></div>
         <div class="rw">
           <div>
             <div class="v44"><span id="p-mval">—</span><i id="p-munit">KG</i></div>
@@ -495,8 +498,8 @@
           <svg class="ring" viewBox="0 0 56 56"><circle class="tr" cx="28" cy="28" r="24"/><circle class="pg" id="p-ring" cx="28" cy="28" r="24"/></svg>
         </div>
       </div>
-      <div class="rows" id="p-rows"></div>
-    </div>
+      <!-- chỉ bảng chỉ số cuộn; tên, ngày, 2 card đứng yên (Figma A4) -->
+      <div class="rows scroll" id="p-rows"></div>
   </div>
   <div class="stack">
     <button class="big acid" onclick="openMeasure()"><span>Nhập số đo mới nhất</span><svg class="bi"><use href="#i-plus"/></svg></button>
@@ -521,9 +524,9 @@
 
 <!-- ================= A4.1 · Chọn chỉ số ================= -->
 <section class="screen" id="s-metric">
-  <div class="top tight"><span class="brand"><svg class="lg" viewBox="0 0 132 43"><use href="#b0dy"/></svg><span class="em">/</span><span class="crumb mq"><span>CHỌN CHỈ SỐ</span></span></span></div>
+  <div class="top tight"><span class="brand"><svg class="lg" viewBox="0 0 132 43"><use href="#b0dy"/></svg><span class="em">/</span><span class="crumb mq"><span>CHỌN CHỈ SỐ CHÍNH</span></span></span></div>
   <div class="body st">
-    <h1>Chọn chỉ số</h1>
+    <h1>Chọn chỉ số chính</h1>
     <div class="scroll grow" id="m-list" style="margin-top:8px"></div>
   </div>
   <div class="stack">
@@ -678,7 +681,7 @@
    Không có API hoặc ?demo → chạy bằng data mẫu (không gọi mạng).
    ===================================================================== */
 var $=function(id){return document.getElementById(id)};
-var APP_VER='v1.3.2';
+var APP_VER='v1.4';
 /* ngày: nội bộ dùng ISO 'yyyy-MM-dd'; hiển thị 'dd/MM/yy' */
 function isoToday(d){ d=d||new Date(); return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2); }
 function vn(iso){ if(!iso) return ''; var p=String(iso).split('-'); return p.length===3 ? p[2]+'/'+p[1]+'/'+p[0].slice(2) : iso; }
@@ -1189,8 +1192,10 @@ function sendCheckin(m){
   state.ci={name:m.name, day:day, no:localNo, status:'pending'}; ciSave(); ciMark();
   busyLine(true);
   /* KHÔNG auto-retry lệnh check-in — chỉ coach chạm "thử lại" */
+  /* refreshData() có thể đã thay object khách trong lúc chờ → luôn làm việc trên object hiện hành (so theo tên) */
+  var live=function(){ return (state.client && state.client.name===m.name) ? state.client : (findClient(m.name)||m); };
   api({action:'checkin_coach', name:m.name, date:day}, 0, 600, 0, 30000).then(function(res){
-    busyLine(false);
+    busyLine(false); m=live();
     var ci=ciFor(m); if(!ci) return;                          /* đã sang ngày/khách khác */
     var err=res&&res.error;
     if(res && res.ok){
@@ -1202,21 +1207,30 @@ function sendCheckin(m){
     }
     if(err==='da_checkin'){ ciOk(m, ci, ci.no, '✓ ĐÃ CHECK-IN HÔM NAY'); return; }
     if(err==='sai_pin'){ state.ci=null; ciSave(); logout('MÃ PIN KHÔNG CÒN HIỆU LỰC'); return; }
-    ci.status='fail'; ciSave(); ciMark();
-    notifyHere(err==='wrong_ip' ? 'CHƯA CHECK-IN · CHỈ CHECK-IN ĐƯỢC KHI DÙNG WIFI PHÒNG'
-             : err==='khong_phai_khach_cua_ban' ? 'CHƯA CHECK-IN · KHÁCH KHÔNG THUỘC COACH CỦA BẠN'
-             : 'CHƯA CHECK-IN · '+upper(String(err||'LỖI MÁY CHỦ')), true);
+    ciFail(m, ci, err==='wrong_ip' ? 'CHỈ CHECK-IN ĐƯỢC Ở PHÒNG'
+                  : err==='khong_phai_khach_cua_ban' ? 'KHÁCH KHÔNG THUỘC COACH CỦA BẠN'
+                  : 'CHƯA CHECK-IN · '+upper(String(err||'LỖI MÁY CHỦ')));
   }).catch(function(){
-    busyLine(false);
+    busyLine(false); m=live();
     var ci=ciFor(m); if(!ci) return;
-    ci.status='fail'; ciSave(); ciMark();
-    notifyHere('CHƯA CHECK-IN · MÁY CHỦ CHẬM, CHẠM HEADER ĐỂ THỬ LẠI', true);
+    ciFail(m, ci, 'CHƯA CHECK-IN · MÁY CHỦ CHẬM, THỬ LẠI');
   });
+}
+/* check-in thất bại: đang trong buổi tập → đẩy về màn check-in NGAY (buổi ghi dở vẫn cất trong máy,
+   check-in lại thành công sẽ khôi phục). Đã check-out hoặc ở màn khác → chỉ báo đỏ tại chỗ. */
+var SESSION_SCREENS={'s-plan':1,'s-ex':1,'s-set':1,'s-summary':1};
+function ciFail(m, ci, text){
+  ci.status='fail'; ciSave();
+  if(SESSION_SCREENS[state.screen] && state.client && state.client.name===m.name){
+    state.session=null; state.ex=null;            /* rời buổi; lb_session giữ nguyên để khôi phục */
+    go('s-confirm','back'); notify('s-confirm', text, true); return;
+  }
+  ciMark(); notifyHere(text, true);
 }
 /* máy chủ xác nhận: chốt số buổi thật, sửa lại số buổi trên buổi đang ghi + các sự kiện còn trong hàng đợi */
 function ciOk(m, ci, no, text){
   var old=ci.no; ci.no=no; ci.status='ok'; ciSave();
-  if(state.session && state.client===m && state.session.session!==no){ state.session.session=no; saveSession(); }
+  if(state.session && state.client && state.client.name===m.name && state.session.session!==no){ state.session.session=no; saveSession(); }
   if(old!==no){ var ch=false; OUT.q.forEach(function(e){ if(e.name===m.name && e.date===ci.day && e.session===old){ e.session=no; ch=true; } }); if(ch) SS('lb_outbox', JSON.stringify(OUT.q)); }
   ciMark(); if(state.screen!=='s-list' && state.screen!=='s-pin') notifyHere(text);
   if(state.screen==='s-done') $('d-note').innerHTML=doneNote(m);
@@ -1289,7 +1303,7 @@ HOOK['s-profile']=function(){
     rows+='<div class="row"><span class="k">'+upper(x.name)+'</span><span class="r"><span class="d'+(dd.none?' none':'')+'">'+dd.t+'</span><span>'+fmtN(last(a))+' '+x.unit+'</span></span></div>';
   });
   $('p-rows').innerHTML=rows;
-  $('p-scroll').scrollTop=0;
+  $('p-rows').scrollTop=0;
 };
 
 /* =====================================================================
