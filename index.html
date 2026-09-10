@@ -380,10 +380,12 @@
   .ptr .bg{fill:none;stroke:rgba(250,250,250,.14);stroke-width:2}
   .ptr .fg{fill:none;stroke:var(--paper);stroke-width:2;stroke-linecap:butt;stroke-dasharray:69.1;stroke-dashoffset:69.1;transition:stroke .15s ease}
   .ptr.armed .fg,.ptr.load .fg{stroke:var(--acid)}
-  .ptr.load svg{animation:ptrspin .8s linear infinite}
-  .ptr.load .fg{stroke-dashoffset:52;transition:stroke-dashoffset .25s ease}
-  .ptr.done .fg{stroke-dashoffset:0;transition:stroke-dashoffset .25s ease}
+  /* đang tải: cung ngắn vừa xoay vừa co giãn (kiểu Material/Threads) — rõ ràng là "đang chạy" */
+  .ptr.load svg{animation:ptrspin .9s linear infinite}
+  .ptr.load .fg{animation:ptrdash 1.3s ease-in-out infinite}
+  .ptr.done .fg{stroke-dashoffset:0!important;animation:none;transition:stroke-dashoffset .25s ease}
   @keyframes ptrspin{to{transform:rotate(270deg)}}
+  @keyframes ptrdash{0%{stroke-dashoffset:60}50%{stroke-dashoffset:18}100%{stroke-dashoffset:60}}
   .screen.ptr-anim>*{transition:transform .38s cubic-bezier(.22,.85,.22,1)}
   @media (display-mode: standalone){ .ptr{top:calc(max(4px,env(safe-area-inset-top,0px)) + 14px)} }
   .toast{position:absolute;left:20px;right:20px;bottom:max(20px,env(safe-area-inset-bottom)); /* absolute trong body (body đã fixed + kéo dài) */
@@ -696,7 +698,7 @@
    Không có API hoặc ?demo → chạy bằng data mẫu (không gọi mạng).
    ===================================================================== */
 var $=function(id){return document.getElementById(id)};
-var APP_VER='v1.5';
+var APP_VER='v1.5.1';
 /* ngày: nội bộ dùng ISO 'yyyy-MM-dd'; hiển thị 'dd/MM/yy' */
 function isoToday(d){ d=d||new Date(); return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2); }
 function vn(iso){ if(!iso) return ''; var p=String(iso).split('-'); return p.length===3 ? p[2]+'/'+p[1]+'/'+p[0].slice(2) : iso; }
@@ -958,7 +960,8 @@ function notify(id, text, err){
   var sc=$(id); if(!sc||!sc.querySelector('.top .crumb')){ toast(text); return; }
   var top=sc.querySelector('.top'), crumb=top.querySelector('.crumb'), span=crumb.firstElementChild, cls=err?'nte':'nt';
   if(top._nt){ clearTimeout(top._nt); clearTimeout(top._nt2); } else top._orig=span.textContent;
-  function swap(t, on){ crumb.classList.add('swap'); setTimeout(function(){ span.textContent=t; top.classList.remove('nt','nte'); if(on) top.classList.add(cls); crumb.classList.remove('swap'); mqInit(top); },180); }
+  /* mqStop trước khi đổi chữ: huỷ hết timer marquee của chữ cũ, nếu không chữ gốc (ngắn) vẫn bị cuộn tiếp */
+  function swap(t, on){ crumb.classList.add('swap'); setTimeout(function(){ mqStop(top); span.textContent=t; top.classList.remove('nt','nte'); if(on) top.classList.add(cls); crumb.classList.remove('swap'); mqInit(top); },180); }
   top._nt=setTimeout(function(){ swap(text,true); }, 320);
   top._nt2=setTimeout(function(){ swap(top._orig,false); top._nt=0; top._orig=null; }, 320+2600);
 }
@@ -1643,17 +1646,27 @@ function checkUpdate(){
   return fetch(location.pathname+'?u='+Date.now(), {cache:'no-store'}).then(function(r){ return r.text(); })
     .then(function(t){ var m=t.match(/APP_VER='([^']*)'/); return !!(m && m[1]!==APP_VER); }).catch(function(){ return false; });
 }
+/* Vòng xoay chỉ chờ bước kiểm tra bản mới (nhanh, ≤1,5s); dữ liệu coach (máy chủ Apps Script 3–8s) tiếp tục ở nền
+   với vạch bận, xong thì báo V-B. Nhờ vậy cử chỉ luôn "nhả" nhanh dù máy chủ chậm. */
 function ptrRefresh(){
-  var ptr=$('ptr'); PTR.busy=true; ptr.classList.add('load'); ptr.classList.remove('armed'); ptrMove(PTR.hold,true);
-  var t0=Date.now(), jobs=[checkUpdate(), state.pin&&!state.loading ? refreshData(true).catch(function(){}) : Promise.resolve(), flush().catch(function(){})];
-  Promise.all(jobs).then(function(r){
+  var ptr=$('ptr'), fg=ptr.querySelector('.fg');
+  PTR.busy=true; ptr.classList.add('load'); ptr.classList.remove('armed'); fg.style.strokeDashoffset='';   /* bỏ inline để CSS .load xoay được */
+  ptrMove(PTR.hold,true);
+  var t0=Date.now();
+  var upd=Promise.race([checkUpdate(), new Promise(function(r){ setTimeout(function(){ r(false); },1500); })]);
+  var data=(state.pin&&!state.loading) ? refreshData(true).then(function(){ return true; }, function(){ return false; }) : Promise.resolve(null);
+  busyLine(true); Promise.all([data, flush().catch(function(){})]).then(function(r){
+    busyLine(false);
+    if(r[0]===true && state.pin && state.screen!=='s-pin') notifyHere('✓ ĐÃ LÀM MỚI · '+nowHM());
+    else if(r[0]===false) notifyHere('MÁY CHỦ CHẬM · DÙNG DỮ LIỆU ĐÃ LƯU', true);
+  });
+  upd.then(function(isNew){
     var wait=Math.max(0, 650-(Date.now()-t0));           /* xoay tối thiểu 0,65s cho mắt kịp thấy */
     setTimeout(function(){
-      if(r[0]){ ptr.classList.remove('load'); ptr.classList.add('done'); setTimeout(function(){ location.reload(); }, 220); return; }
       ptr.classList.remove('load'); ptr.classList.add('done');
+      if(isNew){ setTimeout(function(){ location.reload(); }, 220); return; }
       setTimeout(function(){ ptrMove(0,true); ptr.style.opacity='0'; ptr.style.transform='scale(.6)'; PTR.busy=false; PTR.d=0;
-        setTimeout(function(){ ptr.classList.remove('done'); ptrProgress(0); }, 250);
-        if(state.pin && state.screen!=='s-pin') notifyHere('✓ ĐÃ LÀM MỚI · '+nowHM()); }, 260);
+        setTimeout(function(){ ptr.classList.remove('done'); ptrProgress(0); }, 250); }, 260);
     }, wait);
   });
 }
