@@ -73,6 +73,13 @@
   .top{transition:border-color .3s ease}
   .top.nt{border-bottom-color:var(--acid)}
   .top.nt .crumb{color:var(--acid)}
+  /* thông báo lỗi (cùng cơ chế V-B, màu đỏ) + trạng thái "chưa check-in" bám header, chạm crumb để thử lại */
+  .top.nte{border-bottom-color:var(--red)}
+  .top.nte .crumb{color:var(--red)}
+  .top.cierr .crumb{color:var(--red);cursor:pointer}
+  .top.cierr{border-bottom-color:rgba(233,37,105,.5)}
+  /* màn admin — một chỉ số sống (IP thiết bị) + một hành động, y như app check-in */
+  .ipval{font-family:var(--mono);font-size:34px;letter-spacing:-.01em;color:var(--paper);margin-top:14px;font-variant-numeric:tabular-nums}
   .link{display:inline-flex;align-items:center;gap:8px;color:var(--ash);flex:none;margin-left:12px;
         padding:7px 11px;font-size:11px;letter-spacing:.14em;border:1px solid var(--hair);font-family:var(--mono);
         transition:transform .12s ease,border-color .12s ease,color .12s ease}
@@ -90,7 +97,10 @@
 
   /* ---- marquee: tiêu đề/tên cố định 1 dòng; dài quá → "…" rồi tự chạy dần sang trái, lặp lại ---- */
   .mq{display:block;white-space:nowrap;overflow:hidden;text-overflow:clip;min-width:0;max-width:100%;
-      transition:opacity .3s ease}
+      transition:opacity .3s ease;
+      /* overflow:hidden cắt phần chân chữ (g, y, ạ…) khi line-height < ascent+descent của font
+         → chừa đệm dưới rồi bù lại bằng margin âm: bố cục không đổi, chân chữ không mất */
+      padding-bottom:.16em;margin-bottom:-.16em}
   .mq.ell{text-overflow:ellipsis}
   .mq.run{-webkit-mask-image:linear-gradient(to right,transparent 0,#000 14px,#000 calc(100% - 24px),transparent 100%);
                   mask-image:linear-gradient(to right,transparent 0,#000 14px,#000 calc(100% - 24px),transparent 100%)}
@@ -174,6 +184,7 @@
   .meter .ma{background:var(--acid);transition-delay:.4s}
   .statline{margin-top:12px}
   .statline .ac{color:var(--acid)}
+  .statline .er{color:var(--red)}
   h1.three{margin-top:0}
 
   /* ============ A4 — hồ sơ ============ */
@@ -399,6 +410,24 @@
     <div class="pinerr" id="pin-err"></div>
     <div class="pad" id="pin-pad"></div>
     <button class="ghost" onclick="toast('Liên hệ chủ phòng để cấp lại mã PIN')">Quên mã PIN?</button>
+    <div class="label" id="diag" hidden style="margin-top:10px;line-height:1.6;letter-spacing:.06em"></div>
+  </div>
+</section>
+
+<!-- ================= ADMIN (vào bằng PIN admin ở màn PIN) — giữ y như app check-in ================= -->
+<section class="screen" id="s-admin">
+  <div class="top"><span class="brand"><svg class="lg" viewBox="0 0 132 43"><use href="#b0dy"/></svg><span class="em">/</span><span class="crumb mq"><span>ADMIN</span></span></span></div>
+  <div class="body st">
+    <h1>Admin</h1>
+    <div class="block">
+      <div class="label">IP CỦA THIẾT BỊ NÀY</div>
+      <div class="ipval" id="am-ip">—</div>
+      <div class="label statline" id="am-note">CẬP NHẬT ĐỂ LẤY IP NÀY LÀM IP CỦA PHÒNG</div>
+    </div>
+  </div>
+  <div class="stack">
+    <button class="big acid" onclick="registerIp()"><span>Cập nhật IP phòng</span><svg class="bi"><use href="#i-check"/></svg></button>
+    <button class="ghost" onclick="adminDone()">Xong</button>
   </div>
 </section>
 
@@ -642,7 +671,7 @@
    Không có API hoặc ?demo → chạy bằng data mẫu (không gọi mạng).
    ===================================================================== */
 var $=function(id){return document.getElementById(id)};
-var APP_VER='v1';
+var APP_VER='v1.3';
 /* ngày: nội bộ dùng ISO 'yyyy-MM-dd'; hiển thị 'dd/MM/yy' */
 function isoToday(d){ d=d||new Date(); return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2); }
 function vn(iso){ if(!iso) return ''; var p=String(iso).split('-'); return p.length===3 ? p[2]+'/'+p[1]+'/'+p[0].slice(2) : iso; }
@@ -810,6 +839,9 @@ function demoApi(body){
   var db=demoDb();
   return new Promise(function(res){ setTimeout(function(){
     if(body.action==='ping') return res({ok:true,pong:1});
+    /* demo: PIN 0000 = admin (mock), PIN khác = coach */
+    if(body.action==='admin') return res(body.apin==='0000' ? {ok:true} : {ok:false,error:'sai_pin'});
+    if(body.action==='setip') return res(body.apin==='0000' ? {ok:true, ip:body.ip||'demo'} : {ok:false,error:'sai_pin'});
     if(body.pin==='0000') return res({ok:false,error:'sai_pin'});
     if(body.action==='coach'){ var snap={}; db.clients.forEach(function(c){ snap[c.name]=c.snap; });
       return res({ok:true, coach:'Quyết', members:db.clients.map(function(c){return {name:c.name,done:c.done,total:c.total,left:c.left,coach:c.coach}}), snapshot:JSON.parse(JSON.stringify(snap)), library:null, today:isoToday()}); }
@@ -829,7 +861,13 @@ function demoApi(body){
 
 var state={screen:null, client:null, session:null, ex:null, kg:0, rep:8, profileBack:'s-confirm',
            tMetric:null, tVal:0, msForm:{}, msActive:'weight', rpe:0,
-           pin:'', coach:'', clients:[], lib:LIB_DEFAULT, ip:ST('lb_ip')||'', dataTs:0};
+           pin:'', apin:'', coach:'', clients:[], lib:LIB_DEFAULT, ip:ST('lb_ip')||'', dataTs:0, loading:false, ci:null};
+/* ---- check-in lạc quan: {name, day, no, status:'pending'|'ok'|'fail'} cất localStorage ----
+   Mở lại app khi còn 'pending' → coi như 'fail' (không biết máy chủ đã nhận chưa; thử lại thì
+   máy chủ trả da_checkin nếu đã ghi, nên KHÔNG thể ghi trùng). */
+try{ state.ci=JSON.parse(ST('lb_ci')||'null'); if(state.ci&&state.ci.status==='pending') state.ci.status='fail'; }catch(e){ state.ci=null; }
+function ciSave(){ SS('lb_ci', state.ci?JSON.stringify(state.ci):null); }
+function ciFor(m){ var c=state.ci; return (c && m && c.name===m.name && c.day===TODAY_ISO) ? c : null; }
 
 /* =====================================================================
    CHUYỂN MÀN — y nguyên app check-in
@@ -890,14 +928,20 @@ function setMeter(prefix, done, total, delay){
   }, delay);
 }
 /* thông báo V-B: crumb đổi thành dòng trạng thái Acid + hairline header Acid ~2,6s rồi trả lại */
-function notify(id, text){
-  var top=$(id).querySelector('.top'), crumb=top.querySelector('.crumb'), span=crumb.firstElementChild;
+function notify(id, text, err){
+  var sc=$(id); if(!sc||!sc.querySelector('.top .crumb')){ toast(text); return; }
+  var top=sc.querySelector('.top'), crumb=top.querySelector('.crumb'), span=crumb.firstElementChild, cls=err?'nte':'nt';
   if(top._nt){ clearTimeout(top._nt); clearTimeout(top._nt2); } else top._orig=span.textContent;
-  function swap(t, on){ crumb.classList.add('swap'); setTimeout(function(){ span.textContent=t; top.classList.toggle('nt',on); crumb.classList.remove('swap'); mqInit(top); },180); }
+  function swap(t, on){ crumb.classList.add('swap'); setTimeout(function(){ span.textContent=t; top.classList.remove('nt','nte'); if(on) top.classList.add(cls); crumb.classList.remove('swap'); mqInit(top); },180); }
   top._nt=setTimeout(function(){ swap(text,true); }, 320);
   top._nt2=setTimeout(function(){ swap(top._orig,false); top._nt=0; top._orig=null; }, 320+2600);
 }
+/* thông báo trên màn đang mở (kết quả việc chạy nền trả về lúc coach đã đi tiếp) */
+function notifyHere(text, err){ notify(state.screen, text, err); }
 function spin(on){ $('busy').classList.toggle('on', !!on); $('shield').classList.toggle('on', !!on); }
+/* vạch bận KHÔNG chặn thao tác — mọi việc nền đều dùng cái này, không dùng spin() */
+var BUSY_N=0;
+function busyLine(on){ BUSY_N=Math.max(0, BUSY_N+(on?1:-1)); $('busy').classList.toggle('on', BUSY_N>0); }
 function toast(msg){ var t=$('toast'); t.textContent=msg; t.classList.add('show'); clearTimeout(t._h); t._h=setTimeout(function(){t.classList.remove('show')},2600); }
 
 /* =====================================================================
@@ -953,6 +997,9 @@ function mqCycle(m){
       },320);
     }, dur*1000+1600);
   },1600);
+}
+function mqStop(root){
+  MQ=MQ.filter(function(m){ if(!root.contains(m.el)) return true; clearTimeout(m.t); m.el.classList.remove('run','fade'); m.el.classList.add('ell'); m.inner.style.transition='none'; m.inner.style.transform='none'; return false; });
 }
 function mqStopAll(){
   MQ.forEach(function(m){ clearTimeout(m.t); m.el.classList.remove('run','fade'); m.el.classList.add('ell'); m.inner.style.transition='none'; m.inner.style.transform='none'; });
@@ -1028,20 +1075,68 @@ function tryPin(){
     var c=loadCache(lastc.coach);
     if(c){ state.pin=pin; SES('lb_pin',pin); buildClients(c.res); state.dataTs=c.ts; go('s-list','fwd'); refreshData(true); flush(); return; }
   }
-  spin(true); state.pin=pin;
+  /* chưa có cache: sang danh sách NGAY ở trạng thái đang tải (vạch bận, không chặn), máy chủ trả lời sau.
+     Sai PIN coach → thử PIN admin → màn Admin (cập nhật IP phòng), y như app check-in. */
+  state.pin=pin; state.coach=''; state.clients=[]; state.loading=true; state.dataTs=Date.now();
+  go('s-list','fwd'); busyLine(true);
   api({action:'coach'}, 2, 600, 0, 30000).then(function(res){
-    spin(false);
-    if(!res||!res.ok){ state.pin=''; pinError(res&&res.error==='sai_pin'?'MÃ PIN KHÔNG ĐÚNG':'MÁY CHỦ LỖI — THỬ LẠI'); return; }
-    SES('lb_pin',pin); buildClients(res); saveCache(res); state.dataTs=Date.now();
-    go('s-list','fwd'); flush();
-  }).catch(function(){ spin(false); state.pin=''; pinError('MÁY CHỦ CHẬM — THỬ LẠI'); });
+    if(state.pin!==pin){ busyLine(false); return; }           /* đã đăng xuất/đổi PIN trong lúc chờ */
+    if(res&&res.ok){
+      busyLine(false); state.loading=false; SES('lb_pin',pin); buildClients(res); saveCache(res); state.dataTs=Date.now();
+      if(state.screen==='s-list') HOOK['s-list']();
+      flush(); return;
+    }
+    if(res&&res.error==='sai_pin'){
+      return api({action:'admin', apin:pin}, 2, 600, 0, 30000).then(function(ad){
+        busyLine(false); state.loading=false;
+        if(ad&&ad.ok){ openAdminPanel(pin); return; }
+        backToPin('MÃ PIN KHÔNG ĐÚNG');
+      });
+    }
+    busyLine(false); backToPin('MÁY CHỦ LỖI — THỬ LẠI');
+  }).catch(function(){ busyLine(false); backToPin('MÁY CHỦ CHẬM — THỬ LẠI'); });
 }
+function backToPin(msg){ state.pin=''; state.loading=false; state.clients=[]; go('s-pin','back'); setTimeout(function(){ pinError(msg); },300); }
 HOOK['s-pin']=function(){ startPin(); warm(); };
+/* chẩn đoán bố cục trên máy thật: chạm logo ở màn PIN 5 lần → hiện số đo khung nhìn (không ảnh hưởng gì khác) */
+(function(){ var n=0, t=0; $('s-pin').querySelector('.lg').addEventListener('click', function(){
+  var now=Date.now(); n=(now-t<1500)?n+1:1; t=now; if(n<5) return; n=0;
+  var pr=document.createElement('div'); pr.style.cssText='position:fixed;left:0;top:0;width:0;height:0;padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom) 0;visibility:hidden'; document.body.appendChild(pr);
+  var cs=getComputedStyle(pr), sc=$('s-pin').getBoundingClientRect(), st=$('s-pin').querySelector('.pinbottom').getBoundingClientRect();
+  var vv=window.visualViewport;
+  $('diag').hidden=false;
+  $('diag').textContent='WIN '+innerWidth+'×'+innerHeight+' · SCREEN '+screen.width+'×'+screen.height+' · VV '+(vv?Math.round(vv.height):'-')
+    +' · SAT '+cs.paddingTop+' · SAB '+cs.paddingBottom+' · SCREEN-EL '+Math.round(sc.top)+'→'+Math.round(sc.bottom)+' · PAD-B '+getComputedStyle($('s-pin')).paddingBottom
+    +' · BTN-BOTTOM '+Math.round(st.bottom)+' · '+(matchMedia('(display-mode: standalone)').matches?'STANDALONE':'BROWSER')+(navigator.standalone?'/NAV':'')+' · DPR '+devicePixelRatio;
+  pr.remove();
+}); })();
+
+/* =====================================================================
+   ADMIN — cập nhật IP phòng (PIN admin, không lưu PIN vào máy)
+   ===================================================================== */
+function openAdminPanel(pin){ state.apin=pin; state.pin=''; state.clients=[]; go('s-admin','fwd'); }
+HOOK['s-admin']=function(){
+  $('am-ip').textContent=state.ip||'—';
+  $('am-note').textContent='CẬP NHẬT ĐỂ LẤY IP NÀY LÀM IP CỦA PHÒNG';
+  refreshIp().then(function(){ if(state.screen==='s-admin') $('am-ip').textContent=state.ip||'—'; });
+};
+function registerIp(){
+  if(state._setip) return; state._setip=true; busyLine(true);
+  refreshIp().then(function(){
+    $('am-ip').textContent=state.ip||'—';
+    return api({action:'setip', pin:state.apin, apin:state.apin}, 1, 800, 0, 30000);
+  }).then(function(res){
+    busyLine(false); state._setip=false;
+    if(res&&res.ok){ $('am-note').textContent='IP PHÒNG HIỆN TẠI ĐANG LÀ IP NÀY'; notify('s-admin','✓ ĐÃ LƯU IP PHÒNG · '+(res.ip||state.ip)); }
+    else notify('s-admin','LỖI · '+upper(String((res&&res.error)||'MÁY CHỦ')), true);
+  }).catch(function(){ busyLine(false); state._setip=false; notify('s-admin','MÁY CHỦ CHẬM · THỬ LẠI', true); });
+}
+function adminDone(){ state.apin=''; go('s-pin','back'); }
 
 /* =====================================================================
    A2 — danh sách khách
    ===================================================================== */
-HOOK['s-list']=function(){ $('l-crumb').textContent='COACH '+upper(state.coach||''); $('q').value=''; renderList(true); if(Date.now()-state.dataTs>60000) refreshData(true); };
+HOOK['s-list']=function(){ $('l-crumb').textContent=state.loading?'ĐANG TẢI…':'COACH '+upper(state.coach||''); $('q').value=''; renderList(true); if(!state.loading && Date.now()-state.dataTs>60000) refreshData(true); };
 function renderList(animate){
   var q=norm($('q').value), el=$('list'); el.innerHTML=''; var shown=0;
   (state.clients||[]).forEach(function(m){
@@ -1054,7 +1149,7 @@ function renderList(animate){
     b.onclick=function(){ state.client=m; state.session=null; go('s-confirm','fwd'); };
     el.appendChild(b); shown++;
   });
-  if(!shown){ var d=document.createElement('div'); d.className='empty'; d.textContent=q?'KHÔNG TÌM THẤY TÊN NÀY':'CHƯA CÓ DANH SÁCH'; el.appendChild(d); }
+  if(!shown){ var d=document.createElement('div'); d.className='empty'; d.textContent=q?'KHÔNG TÌM THẤY TÊN NÀY':state.loading?'ĐANG TẢI DANH SÁCH…':'CHƯA CÓ DANH SÁCH'; el.appendChild(d); }
   fogUpdate(el); if(!animate) mqInit(el);
 }
 
@@ -1070,27 +1165,73 @@ HOOK['s-confirm']=function(){
   countUp($('c-num'), m.done+1, 700, 420);
   setMeter('c', m.done, m.total, 460);
 };
+/* CHECK-IN LẠC QUAN: sang màn chọn buổi NGAY, lệnh check-in chạy nền rồi báo kết quả trên header
+   (V-B). Số buổi tạm = đã tập + 1; máy chủ trả số thật thì sửa lại (kể cả các set đã xếp hàng).
+   Thất bại → header đỏ "CHƯA CHECK-IN · CHẠM ĐỂ THỬ LẠI"; coach vẫn ghi set bình thường. */
 function doCheckin(){
-  var m=state.client, day=TODAY_ISO;
-  spin(true);
-  /* KHÔNG retry lệnh check-in — tránh ghi trùng buổi */
+  var m=state.client, prev=ciFor(m);
+  if(prev && prev.status==='pending') return;                 /* đang gửi rồi */
+  var no = prev ? prev.no : m.done+1;                          /* đã/đang check-in hôm nay → giữ số buổi */
+  startSession(m, no);                                        /* buổi ghi dở hôm nay → giữ nguyên buổi đó */
+  go('s-plan','fwd');
+  if(prev && prev.status==='ok'){ notify('s-plan','✓ ĐÃ CHECK-IN HÔM NAY · TIẾP TỤC'); return; }
+  sendCheckin(m);
+}
+function sendCheckin(m){
+  var prev=ciFor(m), day=TODAY_ISO, localNo=(prev&&prev.no)||(state.session&&state.session.session)||(m.done+1);
+  state.ci={name:m.name, day:day, no:localNo, status:'pending'}; ciSave(); ciMark();
+  busyLine(true);
+  /* KHÔNG auto-retry lệnh check-in — chỉ coach chạm "thử lại" */
   api({action:'checkin_coach', name:m.name, date:day}, 0, 600, 0, 30000).then(function(res){
-    spin(false);
+    busyLine(false);
+    var ci=ciFor(m); if(!ci) return;                          /* đã sang ngày/khách khác */
+    var err=res&&res.error;
     if(res && res.ok){
       if(res.member){ var sd=+res.member.done||0; m.total=+res.member.total||m.total; m.done=Math.max(sd, m.done+1); m.left=(sd>=m.done && res.member.left!=null)?+res.member.left:Math.max(0,m.total-m.done); }
       else { m.done+=1; m.left=Math.max(0,m.total-m.done); }
-      startSession(m, m.done);
-      go('s-plan','fwd'); notify('s-plan','✓ ĐÃ CHECK-IN · '+nowHM());
+      ciOk(m, ci, m.done, '✓ ĐÃ CHECK-IN · BUỔI '+m.done+' · '+nowHM());
       var c=loadCache(state.coach); if(c){ var mm=(c.res.members||[]).filter(function(x){return x.name===m.name})[0]; if(mm){ mm.done=m.done; mm.left=m.left; saveCache(c.res); } }
       return;
     }
-    var err=res&&res.error;
-    if(err==='da_checkin'){ startSession(m, m.done); go('s-plan','fwd'); notify('s-plan','✓ ĐÃ CHECK-IN HÔM NAY · TIẾP TỤC'); return; }
-    if(err==='wrong_ip') toast('Chỉ check-in được khi dùng WiFi của phòng');
-    else if(err==='sai_pin') logout('MÃ PIN KHÔNG CÒN HIỆU LỰC');
-    else if(err==='khong_phai_khach_cua_ban') toast('Khách này không thuộc coach của bạn');
-    else toast('Không check-in được: '+(err||'lỗi máy chủ'));
-  }).catch(function(){ spin(false); toast('MÁY CHỦ CHẬM — thử lại'); });
+    if(err==='da_checkin'){ ciOk(m, ci, ci.no, '✓ ĐÃ CHECK-IN HÔM NAY'); return; }
+    if(err==='sai_pin'){ state.ci=null; ciSave(); logout('MÃ PIN KHÔNG CÒN HIỆU LỰC'); return; }
+    ci.status='fail'; ciSave(); ciMark();
+    notifyHere(err==='wrong_ip' ? 'CHƯA CHECK-IN · CHỈ CHECK-IN ĐƯỢC KHI DÙNG WIFI PHÒNG'
+             : err==='khong_phai_khach_cua_ban' ? 'CHƯA CHECK-IN · KHÁCH KHÔNG THUỘC COACH CỦA BẠN'
+             : 'CHƯA CHECK-IN · '+upper(String(err||'LỖI MÁY CHỦ')), true);
+  }).catch(function(){
+    busyLine(false);
+    var ci=ciFor(m); if(!ci) return;
+    ci.status='fail'; ciSave(); ciMark();
+    notifyHere('CHƯA CHECK-IN · MÁY CHỦ CHẬM, CHẠM HEADER ĐỂ THỬ LẠI', true);
+  });
+}
+/* máy chủ xác nhận: chốt số buổi thật, sửa lại số buổi trên buổi đang ghi + các sự kiện còn trong hàng đợi */
+function ciOk(m, ci, no, text){
+  var old=ci.no; ci.no=no; ci.status='ok'; ciSave();
+  if(state.session && state.client===m && state.session.session!==no){ state.session.session=no; saveSession(); }
+  if(old!==no){ var ch=false; OUT.q.forEach(function(e){ if(e.name===m.name && e.date===ci.day && e.session===old){ e.session=no; ch=true; } }); if(ch) SS('lb_outbox', JSON.stringify(OUT.q)); }
+  ciMark(); if(state.screen!=='s-list' && state.screen!=='s-pin') notifyHere(text);
+  if(state.screen==='s-done') $('d-note').innerHTML=doneNote(m);
+}
+/* thử lại theo ý coach (chạm header) */
+function retryCheckin(){ var m=state.client, ci=ciFor(m); if(!m||!ci||ci.status!=='fail') return; sendCheckin(m); }
+/* header các màn buổi tập: HOOK đặt crumb qua setCrumb(); chưa check-in được → crumb đỏ, chạm để thử lại */
+var CI_SCREENS={'s-plan':1,'s-ex':1,'s-set':1,'s-summary':1,'s-done':1};
+function setCrumb(id, text){ var top=$(id).querySelector('.top'); top._base=text; top.querySelector('.crumb').firstElementChild.textContent=text; ciMark(id, true); }
+function ciMark(id, fromHook){
+  id=id||state.screen; if(!CI_SCREENS[id]) return;
+  var top=$(id).querySelector('.top'), crumb=top.querySelector('.crumb'), span=crumb.firstElementChild;
+  var ci=ciFor(state.client), fail=!!(ci && ci.status==='fail');
+  var txt = fail ? 'CHƯA CHECK-IN · CHẠM ĐỂ THỬ LẠI' : (top._base!=null ? top._base : span.textContent);
+  top.classList.toggle('cierr', fail); crumb.onclick = fail ? retryCheckin : null;
+  if(top._nt) top._orig=txt;                                  /* đang có thông báo V-B → đổi chữ sẽ trả lại sau */
+  else if(span.textContent!==txt){ span.textContent=txt; if(!fromHook){ mqStop(top); mqInit(top); } }
+}
+function doneNote(m){
+  var ci=ciFor(m), st=ci?ci.status:'ok';
+  return (st==='ok' ? 'CÒN LẠI '+m.left+' BUỔI' : st==='pending' ? 'ĐANG CHECK-IN…' : '<span class="er">CHƯA CHECK-IN</span>')
+       + ' · ĐÃ KÝ <span class="ac">'+state.signed+'</span>';
 }
 /* buổi tập: khôi phục nếu đã ghi dở hôm nay, không thì tạo mới */
 function startSession(m, sessionNo){
@@ -1250,7 +1391,7 @@ function planList(m){
   return plans;
 }
 HOOK['s-plan']=function(){
-  var m=state.client; $('pl-crumb').textContent=upper(firstName(m.name))+' · BUỔI '+state.session.session;
+  var m=state.client; setCrumb('s-plan', upper(firstName(m.name))+' · BUỔI '+state.session.session);
   var el=$('pl-list'); el.innerHTML='';
   planList(m).forEach(function(p,i){
     var b=document.createElement('button'); b.className='opt rowin'+(p.rec?' sel':''); b.style.animationDelay=Math.min(i*24,280)+'ms';
@@ -1274,7 +1415,7 @@ function startPlan(p){
 /* =====================================================================
    B2 — chọn bài tập (B2.1 chưa tập / B2.2 đã có set)
    ===================================================================== */
-HOOK['s-ex']=function(){ $('ex-crumb').textContent='BUỔI '+state.session.session+' · '+upper(state.session.plan); $('exq').value=''; renderEx(true); };
+HOOK['s-ex']=function(){ setCrumb('s-ex', 'BUỔI '+state.session.session+' · '+upper(state.session.plan)); $('exq').value=''; renderEx(true); };
 function exTile(e, i, animate){
   var b=document.createElement('button'), n=e.sets.length;
   b.className='ex'+(e.done?' done':'')+(animate?' rowin':''); if(animate) b.style.animationDelay=Math.min(i*24,280)+'ms';
@@ -1314,7 +1455,7 @@ function openSet(e){
 }
 HOOK['s-set']=function(){
   var s=state.session, e=state.ex;
-  $('st-crumb').textContent=upper(s.plan)+' · BÀI '+(s.started.indexOf(e)+1);
+  setCrumb('s-set', upper(s.plan)+' · BÀI '+(s.started.indexOf(e)+1));
   $('st-name').textContent=e.name;
   $('st-main').classList.toggle('on', e.main);
   $('st-goal').textContent=(e.lastKg!=null)?(fmt1(e.lastKg)+' × '+e.lastRep):'—';
@@ -1363,7 +1504,7 @@ function endExercise(){
    ===================================================================== */
 HOOK['s-summary']=function(){
   var m=state.client, s=state.session;
-  $('sm-crumb').textContent=upper(firstName(m.name))+' · BUỔI '+s.session;
+  setCrumb('s-summary', upper(firstName(m.name))+' · BUỔI '+s.session);
   $('sm-title').textContent='Tổng kết buổi '+s.session;
   /* bài chính (công tắc) — nếu chưa đánh dấu thì lấy bài nhiều set nhất */
   var main=s.ex.filter(function(e){return e.main})[0] || s.ex.slice().sort(function(a,b){return b.sets.length-a.sets.length})[0];
@@ -1392,10 +1533,10 @@ function doCheckout(){
   enqueue({type:'CHECKOUT', session:s.session, plan:s.plan, ex:main?main.name:'', form:state.rpe||null, note:($('sm-note').value||'').trim()});
   state.signed=nowHM(); state.doneNo=s.session;
   state.session=null; state.ex=null; saveSession();      /* buổi đã chốt — không khôi phục lại nữa */
-  spin(true);
-  /* cố gửi hết hàng đợi trong ≤8s; không xong thì vẫn sang B5, nền sẽ gửi tiếp */
-  var done=false, t=setTimeout(function(){ if(!done){ done=true; spin(false); go('s-done','fwd'); } }, 8000);
-  flush().then(function(){ if(!done){ done=true; clearTimeout(t); spin(false); go('s-done','fwd'); } });
+  /* sang B5 NGAY; hàng đợi gửi nền. Check-in trước đó chưa ghi được → coach bấm check-out = một lần thử lại */
+  go('s-done','fwd');
+  var ci=ciFor(m); if(ci && ci.status==='fail') sendCheckin(m);
+  busyLine(true); flush().then(function(){ busyLine(false); }, function(){ busyLine(false); });
 }
 
 /* =====================================================================
@@ -1403,11 +1544,11 @@ function doCheckout(){
    ===================================================================== */
 HOOK['s-done']=function(){
   var m=state.client;
-  $('d-crumb').textContent='CHECK-OUT · '+TODAY;
+  setCrumb('s-done', 'CHECK-OUT · '+TODAY);
   $('d-name').textContent=m.name;
   $('d-total').textContent='/ '+m.total;
   var n=state.doneNo||m.done;
-  $('d-note').innerHTML='CÒN LẠI '+m.left+' BUỔI · ĐÃ KÝ <span class="ac">'+state.signed+'</span>';
+  $('d-note').innerHTML=doneNote(m);
   countUp($('d-num'), n, 700, 420);
   setMeter('d', n-1, m.total, 460);
   if(OUT.q.length) setTimeout(function(){ if(OUT.q.length && state.screen==='s-done') toast('Đang đồng bộ '+OUT.q.length+' mục… vẫn giữ trong máy'); }, 2500);
