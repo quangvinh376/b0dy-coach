@@ -1075,7 +1075,8 @@ function doCheckin(){
   api({action:'checkin_coach', name:m.name, date:day}, 0, 600, 0, 30000).then(function(res){
     spin(false);
     if(res && res.ok){
-      if(res.member){ m.done=+res.member.done||m.done; m.total=+res.member.total||m.total; m.left=(res.member.left!=null)?+res.member.left:Math.max(0,m.total-m.done); }
+      if(res.member){ var sd=+res.member.done||0; m.total=+res.member.total||m.total; m.done=Math.max(sd, m.done+1); m.left=(sd>=m.done && res.member.left!=null)?+res.member.left:Math.max(0,m.total-m.done); }
+      else { m.done+=1; m.left=Math.max(0,m.total-m.done); }
       startSession(m, m.done);
       go('s-plan','fwd'); notify('s-plan','✓ ĐÃ CHECK-IN · '+nowHM());
       var c=loadCache(state.coach); if(c){ var mm=(c.res.members||[]).filter(function(x){return x.name===m.name})[0]; if(mm){ mm.done=m.done; mm.left=m.left; saveCache(c.res); } }
