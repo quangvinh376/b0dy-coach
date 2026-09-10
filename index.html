@@ -982,6 +982,8 @@ function makeRuler(track, cfg){
     track.scrollTo({left:i*PX, behavior:smooth?'smooth':'auto'});
     cfg.onChange(r.v,false);
   };
+  /* đổi kích thước khung (xoay máy, thanh địa chỉ Safari ẩn/hiện) → giữ nguyên giá trị */
+  window.addEventListener('resize', function(){ if(track.offsetParent) r.set(r.v,false); });
   return r;
 }
 function bump(el){ el.classList.remove('bump'); void el.offsetWidth; el.classList.add('bump'); setTimeout(function(){el.classList.remove('bump')},140); }
@@ -1388,7 +1390,8 @@ function doCheckout(){
   var s=state.session, m=state.client;
   var main=s.ex.filter(function(e){return e.main})[0];
   enqueue({type:'CHECKOUT', session:s.session, plan:s.plan, ex:main?main.name:'', form:state.rpe||null, note:($('sm-note').value||'').trim()});
-  state.signed=nowHM();
+  state.signed=nowHM(); state.doneNo=s.session;
+  state.session=null; state.ex=null; saveSession();      /* buổi đã chốt — không khôi phục lại nữa */
   spin(true);
   /* cố gửi hết hàng đợi trong ≤8s; không xong thì vẫn sang B5, nền sẽ gửi tiếp */
   var done=false, t=setTimeout(function(){ if(!done){ done=true; spin(false); go('s-done','fwd'); } }, 8000);
@@ -1403,14 +1406,14 @@ HOOK['s-done']=function(){
   $('d-crumb').textContent='CHECK-OUT · '+TODAY;
   $('d-name').textContent=m.name;
   $('d-total').textContent='/ '+m.total;
-  var n=state.session?state.session.session:m.done;
+  var n=state.doneNo||m.done;
   $('d-note').innerHTML='CÒN LẠI '+m.left+' BUỔI · ĐÃ KÝ <span class="ac">'+state.signed+'</span>';
   countUp($('d-num'), n, 700, 420);
   setMeter('d', n-1, m.total, 460);
   if(OUT.q.length) setTimeout(function(){ if(OUT.q.length && state.screen==='s-done') toast('Đang đồng bộ '+OUT.q.length+' mục… vẫn giữ trong máy'); }, 2500);
 };
 function finish(){
-  state.session=null; state.ex=null; state.rpe=0; $('sm-note').value=''; saveSession();
+  state.session=null; state.ex=null; state.rpe=0; state.doneNo=0; $('sm-note').value=''; saveSession();
   go('s-list','back'); refreshData(true); flush();
 }
 
