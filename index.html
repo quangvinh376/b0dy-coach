@@ -5,7 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <meta name="color-scheme" content="dark">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<!-- "black" (đặc) thay vì "black-translucent": iOS 26 cấp web view cao = màn hình − thanh trạng thái nhưng neo ở mép trên,
+     phần dưới 793pt KHÔNG được vẽ (nút bị cắt viền). Với "black", web view nằm dưới thanh trạng thái và chạm đáy màn hình. -->
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
 <meta name="apple-mobile-web-app-title" content="B0DY">
 <title>B0DY — Coach</title>
 <meta name="theme-color" content="#0A0A0A">
@@ -37,7 +39,8 @@
           padding:max(20px,env(safe-area-inset-top)) 20px max(16px,calc(env(safe-area-inset-bottom,0px) + 21px))}
   /* PWA iOS (black-translucent): khung nhìn cao = màn hình − thanh trạng thái (đo 15 Pro: 793/852) nhưng vẽ từ
      mép trên → hở 59pt ở đáy. Kéo body dài thêm đúng inset trên để phủ hết màn hình. */
-  @media (display-mode: standalone){ body{bottom:auto;height:calc(100% + env(safe-area-inset-top,0px))} }
+  /* PWA: thanh trạng thái đặc → web view bắt đầu ngay dưới nó (inset trên = 0) → header sát dưới thanh như Figma (top y=55) */
+  @media (display-mode: standalone){ .screen{padding-top:max(4px,env(safe-area-inset-top,0px))} }
   .screen.on{display:flex}
   .screen.enter-fwd{animation:inF .46s cubic-bezier(.22,.85,.22,1) both}
   .screen.enter-back{animation:inB .46s cubic-bezier(.22,.85,.22,1) both}
@@ -675,7 +678,7 @@
    Không có API hoặc ?demo → chạy bằng data mẫu (không gọi mạng).
    ===================================================================== */
 var $=function(id){return document.getElementById(id)};
-var APP_VER='v1.3.1';
+var APP_VER='v1.3.2';
 /* ngày: nội bộ dùng ISO 'yyyy-MM-dd'; hiển thị 'dd/MM/yy' */
 function isoToday(d){ d=d||new Date(); return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2); }
 function vn(iso){ if(!iso) return ''; var p=String(iso).split('-'); return p.length===3 ? p[2]+'/'+p[1]+'/'+p[0].slice(2) : iso; }
