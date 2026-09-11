@@ -99,7 +99,9 @@
   .label{font-family:var(--mono);font-size:11px;letter-spacing:.14em;color:var(--slate)}
   .label8{font-family:var(--mono);font-size:12px;letter-spacing:.08em;color:var(--slate)}
   .mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
-  .bigname{font-size:42px;line-height:1.12;letter-spacing:-.025em;margin-top:10px}
+  .bigname{font-size:32px;line-height:1.12;letter-spacing:-.02em;margin-top:10px}
+  /* A3.1: khách đã tập hôm nay → nút check-in mờ 25%, không bấm được */
+  .big.off{opacity:.25;pointer-events:none}
   .ac{color:var(--acid)}
 
   /* ---- marquee: tiêu đề/tên cố định 1 dòng; dài quá → "…" rồi tự chạy dần sang trái, lặp lại ---- */
@@ -435,7 +437,7 @@
     <div class="dots" id="pin-dots"></div>
     <div class="pinerr" id="pin-err"></div>
     <div class="pad" id="pin-pad"></div>
-    <button class="ghost" onclick="toast('Liên hệ chủ phòng để cấp lại mã PIN')">Quên mã PIN?</button>
+    <button class="ghost" onclick="notify('s-pin','LIÊN HỆ CHỦ PHÒNG ĐỂ CẤP LẠI MÃ PIN')">Quên mã PIN?</button>
     <div class="label" id="diag" hidden style="margin-top:10px;line-height:1.6;letter-spacing:.06em"></div>
   </div>
 </section>
@@ -482,7 +484,7 @@
     </div>
   </div>
   <div class="stack">
-    <button class="big acid" onclick="doCheckin()"><span>Check-in buổi tập</span><svg class="bi"><use href="#i-arr"/></svg></button>
+    <button class="big acid" id="c-btn" onclick="doCheckin()"><span>Check-in buổi tập</span><svg class="bi"><use href="#i-arr"/></svg></button>
     <button class="ghost" onclick="go('s-list','back')">Quay lại</button>
   </div>
 </section>
@@ -698,7 +700,7 @@
    Không có API hoặc ?demo → chạy bằng data mẫu (không gọi mạng).
    ===================================================================== */
 var $=function(id){return document.getElementById(id)};
-var APP_VER='v1.5.1';
+var APP_VER='v1.6';
 /* ngày: nội bộ dùng ISO 'yyyy-MM-dd'; hiển thị 'dd/MM/yy' */
 function isoToday(d){ d=d||new Date(); return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2); }
 function vn(iso){ if(!iso) return ''; var p=String(iso).split('-'); return p.length===3 ? p[2]+'/'+p[1]+'/'+p[0].slice(2) : iso; }
@@ -774,7 +776,7 @@ function buildClients(res){
   state.clients=(res.members||[]).map(function(m){
     var c=snap[m.name]||{};
     return {name:m.name, done:+m.done||0, total:+m.total||0, left:(m.left!=null?+m.left:Math.max(0,(+m.total||0)-(+m.done||0))), coach:m.coach,
-            start:m.start||'', end:m.end||'', measures:c.measures||[], target:c.target||{}, main:c.main||'weight', last:c.last||{}, plans:c.plans||{}};
+            start:m.start||'', end:m.end||'', checked:!!m.checked, signed:m.signed||'', measures:c.measures||[], target:c.target||{}, main:c.main||'weight', last:c.last||{}, plans:c.plans||{}};
   });
   if(res.today) TODAY_ISO=res.today, TODAY=vn(TODAY_ISO);
   applyPending();
@@ -804,7 +806,7 @@ function refreshData(quiet){
     if(cur) state.client=findClient(cur)||state.client;
     if(state.screen==='s-list') renderList(false);
     else if(state.client && {'s-profile':1,'s-confirm':1,'s-history':1}[state.screen] && HOOK[state.screen]){ HOOK[state.screen](); var sc=$(state.screen); sc.querySelectorAll('.scroll').forEach(fogUpdate); mqStopAll(); mqInit(sc); }
-  }).catch(function(){ state._refreshing=null; if(!quiet) toast('MÁY CHỦ CHẬM — dùng dữ liệu đã lưu'); });
+  }).catch(function(){ state._refreshing=null; if(!quiet) notifyHere('MÁY CHỦ CHẬM · DÙNG DỮ LIỆU ĐÃ LƯU', true); });
   return state._refreshing;
 }
 function logout(msg){ state.pin=''; SES('lb_pin',null); state.clients=[]; state.session=null; saveSession(); go('s-pin','back'); if(msg) setTimeout(function(){ pinError(msg); },300); }
@@ -860,7 +862,7 @@ function demoDb(){
   ];
   D[0].snap.last={'Lat Pulldown':{kg:57.5,rep:8,d:'2026-09-03'},'Bench Press':{kg:60,rep:8,d:'2026-09-03'},'Incline Bench':{kg:50,rep:8,d:'2026-09-03'},'DB Shoulder Press':{kg:20,rep:10,d:'2026-09-03'},'Barbell Row':{kg:50,rep:8,d:'2026-09-03'},'Dip':{kg:10,rep:10,d:'2026-09-03'},'Face Pull':{kg:25,rep:12,d:'2026-09-03'},'Squat':{kg:80,rep:6,d:'2026-09-05'}};
   D[0].snap.plans={'Upper':'2026-09-03','Lower':'2026-09-05','Full-body':'2026-09-02','Cardio':'2026-09-01'};
-  DEMO_DB={clients:D, checked:{}, log:[]};
+  DEMO_DB={clients:D, checked:{}, at:{}, log:[]};
   return DEMO_DB;
 }
 function demoApi(body){
@@ -872,10 +874,10 @@ function demoApi(body){
     if(body.action==='setip') return res(body.apin==='0000' ? {ok:true, ip:body.ip||'demo'} : {ok:false,error:'sai_pin'});
     if(body.pin==='0000') return res({ok:false,error:'sai_pin'});
     if(body.action==='coach'){ var snap={}; db.clients.forEach(function(c){ snap[c.name]=c.snap; });
-      return res({ok:true, coach:'Quyết', members:db.clients.map(function(c){return {name:c.name,done:c.done,total:c.total,left:c.left,coach:c.coach}}), snapshot:JSON.parse(JSON.stringify(snap)), library:null, today:isoToday()}); }
+      return res({ok:true, coach:'Quyết', members:db.clients.map(function(c){return {name:c.name,done:c.done,total:c.total,left:c.left,coach:c.coach,checked:db.checked[c.name]===isoToday(),signed:db.checked[c.name]===isoToday()?(db.at[c.name]||''):''}}), snapshot:JSON.parse(JSON.stringify(snap)), library:null, today:isoToday()}); }
     if(body.action==='checkin_coach'){ var c=db.clients.filter(function(x){return x.name===body.name})[0]; if(!c) return res({ok:false,error:'khong_phai_khach_cua_ban'});
       if(db.checked[c.name]===isoToday()) return res({ok:false,error:'da_checkin'});
-      db.checked[c.name]=isoToday(); c.done++; c.left--; return res({ok:true,row:0,member:{name:c.name,done:c.done,total:c.total,left:c.left,coach:c.coach},coach:'Quyết'}); }
+      db.checked[c.name]=isoToday(); db.at[c.name]=nowHM(); c.done++; c.left--; return res({ok:true,row:0,member:{name:c.name,done:c.done,total:c.total,left:c.left,coach:c.coach},coach:'Quyết',at:db.at[c.name]}); }
     if(body.action==='log'){ var n=0; (body.events||[]).forEach(function(e){ if(db.log.some(function(x){return x.id===e.id})) return; db.log.push(e); n++;
         var c=db.clients.filter(function(x){return x.name===e.name})[0]; if(!c) return; var sn=c.snap;
         if(e.type==='ĐO'){ var m=sn.measures.filter(function(x){return x.d===e.date})[0]; if(!m){ m={d:e.date}; sn.measures.push(m); } m[e.metric]=e.val; }
@@ -945,14 +947,14 @@ function countUp(el, to, dur, delay){
   }, delay || 0);
 }
 /* meter kép: Paper = đã tập, Acid = đúng 1 buổi (buổi này) */
-function setMeter(prefix, done, total, delay){
+function setMeter(prefix, done, total, delay, noNow){
   var mb=$(prefix+'-mb'), ma=$(prefix+'-ma');
   mb.style.transition='none'; ma.style.transition='none';
   mb.style.width='0'; ma.style.width='0';
   setTimeout(function(){
     mb.style.transition=''; ma.style.transition='';
     mb.style.width='calc('+pct(done,total).toFixed(2)+'% - 1px)';
-    ma.style.width='calc('+(total>0 ? (100/total).toFixed(2) : 0)+'% - 1px)';
+    ma.style.width= noNow ? '0' : 'calc('+(total>0 ? (100/total).toFixed(2) : 0)+'% - 1px)';
   }, delay);
 }
 /* thông báo V-B: crumb đổi thành dòng trạng thái Acid + hairline header Acid ~2,6s rồi trả lại */
@@ -1185,14 +1187,30 @@ function renderList(animate){
 /* =====================================================================
    A3 — check-in
    ===================================================================== */
+/* khách đã tập hôm nay? → giờ ký (chuỗi) hoặc null. Nguồn: máy chủ (m.checked/m.signed từ SESSION LOG) hoặc
+   check-in trên máy này (state.ci ok). Buổi còn ghi dở trên máy này → null để coach vào tiếp. */
+function doneToday(m){
+  if(loadSession(m.name)) return null;
+  var ci=ciFor(m); if(ci && ci.status==='ok') return ci.at || m.signed || '';
+  if(m.checked) return m.signed || '';
+  return null;
+}
 HOOK['s-confirm']=function(){
-  var m=state.client;
+  var m=state.client, at=doneToday(m), btn=$('c-btn');
   $('c-crumb').textContent='CHECK-IN · '+TODAY;
   $('c-name').textContent=m.name;
   $('c-total').textContent='/ '+m.total;
-  $('c-note').textContent='ĐÃ TẬP '+m.done+' · CÒN '+m.left+' BUỔI';
-  countUp($('c-num'), m.done+1, 700, 420);
-  setMeter('c', m.done, m.total, 460);
+  if(at!=null){                                  /* A3.1 — đã tập hôm nay */
+    $('c-note').innerHTML='CÒN LẠI '+m.left+' BUỔI · ĐÃ KÝ <span class="ac">'+(at||'—')+'</span>';
+    countUp($('c-num'), m.done, 700, 420);
+    setMeter('c', m.done, m.total, 460, true);
+    btn.classList.add('off'); btn.setAttribute('aria-disabled','true');
+  } else {
+    var ss=loadSession(m.name);                  /* buổi còn ghi dở trên máy này → số buổi của buổi đó, bấm để vào tiếp */
+    if(ss){ $('c-note').textContent='ĐANG GHI BUỔI '+ss.session+' · CÒN '+m.left+' BUỔI'; countUp($('c-num'), ss.session, 700, 420); setMeter('c', ss.session-1, m.total, 460); }
+    else { $('c-note').textContent='ĐÃ TẬP '+m.done+' · CÒN '+m.left+' BUỔI'; countUp($('c-num'), m.done+1, 700, 420); setMeter('c', m.done, m.total, 460); }
+    btn.classList.remove('off'); btn.removeAttribute('aria-disabled');
+  }
 };
 /* CHECK-IN LẠC QUAN: sang màn chọn buổi NGAY, lệnh check-in chạy nền rồi báo kết quả trên header
    (V-B). Số buổi tạm = đã tập + 1; máy chủ trả số thật thì sửa lại (kể cả các set đã xếp hàng).
@@ -1200,10 +1218,12 @@ HOOK['s-confirm']=function(){
 function doCheckin(){
   var m=state.client, prev=ciFor(m);
   if(prev && prev.status==='pending') return;                 /* đang gửi rồi */
+  if(doneToday(m)!=null) return;                              /* A3.1: đã tập hôm nay, không có buổi ghi dở */
   var no = prev ? prev.no : m.done+1;                          /* đã/đang check-in hôm nay → giữ số buổi */
-  startSession(m, no);                                        /* buổi ghi dở hôm nay → giữ nguyên buổi đó */
+  var resumed=startSession(m, no);                            /* buổi ghi dở hôm nay → giữ nguyên buổi đó */
   go('s-plan','fwd');
-  if(prev && prev.status==='ok'){ notify('s-plan','✓ ĐÃ CHECK-IN HÔM NAY · TIẾP TỤC'); return; }
+  if(prev && prev.status==='ok'){ notify('s-plan', resumed ? '✓ TIẾP TỤC BUỔI ĐANG GHI DỞ' : '✓ ĐÃ CHECK-IN HÔM NAY · TIẾP TỤC'); return; }
+  if(resumed) notify('s-plan','TIẾP TỤC BUỔI ĐANG GHI DỞ');
   sendCheckin(m);
 }
 function sendCheckin(m){
@@ -1220,11 +1240,11 @@ function sendCheckin(m){
     if(res && res.ok){
       if(res.member){ var sd=+res.member.done||0; m.total=+res.member.total||m.total; m.done=Math.max(sd, m.done+1); m.left=(sd>=m.done && res.member.left!=null)?+res.member.left:Math.max(0,m.total-m.done); }
       else { m.done+=1; m.left=Math.max(0,m.total-m.done); }
-      ciOk(m, ci, m.done, '✓ ĐÃ CHECK-IN · BUỔI '+m.done+' · '+nowHM());
+      ciOk(m, ci, m.done, '✓ ĐÃ CHECK-IN · BUỔI '+m.done+' · '+(res.at||nowHM()), res.at);
       var c=loadCache(state.coach); if(c){ var mm=(c.res.members||[]).filter(function(x){return x.name===m.name})[0]; if(mm){ mm.done=m.done; mm.left=m.left; saveCache(c.res); } }
       return;
     }
-    if(err==='da_checkin'){ ciOk(m, ci, ci.no, '✓ ĐÃ CHECK-IN HÔM NAY'); return; }
+    if(err==='da_checkin'){ ciOk(m, ci, ci.no, '✓ ĐÃ CHECK-IN HÔM NAY', res.at||m.signed||''); return; }
     if(err==='sai_pin'){ state.ci=null; ciSave(); logout('MÃ PIN KHÔNG CÒN HIỆU LỰC'); return; }
     ciFail(m, ci, err==='wrong_ip' ? 'CHỈ CHECK-IN ĐƯỢC Ở PHÒNG'
                   : err==='khong_phai_khach_cua_ban' ? 'KHÁCH KHÔNG THUỘC COACH CỦA BẠN'
@@ -1247,8 +1267,9 @@ function ciFail(m, ci, text){
   ciMark(); notifyHere(text, true);
 }
 /* máy chủ xác nhận: chốt số buổi thật, sửa lại số buổi trên buổi đang ghi + các sự kiện còn trong hàng đợi */
-function ciOk(m, ci, no, text){
-  var old=ci.no; ci.no=no; ci.status='ok'; ciSave();
+function ciOk(m, ci, no, text, at){
+  var old=ci.no; ci.no=no; ci.status='ok'; ci.at=at||ci.at||nowHM(); ciSave();
+  m.checked=true; if(!m.signed) m.signed=ci.at;
   if(state.session && state.client && state.client.name===m.name && state.session.session!==no){ state.session.session=no; saveSession(); }
   if(old!==no){ var ch=false; OUT.q.forEach(function(e){ if(e.name===m.name && e.date===ci.day && e.session===old){ e.session=no; ch=true; } }); if(ch) SS('lb_outbox', JSON.stringify(OUT.q)); }
   ciMark(); if(state.screen!=='s-list' && state.screen!=='s-pin') notifyHere(text);
@@ -1277,8 +1298,7 @@ function doneNote(m){
 function startSession(m, sessionNo){
   var s=loadSession(m.name);
   state.session=s||{plan:null, ex:[], started:[], session:sessionNo};
-  if(s) toast('Tiếp tục buổi đang ghi dở');
-  saveSession();
+  saveSession(); return !!s;
 }
 
 /* =====================================================================
@@ -1399,7 +1419,7 @@ function saveMeasure(){
   if(!today || today.d!==TODAY_ISO){ today={d:TODAY_ISO}; m.measures.push(today); }
   METRICS.forEach(function(x){ var v=state.msForm[x.id]; if(!v) return; var num=parseFloat(v.replace(',','.')); if(isNaN(num)) return;
     today[x.id]=num; n++; enqueue({type:'ĐO', metric:x.id, val:num, session:state.session&&state.session.session}); });
-  if(!n){ if(Object.keys(today).length===1) m.measures.pop(); toast('Chưa nhập số đo nào'); return; }
+  if(!n){ if(Object.keys(today).length===1) m.measures.pop(); notifyHere('CHƯA NHẬP SỐ ĐO NÀO', true); return; }
   flush();
   go('s-profile','back');
   notify('s-profile','✓ ĐÃ LƯU '+n+' SỐ ĐO');
@@ -1477,7 +1497,7 @@ function renderEx(animate){
   else if(rest.length) grid(rest,true);
   else { var d=document.createElement('div'); d.className='empty'; d.textContent='KHÔNG TÌM THẤY BÀI NÀY'; el.appendChild(d); }
   var st=$('ex-stack'), any=s.ex.some(function(e){return e.sets.length});
-  st.innerHTML= any ? '<button class="big paper" onclick="go(\'s-summary\',\'fwd\')"><span>Check-out buổi tập</span><svg class="bi"><use href="#i-arr"/></svg></button>'
+  st.innerHTML= any ? '<button class="ghost" onclick="go(\'s-summary\',\'fwd\')"><span>Check-out buổi tập</span><svg class="gi"><use href="#i-arr"/></svg></button>'
                     : '<button class="ghost" onclick="go(\'s-plan\',\'back\')">Quay lại</button>';
   fogUpdate(el); if(!animate) mqInit(el);
 }
@@ -1530,7 +1550,7 @@ function record(ok){
 }
 function endExercise(){
   var e=state.ex, s=state.session;
-  if(!e.sets.length){ toast('Chưa ghi set nào cho '+e.name); return; }
+  if(!e.sets.length){ notifyHere('CHƯA GHI SET NÀO · '+upper(e.name), true); return; }
   e.done=true;
   var okN=e.sets.filter(function(x){return x[2]}).length;
   enqueue({type:'BÀI', session:s.session, plan:s.plan, ex:e.name, set:e.sets.length, ok:okN, main:e.main?1:0});
@@ -1591,7 +1611,7 @@ HOOK['s-done']=function(){
   $('d-note').innerHTML=doneNote(m);
   countUp($('d-num'), n, 700, 420);
   setMeter('d', n-1, m.total, 460);
-  if(OUT.q.length) setTimeout(function(){ if(OUT.q.length && state.screen==='s-done') toast('Đang đồng bộ '+OUT.q.length+' mục… vẫn giữ trong máy'); }, 2500);
+  if(OUT.q.length) setTimeout(function(){ if(OUT.q.length && state.screen==='s-done') notify('s-done','ĐANG ĐỒNG BỘ '+OUT.q.length+' MỤC · VẪN GIỮ TRONG MÁY'); }, 2500);
 };
 function finish(){
   state.session=null; state.ex=null; state.rpe=0; state.doneNo=0; $('sm-note').value=''; saveSession();
