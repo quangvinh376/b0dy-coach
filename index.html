@@ -700,7 +700,7 @@
    Không có API hoặc ?demo → chạy bằng data mẫu (không gọi mạng).
    ===================================================================== */
 var $=function(id){return document.getElementById(id)};
-var APP_VER='v1.6';
+var APP_VER='v1.6.1';
 /* ngày: nội bộ dùng ISO 'yyyy-MM-dd'; hiển thị 'dd/MM/yy' */
 function isoToday(d){ d=d||new Date(); return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2); }
 function vn(iso){ if(!iso) return ''; var p=String(iso).split('-'); return p.length===3 ? p[2]+'/'+p[1]+'/'+p[0].slice(2) : iso; }
@@ -801,11 +801,12 @@ function refreshData(quiet){
   state._refreshing=api({action:'coach'}, 2, 600, 0, 30000).then(function(res){
     state._refreshing=null;
     if(!res||!res.ok){ if(res&&res.error==='sai_pin'){ logout('MÃ PIN KHÔNG CÒN HIỆU LỰC'); } return; }
-    var cur=state.client&&state.client.name;
+    var cur=state.client&&state.client.name, before=cur?JSON.stringify(state.client):'';
     buildClients(res); saveCache(res); state.dataTs=Date.now();
     if(cur) state.client=findClient(cur)||state.client;
     if(state.screen==='s-list') renderList(false);
-    else if(state.client && {'s-profile':1,'s-confirm':1,'s-history':1}[state.screen] && HOOK[state.screen]){ HOOK[state.screen](); var sc=$(state.screen); sc.querySelectorAll('.scroll').forEach(fogUpdate); mqStopAll(); mqInit(sc); }
+    /* đang xem một khách mà dữ liệu khách đó đổi (vd vừa được check-in từ máy khác) → vẽ lại màn, không thì giữ yên */
+    else if(state.client && {'s-profile':1,'s-confirm':1,'s-history':1}[state.screen] && HOOK[state.screen] && JSON.stringify(state.client)!==before){ HOOK[state.screen](); var sc=$(state.screen); sc.querySelectorAll('.scroll').forEach(fogUpdate); mqStopAll(); mqInit(sc); }
   }).catch(function(){ state._refreshing=null; if(!quiet) notifyHere('MÁY CHỦ CHẬM · DÙNG DỮ LIỆU ĐÃ LƯU', true); });
   return state._refreshing;
 }
@@ -1204,13 +1205,18 @@ HOOK['s-confirm']=function(){
     $('c-note').innerHTML='CÒN LẠI '+m.left+' BUỔI · ĐÃ KÝ <span class="ac">'+(at||'—')+'</span>';
     countUp($('c-num'), m.done, 700, 420);
     setMeter('c', m.done, m.total, 460, true);
+    btn.querySelector('span').textContent='Check-in buổi tập';
     btn.classList.add('off'); btn.setAttribute('aria-disabled','true');
   } else {
-    var ss=loadSession(m.name);                  /* buổi còn ghi dở trên máy này → số buổi của buổi đó, bấm để vào tiếp */
-    if(ss){ $('c-note').textContent='ĐANG GHI BUỔI '+ss.session+' · CÒN '+m.left+' BUỔI'; countUp($('c-num'), ss.session, 700, 420); setMeter('c', ss.session-1, m.total, 460); }
+    var ss=loadSession(m.name);                  /* buổi còn ghi dở trên máy này → số buổi của buổi đó, nút = "Tiếp tục buổi tập" */
+    var ci=ciFor(m), at=(ci&&ci.status==='ok')?(ci.at||m.signed||''):(m.checked?(m.signed||''):'');
+    if(ss){ $('c-note').innerHTML='ĐANG GHI BUỔI '+ss.session+' · CÒN '+m.left+' BUỔI'+(at?' · ĐÃ KÝ <span class="ac">'+at+'</span>':''); countUp($('c-num'), ss.session, 700, 420); setMeter('c', ss.session-1, m.total, 460); }
     else { $('c-note').textContent='ĐÃ TẬP '+m.done+' · CÒN '+m.left+' BUỔI'; countUp($('c-num'), m.done+1, 700, 420); setMeter('c', m.done, m.total, 460); }
+    btn.querySelector('span').textContent = ss ? 'Tiếp tục buổi tập' : 'Check-in buổi tập';
     btn.classList.remove('off'); btn.removeAttribute('aria-disabled');
   }
+  /* dữ liệu có thể cũ (khách vừa được check-in từ máy khác) → đồng bộ nền; xong thì HOOK này chạy lại → A3.1 */
+  if(!state.loading && Date.now()-state.dataTs>30000) refreshData(true);
 };
 /* CHECK-IN LẠC QUAN: sang màn chọn buổi NGAY, lệnh check-in chạy nền rồi báo kết quả trên header
    (V-B). Số buổi tạm = đã tập + 1; máy chủ trả số thật thì sửa lại (kể cả các set đã xếp hàng).
