@@ -1,7 +1,7 @@
 /* B0DY Coach — service worker: mở được app khi mất mạng.
    index.html: network-first (bản mới lên là dùng ngay), rớt mạng → bản đã cache.
    Font/asset tĩnh: cache-first. Không đụng tới API (script.google.com). */
-var VER='b0dy-coach-v1.5.1';
+var VER='b0dy-coach-v1.6';
 var SHELL=['./','./index.html','./manifest.webmanifest','./icon-192.png','./icon-512.png','./apple-touch-icon.png'];
 self.addEventListener('install',function(e){ e.waitUntil(caches.open(VER).then(function(c){ return c.addAll(SHELL); }).then(function(){ return self.skipWaiting(); })); });
 self.addEventListener('activate',function(e){ e.waitUntil(caches.keys().then(function(ks){ return Promise.all(ks.filter(function(k){return k!==VER}).map(function(k){return caches.delete(k)})); }).then(function(){ return self.clients.claim(); })); });
