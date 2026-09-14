@@ -44,12 +44,12 @@
   .screen.on{display:flex}
   .screen.enter-fwd{animation:inF .46s cubic-bezier(.22,.85,.22,1) both}
   .screen.enter-back{animation:inB .46s cubic-bezier(.22,.85,.22,1) both}
-  .screen.leave-fwd{animation:outF .22s ease both}
-  .screen.leave-back{animation:outB .22s ease both}
+  /* Rời màn dùng TRANSITION (không phải keyframes): bấm nhanh liên tiếp thì màn đang vào dở
+     chạy tiếp từ vị trí hiện tại thay vì nhảy phắt về trạng thái đầy đủ rồi mới trượt ra.
+     show() chụp transform/opacity đang có vào inline style trước khi gắn .out. */
+  .screen.out{animation:none!important;transition:transform .22s ease,opacity .22s ease}
   @keyframes inF{from{opacity:0;transform:translateX(40px)}to{opacity:1;transform:none}}
   @keyframes inB{from{opacity:0;transform:translateX(-40px)}to{opacity:1;transform:none}}
-  @keyframes outF{to{opacity:0;transform:translateX(-26px)}}
-  @keyframes outB{to{opacity:0;transform:translateX(26px)}}
   @keyframes rise{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:none}}
   .st>*{opacity:0}
   .enter-fwd .st>*,.enter-back .st>*{animation:rise .6s cubic-bezier(.2,.75,.2,1) forwards}
@@ -65,7 +65,7 @@
                  transform:scaleX(0);transform-origin:left}
   .enter-fwd .block::before,.enter-back .block::before{animation:draw .7s .22s cubic-bezier(.25,.8,.25,1) forwards}
   @keyframes draw{to{transform:scaleX(1)}}
-  @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}.st>*{opacity:1}}
+  /* prefers-reduced-motion: khối ở CUỐI file (phải đứng sau mọi rule mới thắng được) */
 
   /* ============ HEADER 53px ============ */
   .top{font-family:var(--mono);font-size:11px;letter-spacing:.14em;color:var(--slate);
@@ -113,8 +113,10 @@
   .mq.ell{text-overflow:ellipsis}
   .mq.run{-webkit-mask-image:linear-gradient(to right,transparent 0,#000 14px,#000 calc(100% - 24px),transparent 100%);
                   mask-image:linear-gradient(to right,transparent 0,#000 14px,#000 calc(100% - 24px),transparent 100%)}
-  .mq>span{display:inline;will-change:transform}
-  .mq.run>span{display:inline-block;padding-right:24px}
+  /* will-change CHỈ khi đang chạy: đặt cố định ở .mq>span thì mỗi tên khách trong danh sách
+     là một lớp compositor riêng, kể cả tên ngắn không hề tràn. */
+  .mq>span{display:inline}
+  .mq.run>span{display:inline-block;padding-right:24px;will-change:transform}
   .mq.fade{opacity:0}
 
   .body{flex:1;display:flex;flex-direction:column;min-height:0}
@@ -188,7 +190,9 @@
         color:var(--paper);margin-top:14px;font-variant-numeric:tabular-nums;display:flex;align-items:baseline}
   .stat i{font-style:normal;color:var(--graphite);font-size:26px;letter-spacing:0;margin-left:12px}
   .meter{height:10px;background:rgba(250,250,250,.12);margin-top:22px;display:flex;gap:2px;overflow:hidden}
-  .meter i{display:block;height:100%;width:0;transition:width .9s cubic-bezier(.3,.7,.2,1)}
+  /* Bề rộng đặt ngay từ đầu (tĩnh), chỉ scaleX chạy → GPU, không layout lại mỗi frame. */
+  .meter i{display:block;height:100%;width:0;transform:scaleX(0);transform-origin:left;
+           transition:transform .9s cubic-bezier(.3,.7,.2,1)}
   .meter .mb{background:var(--paper)}
   .meter .ma{background:var(--acid);transition-delay:.4s}
   .statline{margin-top:12px}
@@ -288,9 +292,12 @@
 
   /* ============ A5 — lưới số đo + bàn phím số ============ */
   .grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px;align-content:start}
-  .mt{height:74px;background:rgba(250,250,250,.07);padding:14px 18px 12px;display:flex;flex-direction:column;justify-content:space-between;
-      text-align:left;box-shadow:inset 0 0 0 0 var(--acid);transition:box-shadow .2s ease}
-  .mt.on{box-shadow:inset 0 0 0 2px var(--acid)}
+  /* Viền Acid khi đang nhập: box-shadow tĩnh trên lớp phủ, chỉ opacity chạy → không repaint mỗi frame */
+  .mt{position:relative;height:74px;background:rgba(250,250,250,.07);padding:14px 18px 12px;display:flex;flex-direction:column;justify-content:space-between;
+      text-align:left}
+  .mt::after{content:'';position:absolute;inset:0;box-shadow:inset 0 0 0 2px var(--acid);
+             opacity:0;transition:opacity .2s ease;pointer-events:none}
+  .mt.on::after{opacity:1}
   .mt .l{font-family:var(--mono);font-size:12px;letter-spacing:-.01em;color:var(--paper)}
   .mt .v{font-family:var(--mono);font-size:26px;line-height:1;display:flex;align-items:baseline;gap:6px;font-variant-numeric:tabular-nums}
   .mt .v.none{color:var(--graphite)}
@@ -400,6 +407,36 @@
   .busy.on{display:block}
   .shield{position:fixed;inset:0;z-index:55;display:none}
   .shield.on{display:block}
+
+  /* ============ GIẢM CHUYỂN ĐỘNG ============
+     "Nhẹ hơn", KHÔNG phải "bằng không": giữ fade opacity (giúp hiểu ngữ cảnh và tránh
+     nháy chữ ở header), bỏ mọi dịch chuyển vị trí / phóng to thu nhỏ có tính trang trí.
+     Vạch bận và vòng vuốt-làm-mới được giữ vì đó là phản hồi chức năng "đang chạy".
+     Khối này PHẢI nằm cuối file mới thắng được các rule phía trên. */
+  @media (prefers-reduced-motion:reduce){
+    @keyframes inF{from{opacity:0}to{opacity:1}}
+    @keyframes inB{from{opacity:0}to{opacity:1}}
+    @keyframes rise{from{opacity:0}to{opacity:1}}
+    .screen.out{transition:opacity .2s ease}
+    .block::before{transform:scaleX(1)}
+    .bars i{transform:scaleY(1)}
+    .tline{clip-path:inset(0 0 0 0)}
+    .beads .bd{transform:scale(1)}
+    .beads .sm{transform:scaleY(1)}
+    .beads .ln{clip-path:inset(0 0 0 0)}
+    .enter-fwd .block::before,.enter-back .block::before,
+    .enter-fwd .bars i,.enter-back .bars i,
+    .enter-fwd .tline,.enter-back .tline,
+    .enter-fwd .ring .pg,.enter-back .ring .pg,
+    .enter-fwd .beads .ln,.enter-back .beads .ln,
+    .enter-fwd .beads .bd,.enter-back .beads .bd,
+    .enter-fwd .beads .sm,.enter-back .beads .sm{animation:none}
+    .dots.err{animation:none}
+    .meter i{transition:none}
+    .val b{transition:none}
+    .val b.bump{transform:none}
+    .screen.ptr-anim>*{transition:none}
+  }
 </style>
 </head>
 <body>
@@ -700,7 +737,7 @@
    Không có API hoặc ?demo → chạy bằng data mẫu (không gọi mạng).
    ===================================================================== */
 var $=function(id){return document.getElementById(id)};
-var APP_VER='v1.6.1';
+var APP_VER='v1.7';
 /* ngày: nội bộ dùng ISO 'yyyy-MM-dd'; hiển thị 'dd/MM/yy' */
 function isoToday(d){ d=d||new Date(); return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2); }
 function vn(iso){ if(!iso) return ''; var p=String(iso).split('-'); return p.length===3 ? p[2]+'/'+p[1]+'/'+p[0].slice(2) : iso; }
@@ -903,20 +940,33 @@ function ciFor(m){ var c=state.ci; return (c && m && c.name===m.name && c.day===
 /* =====================================================================
    CHUYỂN MÀN — y nguyên app check-in
    ===================================================================== */
+/* người dùng bật "giảm chuyển động" trong Cài đặt iOS — hỏi mỗi lần, không cache */
+var RM_MQ = window.matchMedia ? window.matchMedia('(prefers-reduced-motion: reduce)') : null;
+function rm(){ return !!(RM_MQ && RM_MQ.matches); }
+
 function show(id, dir){
   dir = dir || 'fwd';
   var el = $(id);
   var cur = (state.screen && $(state.screen)) || document.querySelector('.screen.on');
   if(cur && cur !== el){
     if(cur._t){ clearTimeout(cur._t); cur._t = 0; }
-    cur.classList.remove('enter-fwd','enter-back');
-    cur.classList.add(dir==='fwd' ? 'leave-fwd' : 'leave-back');
+    /* Chụp transform/opacity ĐANG có vào inline trước khi gỡ class enter, rồi mới chuyển
+       sang .out (transition). Nếu không, màn đang vào dở sẽ nhảy về trạng thái đầy đủ. */
+    var cs = getComputedStyle(cur);
+    cur.style.transform = cs.transform;
+    cur.style.opacity   = cs.opacity;
+    cur.classList.remove('enter-fwd','enter-back','out');
+    void cur.offsetWidth;
+    cur.classList.add('out');
+    cur.style.transform = rm() ? cs.transform : 'translateX('+(dir==='fwd' ? -26 : 26)+'px)';
+    cur.style.opacity   = '0';
     cur._t = (function(c){ return setTimeout(function(){
-      c.classList.remove('on','leave-fwd','leave-back'); c._t = 0;
+      c.classList.remove('on','out'); c.style.transform=''; c.style.opacity=''; c._t = 0;
     }, 230); })(cur);
   }
   if(el._t){ clearTimeout(el._t); el._t = 0; }
-  el.classList.remove('leave-fwd','leave-back','enter-fwd','enter-back');
+  el.classList.remove('out','enter-fwd','enter-back');
+  el.style.transform=''; el.style.opacity='';
   el.classList.add('on');
   void el.offsetWidth;
   el.classList.add(dir==='fwd' ? 'enter-fwd' : 'enter-back');
@@ -936,6 +986,7 @@ function go(id, dir){
   }, 40);
 }
 function countUp(el, to, dur, delay){
+  if(rm()){ el.textContent = String(to); return; }   /* giảm chuyển động: ra thẳng số cuối */
   el.textContent = '0';
   setTimeout(function(){
     var t0 = performance.now();
@@ -950,12 +1001,15 @@ function countUp(el, to, dur, delay){
 /* meter kép: Paper = đã tập, Acid = đúng 1 buổi (buổi này) */
 function setMeter(prefix, done, total, delay, noNow){
   var mb=$(prefix+'-mb'), ma=$(prefix+'-ma');
+  /* Bề rộng đặt NGAY (tĩnh), chỉ scaleX chạy → chạy trên GPU, không layout lại mỗi frame */
   mb.style.transition='none'; ma.style.transition='none';
-  mb.style.width='0'; ma.style.width='0';
+  mb.style.width='calc('+pct(done,total).toFixed(2)+'% - 1px)';
+  ma.style.width= noNow ? '0px' : 'calc('+(total>0 ? (100/total).toFixed(2) : 0)+'% - 1px)';
+  mb.style.transform='scaleX(0)'; ma.style.transform='scaleX(0)';
+  void mb.offsetWidth;
   setTimeout(function(){
     mb.style.transition=''; ma.style.transition='';
-    mb.style.width='calc('+pct(done,total).toFixed(2)+'% - 1px)';
-    ma.style.width= noNow ? '0' : 'calc('+(total>0 ? (100/total).toFixed(2) : 0)+'% - 1px)';
+    mb.style.transform='scaleX(1)'; ma.style.transform='scaleX(1)';
   }, delay);
 }
 /* thông báo V-B: crumb đổi thành dòng trạng thái Acid + hairline header Acid ~2,6s rồi trả lại */
@@ -1000,12 +1054,25 @@ $('st-hist')._fogBot=64;
    nghỉ 1,6s với "…" → chạy trái đều 32px/s tới khi lộ hết → giữ 1,6s → mờ .3s → về đầu → lặp.
    ===================================================================== */
 var MQ=[];
+/* Dọn các mục trỏ vào DOM đã bị gỡ (innerHTML='' khi gõ tìm kiếm). Không dọn thì chuỗi
+   setTimeout của mqCycle tự lên lịch lại vĩnh viễn trên node chết — gõ 10 ký tự với 40
+   khách là vài trăm chuỗi chạy nền. mqStop() lọc theo contains() nên không bắt được. */
+function mqPrune(){
+  MQ = MQ.filter(function(m){ if(document.contains(m.el)) return true; clearTimeout(m.t); return false; });
+}
 function mqInit(root){
+  mqPrune();
+  if(rm()) return;                       /* giảm chuyển động: giữ "…", không cho chữ chạy */
+  var pend=[];
   root.querySelectorAll('.mq').forEach(function(el){
     var inner=el.firstElementChild; if(!inner) return;
     el.classList.remove('run','fade'); el.classList.add('ell');
     inner.style.transition='none'; inner.style.transform='none';
-    var ov=el.scrollWidth-el.clientWidth;
+    pend.push(el);
+  });
+  /* đọc scrollWidth SAU khi ghi xong toàn bộ → một lần layout, thay vì ghi-đọc xen kẽ từng phần tử */
+  pend.forEach(function(el){
+    var inner=el.firstElementChild, ov=el.scrollWidth-el.clientWidth;
     if(ov<=1) return;
     var m={el:el,inner:inner,ov:ov+24,t:0};
     MQ.push(m); mqCycle(m);
