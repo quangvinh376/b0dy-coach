@@ -1,0 +1,52 @@
+/* Chụp từng màn của luồng demo (?demo) — không mạng ngoài: mock font. Kết quả: test/out/*.png + danh sách lỗi JS */
+var {chromium}=require('playwright'); var serve=require('./serve'); var fs=require('fs');
+(async function(){
+  var srv=await serve(8123), browser=await chromium.launch({executablePath:'/opt/pw-browsers/chromium-1194/chrome-linux/chrome'});
+  var ctx=await browser.newContext({viewport:{width:393,height:852}, deviceScaleFactor:2, hasTouch:true, isMobile:true});
+  await ctx.route(/fontshare|fonts\.googleapis|fonts\.gstatic/, function(r){ r.fulfill({status:200, contentType:'text/css', body:''}); });
+  var page=await ctx.newPage(), errors=[]; page.on('pageerror', function(e){ errors.push(String(e)); }); page.on('console', function(m){ if(m.type()==='error') errors.push('console: '+m.text()); });
+  fs.mkdirSync('test/out',{recursive:true});
+  var n=0; async function shot(name, wait){ await page.waitForTimeout(wait||700); await page.screenshot({path:'test/out/'+(++n<10?'0':'')+n+'-'+name+'.png'}); }
+  await page.goto('http://localhost:8123/?demo'); await shot('pin');
+  for(var k of ['1','2','3','4']) await page.click('#pin-pad button:has-text("'+k+'")'); await shot('home',1200);
+  await page.click('#h-7d'); await shot('home-7d');
+  await page.click('#p-home .nav .ghost:nth-child(2)'); await shot('clients');
+  await page.click('#cl-list .row'); await shot('profile',900);
+  await page.click('#pf-tabs button:nth-child(3)'); await shot('profile-eo');
+  await page.click('button.row:has-text("Đo lường")'); await shot('measure');
+  await page.click('#ms-list .row'); await shot('measure-open');
+  await page.click('#p-measure .cta'); await shot('measure-new');
+  await page.click('#mn-pad button:has-text("7")'); await page.click('#mn-pad button:has-text("2")'); await page.click('#mn-pad button:has-text(",")'); await page.click('#mn-pad button:has-text("4")'); await shot('measure-typed');
+  await page.click('#p-measure-new .cta'); await shot('measure-saved');
+  await page.click('#p-measure .nav .ghost'); await page.waitForTimeout(400);
+  await page.click('#pf-target'); await shot('target');
+  await page.click('#tg-tabs button:nth-child(2)'); await shot('target-arm');
+  await page.click('#p-target .nav .ghost'); await page.waitForTimeout(400);
+  await page.click('button.row:has-text("Hiệu suất tập")'); await shot('perf');
+  await page.click('#pe-list .row:not(.off)'); await shot('perf-open');
+  await page.click('#p-perf .nav .ghost'); await page.waitForTimeout(400); await page.click('#p-profile .nav .ghost'); await page.waitForTimeout(400);
+  await page.click('#p-clients .cta'); await shot('pick');
+  await page.fill('#pk-q','qua'); await shot('pick-search');
+  await page.click('#pk-list .row:not(.off)'); await shot('pick-1');
+  await page.click('#pk-go'); await shot('confirm-1',1300);
+  await page.click('#cf-back'); await page.waitForTimeout(400); await page.fill('#pk-q',''); await page.click('#pk-list .row:not(.off):not(.sel)'); await shot('pick-2');
+  await page.click('#pk-go'); await shot('confirm-2',1300);
+  await page.click('#cf-go'); await shot('plan-empty',500); await shot('lib',700);
+  await page.click('#lib-list .row:nth-of-type(1)'); await page.click('#lib-list .row:nth-of-type(2)'); await page.click('#lib-list .row:nth-of-type(4)'); await page.click('#lib-list .row:nth-of-type(6)'); await shot('lib-4');
+  await page.click('#lib-go'); await shot('plan-4');
+  await page.click('#pl-go'); await shot('loop-setup',1200);
+  async function tap(i){ await page.evaluate(function(i){ document.querySelectorAll('#loop-host .loop')[i].dispatchEvent(new PointerEvent('pointerdown',{bubbles:true})); }, i); await page.waitForTimeout(250); }
+  await tap(0); await shot('loop-setup-nav',300);
+  await page.click('#loop-host .loop:nth-child(1) .c1'); await shot('loop-active',900); await tap(0);
+  await page.click('#loop-host .loop:nth-child(1) .j1'); await shot('loop-rest-setup',900); await tap(0);
+  await page.click('#loop-host .loop:nth-child(1) .c1'); await shot('loop-rest',1500); await tap(1);
+  await page.click('#loop-host .loop:nth-child(2) .c1'); await shot('loop-2-active',900); await page.waitForTimeout(6000); await shot('loop-rest-late',300); await tap(0);
+  await page.click('#loop-host .loop:nth-child(1) .g1'); await shot('loop-menu',600);
+  await page.click('#loop-host .loop:nth-child(1) .fend'); await shot('summary',1200);
+  await page.click('#sm-form button:nth-child(4)'); await page.fill('#sm-note','Vai trái hơi mỏi'); await shot('summary-filled');
+  await page.click('#sm-go'); await shot('summary-2',900);
+  await page.click('#sm-go'); await shot('done',1300);
+  await page.click('#p-done .cta'); await shot('home-after',1200);
+  console.log('errors:', JSON.stringify(errors,null,1));
+  await ctx.close(); await browser.close(); srv.close();
+})().catch(function(e){ console.error('FAIL', e); process.exit(1); });
