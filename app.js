@@ -872,30 +872,45 @@ function lastSessionDay(m){
   Object.keys(m.last||{}).forEach(function(ex){ var l=m.last[ex]; if(l && l.d && l.d>d && l.d!==TODAY_ISO) d=l.d; });
   return d;
 }
+/* THẺ SỐ BUỔI: vệt Paper (--x = % đã tập) + vệt Acid (--y = 1 buổi, hôm nay) chạy từ trái khi thẻ có class "in".
+   Chữ 3 lớp chồng khít: lớp dưới = màu ngoài vệt (Paper/Gray); lớp .top.b cắt đúng vệt Paper, lớp .top.a cắt đúng vệt Acid = màu Ink
+   (clip-path chạy cùng nhịp/độ trễ với vệt → mép màu chữ luôn trùng mép vệt). Thẻ done: chỉ vệt Acid toàn phần + .top.b. */
 function cardHtml(m, no, cls, done){
-  var big=cls==='big', W=345, doneP=pct(done?no:no-1,m.total), addP=(m.total>0?100/m.total:0);
-  var fillPx=W*(doneP+(done?0:addP))/100, nW=String(no).length*(big?64:34)+(big?16:12), lt=!done && fillPx<nW*.55;
-  return '<div class="card '+cls+(done?' done':'')+'"><i class="fill b" style="width:'+doneP.toFixed(1)+'%"></i>'+(done?'':'<i class="fill a" style="width:'+addP.toFixed(2)+'%;left:'+doneP.toFixed(1)+'%"></i>')
-        +'<div class="n'+(lt?' lt':'')+'">'+no+'</div><div class="of'+(lt?' lt':'')+'">/ '+m.total+'</div></div>';
+  var doneP=pct(done?no:no-1,m.total), addP=done?0:(m.total>0?100/m.total:0), x=doneP.toFixed(2)+'%', y=addP.toFixed(2)+'%';
+  var txt='<div class="n">'+no+'</div><div class="of">/ '+m.total+'</div>';
+  return '<div class="card '+cls+(done?' done':'')+'" style="--x:'+x+';--y:'+y+'"><i class="fill b" style="width:'+x+'"></i>'+(done?'':'<i class="fill a" style="width:'+y+';left:'+x+'"></i>')
+        +txt+'<div class="top b">'+txt+'</div>'+(done?'':'<div class="top a">'+txt+'</div>')+'</div>';
+}
+/* vào màn: chạy vệt + đếm số (mọi lớp chữ cùng một nhịp, không sửa countUp gốc) */
+function cardsIn(body){ body.querySelectorAll('.card').forEach(function(c){ c.classList.add('in'); var ns=c.querySelectorAll('.n'); countUpAll(ns, +ns[0].textContent, 700, 420); }); }
+/* dựng lại lúc màn đang hiển thị (làm mới nền / check-in xong): hiện thẳng trạng thái cuối, không chạy lại */
+function cardsStill(body){ body.querySelectorAll('.card').forEach(function(c){ c.classList.add('still'); c.classList.add('in'); }); Array.prototype.forEach.call(body.children, function(w){ w.classList.add('still'); }); }
+function countUpAll(els, to, dur, delay){
+  var set=function(v){ els.forEach(function(e){ e.textContent=String(v); }); };
+  if(rm()){ set(to); return; }
+  set(0);
+  setTimeout(function(){ var t0=performance.now(); (function f(t){ var p=Math.min(1,(t-t0)/dur); p=1-Math.pow(1-p,3); set(Math.round(to*p)); if(p<1) requestAnimationFrame(f); })(t0); }, delay||0);
 }
 HOOK['p-confirm']=function(dir, quiet){
   var names=state.sel.length?state.sel:(state.session?state.session.people.map(function(p){return p.name}):[]);
-  var body=$('cf-body'), two=names.length>1, anyDone=false, ss=loadSession(); body.innerHTML='';
-  body.className='body'+(two?' halves':' st');
+  var body=$('cf-body'), pg=$('p-confirm'), two=names.length>1, anyDone=false, ss=loadSession(), html='';
   names.forEach(function(n){
     var m=findClient(n); if(!m) return; var at=doneToday(m), no=personNo(m), resumed=!!(ss && ss.people.some(function(p){return p.name===n}));
     if(at!=null) anyDone=true;
-    var w=document.createElement('div'); w.className=two?'half':'';
     var lines= at!=null
       ? '<div class="a ac">Buổi thứ '+no+' đã xong</div><div class="a">Còn '+m.left+' buổi</div><div class="lab">ĐÃ KÝ LÚC <span class="ac">'+(at||'—')+'</span> · '+vnFull(TODAY_ISO)+'</div>'
       : '<div class="a">'+(resumed?'Đang ghi buổi '+no:'Buổi thứ '+no)+'</div><div class="b">Đã tập '+m.done+', còn '+m.left+' buổi</div>'+(two?'':'<div class="lab">'+(lastSessionDay(m)?'BUỔI TẬP GẦN NHẤT · '+vnFull(lastSessionDay(m)):'CHƯA CÓ BUỔI NÀO')+'</div>');
-    w.innerHTML='<div class="head"><span class="t1 mq"><span>'+esc(firstName(m.name))+'</span></span></div>'+cardHtml(m, no, two?'sm':'big', at!=null)+'<div class="lines'+(two?' sm':'')+'">'+lines+'</div>';
-    body.appendChild(w);
+    html+='<div'+(two?' class="half"':'')+'><div class="head"><span class="t1 mq"><span>'+esc(firstName(m.name))+'</span></span></div>'+cardHtml(m, no, two?'sm':'big', at!=null)+'<div class="lines'+(two?' sm':'')+'">'+lines+'</div></div>';
   });
-  var go=$('cf-go'), back=$('cf-back');
-  if(anyDone && !two){ go.textContent='Về trang chủ'; go.className='cta paper'; go.onclick=function(){ state.sel=[]; go('p-home','back'); }; back.hidden=true; }
-  else { go.textContent= ss ? 'Tiếp tục buổi tập' : (two?'Check-in 2 khách':'Check-in'); go.className='cta'+(anyDone?' off':''); go.onclick=doCheckin; back.hidden=false; }
-  $('p-confirm')._after=function(){ body.querySelectorAll('.card').forEach(function(c){ c.classList.add('in'); }); body.querySelectorAll('.card .n').forEach(function(n){ var v=+n.textContent; countUp(n, v, 700, 420); }); };
+  /* dựng lại nền lúc màn đang hiển thị (refreshData/refreshStats): dữ liệu không đổi → giữ nguyên DOM (không chớp);
+     đổi → dựng lại nhưng hiện thẳng trạng thái cuối (vệt giữ nguyên, số không đếm lại). Lần vào màn (go) → chạy vệt + đếm như cũ. */
+  var live=!!quiet && state.screen==='p-confirm' && !pg._after;
+  if(!(live && body._sig===html)){ body.innerHTML=html; body._sig=html; if(live) cardsStill(body); }
+  body.className='body'+(two?' halves':' st');
+  var btn=$('cf-go'), back=$('cf-back');
+  if(anyDone && !two){ btn.textContent='Về trang chủ'; btn.className='cta paper'; btn.onclick=function(){ state.sel=[]; go('p-home','back'); }; back.hidden=true; }
+  else { btn.textContent= ss ? 'Tiếp tục buổi tập' : (two?'Check-in 2 khách':'Check-in'); btn.className='cta'+(anyDone?' off':''); btn.onclick=doCheckin; back.hidden=false; }
+  if(!live) pg._after=function(){ cardsIn(body); };
   if(!state.loading && Date.now()-state.dataTs>30000) refreshData(true);
 };
 /* CHECK-IN LẠC QUAN: sang "Bài tập hôm nay" NGAY, lệnh check-in chạy nền từng khách, báo trên đảo. */
@@ -1275,15 +1290,17 @@ function summaryNext(){
   busyLine(true); flush().then(function(){ busyLine(false); }, function(){ busyLine(false); });
 }
 HOOK['p-done']=function(){
-  var s=state.lastDone; if(!s) return; var body=$('dn-body'), two=s.people.length>1; body.innerHTML=''; body.className='body'+(two?' halves':' st');
+  var s=state.lastDone; if(!s) return; var body=$('dn-body'), pg=$('p-done'), two=s.people.length>1, html='';
   s.people.forEach(function(p){
     var m=findClient(p.name)||{name:p.name,total:0,left:0}, ci=ciFor(p.name), st=ci?ci.status:'ok';
-    var w=document.createElement('div'); w.className=two?'half':'';
-    w.innerHTML='<div class="head"><span class="t1 mq"><span>'+esc(firstName(m.name))+'</span></span></div>'+cardHtml(m, p.no, two?'sm':'big', true)
-      +'<div class="lines'+(two?' sm':'')+'"><div class="a ac">Buổi thứ '+p.no+' đã xong</div><div class="a">'+(st==='ok'?'Còn '+m.left+' buổi':st==='pending'?'Đang check-in…':'<span class="er">Chưa check-in</span>')+'</div><div class="lab">ĐÃ KÝ LÚC <span class="ac">'+(p.signedAt||nowHM())+'</span> · '+vnFull(TODAY_ISO)+'</div></div>';
-    body.appendChild(w);
+    html+='<div'+(two?' class="half"':'')+'><div class="head"><span class="t1 mq"><span>'+esc(firstName(m.name))+'</span></span></div>'+cardHtml(m, p.no, two?'sm':'big', true)
+      +'<div class="lines'+(two?' sm':'')+'"><div class="a ac">Buổi thứ '+p.no+' đã xong</div><div class="a">'+(st==='ok'?'Còn '+m.left+' buổi':st==='pending'?'Đang check-in…':'<span class="er">Chưa check-in</span>')+'</div><div class="lab">ĐÃ KÝ LÚC <span class="ac">'+(p.signedAt||nowHM())+'</span> · '+vnFull(TODAY_ISO)+'</div></div></div>';
   });
-  $('p-done')._after=function(){ body.querySelectorAll('.card').forEach(function(c){ c.classList.add('in'); }); body.querySelectorAll('.card .n').forEach(function(n){ countUp(n, +n.textContent, 700, 420); }); };
+  /* gọi lại lúc màn đang hiển thị (ciOk khi check-in xong): giữ vệt, không đếm lại; không đổi thì giữ nguyên DOM */
+  var live=state.screen==='p-done' && !pg._after;
+  if(!(live && body._sig===html)){ body.innerHTML=html; body._sig=html; if(live) cardsStill(body); }
+  body.className='body'+(two?' halves':' st');
+  if(!live) pg._after=function(){ cardsIn(body); };
   if(pendingCount()) setTimeout(function(){ if(pendingCount() && state.screen==='p-done') notify('Đang đồng bộ '+pendingCount()+' mục · vẫn giữ trong máy', {spin:true}); }, 2500);
 };
 function finish(){ state.lastDone=null; state.session=null; state.sumIdx=0; saveSession(); go('p-home','back'); refreshData(true); flush(); }
