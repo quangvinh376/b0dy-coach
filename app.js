@@ -7,7 +7,7 @@
    ===================================================================== */
 'use strict';
 var $=function(id){ return document.getElementById(id); };
-var APP_VER='v2.3.2';
+var APP_VER='v2.3.3';
 
 /* ---------------- tiện ích ---------------- */
 function isoToday(d){ d=d||new Date(); return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2); }
@@ -745,7 +745,7 @@ function renderBars(animate){
       heroDay(b.dataset.k, +b.dataset.v);
       if(navigator.vibrate) try{ navigator.vibrate(4); }catch(e){}
     }
-    function up(){ if(!HB.scrub) return; HB.scrub=false; el.classList.remove('scrub'); clearTimeout(HB.t); HB.t=setTimeout(heroMonth, 900); }
+    function up(){ if(!HB.scrub) return; HB.scrub=false; el.classList.remove('scrub'); clearTimeout(HB.t); heroMonth(); }   /* nhả tay: về trạng thái mặc định NGAY */
     el.addEventListener('pointerdown', function(e){
       if(!el.children.length) return; e.preventDefault();
       try{ el.setPointerCapture(e.pointerId); }catch(x){}
@@ -849,7 +849,7 @@ function openTarget(){ state.tgMetric=state.pfMetric; go('p-target','fwd'); }
 HOOK['p-measure']=function(dir, quiet){ renderMeasureList(!quiet); };
 function renderMeasureList(animate){
   var m=state.client, el=$('ms-list'), list=m.measures.slice().reverse(); el.innerHTML='';
-  $('ms-count').textContent='LẦN ĐO · '+list.length;
+  $('ms-count').textContent='LẦN ĐO · '+list.length; $('ms-count').hidden=!list.length;   /* rỗng: chỉ còn dòng CHƯA CÓ LẦN ĐO NÀO */
   list.forEach(function(ms,i){
     var b=document.createElement('button'); b.className='row r51'+(animate?' rowin':''); if(animate) b.style.animationDelay=Math.min(i*24,280)+'ms';
     b.innerHTML='<span class="lt"><span class="nm">'+vnLong(ms.d)+'</span></span>'+ico('i-chev','dn');
@@ -933,6 +933,8 @@ function perfHist(m){
 }
 function renderPerf(animate){
   var m=state.client, q=norm($('pe-q').value), el=$('pe-list'), hist=perfHist(m); el.innerHTML=''; var i=0, any=false;
+  var hasData=Object.keys(hist).some(function(ex){ return (hist[ex]||[]).length; });
+  $('pe-q').closest('.search').hidden=!hasData;   /* chưa có dữ liệu: không có ô tìm, chỉ còn dòng CHƯA CÓ DỮ LIỆU NÀO */
   libGroups().forEach(function(g){
     /* chỉ bài đã có dữ liệu set */
     var items=g.items.filter(function(e){ return (hist[e.name]||[]).length && (!q || norm(e.name).indexOf(q)>=0 || norm(exShort(e.name)).indexOf(q)>=0); }); if(!items.length) return; any=true;
