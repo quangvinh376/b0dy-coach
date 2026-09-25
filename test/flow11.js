@@ -29,7 +29,7 @@ var {chromium}=require('playwright'); var serve=require('./serve'); var fs=requi
   for(var k of ['1','2','3','4']) await page.click('#pin-pad button:has-text("'+k+'")'); await shot('home',1200);
   assert.ok((await page.textContent('#h-taught')).indexOf('103')>=0, 'buổi tháng từ stats');
   assert.ok((await page.textContent('#h-tiles')).indexOf('14,2')>=0, 'hoa hồng');
-  await page.click('#h-go'); await page.click('#pk-list .row:not(.off)'); await page.click('#pk-go'); await shot('confirm',1200);
+  await page.click('#h-go'); await page.click('#pk-list .row:has-text("Doãn Quang")'); await shot('confirm',1200); /* khách 1:1: chạm dòng đi thẳng màn xác nhận */
   await page.click('#cf-go'); await page.waitForTimeout(900); await shot('lib-open',300);
   assert.deepEqual(SRV.checkins, ['Bùi Doãn Quang'], 'check-in đúng 1 lần');
   await page.click('#lib-list .row:nth-of-type(1)'); await page.click('#lib-list .row:nth-of-type(4)'); await page.click('#lib-go'); await shot('plan');
@@ -43,9 +43,11 @@ var {chromium}=require('playwright'); var serve=require('./serve'); var fs=requi
   await page.click('#loop-host .c1'); await page.waitForTimeout(500); await page.click('#loop-host .j0'); await shot('rest-setup-fail',900);
   await page.evaluate(function(){ state.session.people[0].restTotal=8; saveSession(); }); await page.click('#loop-host .c1'); await shot('rest-0',300);
   await page.waitForTimeout(4000); await shot('rest-mid',100); await page.waitForTimeout(4600); await shot('rest-end',100);
-  assert.ok((await page.textContent('#loop-host .c1')).indexOf('Vào set')>=0);
+  assert.ok((await page.textContent('#loop-host .c1')).indexOf('Nghỉ xong')>=0, 'CTA giữ nguyên "Nghỉ xong · kế tiếp" khi hết giờ');
+  assert.ok((await page.textContent('#loop-host .lp .head .sub')).indexOf('Hết giờ nghỉ')>=0, 'dòng 2 đổi thành "Hết giờ nghỉ"');
   await page.waitForTimeout(1500); assert.equal(SRV.logs.filter(function(e){return e.type==='SET'}).length, 1, 'SET nhả khi bắt đầu nghỉ → đã gửi');
-  await page.click('#loop-host .c1'); await shot('setup-2',900);
+  await page.click('#loop-host .c1'); await page.waitForTimeout(400); assert.ok(await page.evaluate(function(){ return document.querySelector('#loop-host .film').classList.contains('on'); }), 'CTA khi hết giờ vẫn mở menu bước tiếp');
+  await page.click('#loop-host .film .exl button:nth-child(1)'); await shot('setup-2',900);
   assert.ok((await page.textContent('#loop-host .sub')).indexOf('set 2')>=0);
   /* offline: ghi set khi mất mạng, sang bài khác qua menu */
   SRV.offline=true;

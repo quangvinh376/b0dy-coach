@@ -27,15 +27,15 @@ var {chromium}=require('playwright'); var serve=require('./serve'); var fs=requi
   await page.click('#p-perf .nav .ghost'); await page.waitForTimeout(400); await page.click('#p-profile .nav .ghost'); await page.waitForTimeout(400);
   await page.click('#p-clients .cta'); await shot('pick');
   await page.fill('#pk-q','qua'); await shot('pick-search');
-  await page.click('#pk-list .row:not(.off)'); await shot('pick-1');
+  await page.click('#pk-list .row:has-text("Doãn Quang")'); await shot('pick-1');
   await page.click('#pk-go'); await shot('confirm-1',1300);
-  await page.click('#cf-back'); await page.waitForTimeout(400); await page.fill('#pk-q',''); await page.click('#pk-list .row:not(.off):not(.sel)'); await shot('pick-2');
+  await page.click('#cf-back'); await page.waitForTimeout(400); await page.fill('#pk-q',''); await page.click('#pk-list .row:has-text("Quang Vinh")'); await shot('pick-2');
   await page.click('#pk-go'); await shot('confirm-2',1300);
   await page.click('#cf-go'); await shot('plan-empty',500); await shot('lib',700);
   await page.click('#lib-list .row:nth-of-type(1)'); await page.click('#lib-list .row:nth-of-type(2)'); await page.click('#lib-list .row:nth-of-type(4)'); await page.click('#lib-list .row:nth-of-type(6)'); await shot('lib-4');
   await page.click('#lib-go'); await shot('plan-4');
   await page.click('#pl-go'); await shot('loop-setup',1200);
-  async function tap(i){ await page.evaluate(function(i){ document.querySelectorAll('#loop-host .loop')[i].dispatchEvent(new PointerEvent('pointerdown',{bubbles:true})); }, i); await page.waitForTimeout(250); }
+  async function tap(i){ await page.evaluate(function(i){ setFocus(i); }, i); await page.waitForTimeout(150); }
   await tap(0); await shot('loop-setup-nav',300);
   await page.click('#loop-host .loop:nth-child(1) .c1'); await shot('loop-active',900); await tap(0);
   await page.click('#loop-host .loop:nth-child(1) .j1'); await shot('loop-rest-setup',900); await tap(0);
