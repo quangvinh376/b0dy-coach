@@ -29,7 +29,7 @@ var {chromium}=require('playwright'); var serve=require('./serve'); var fs=requi
   for(var k of ['1','2','3','4']) await page.click('#pin-pad button:has-text("'+k+'")'); await shot('home',1200);
   assert.ok((await page.textContent('#h-taught')).indexOf('103')>=0, 'buổi tháng từ stats');
   assert.ok((await page.textContent('#h-tiles')).indexOf('14,2')>=0, 'hoa hồng');
-  await page.click('#h-go'); await page.click('#pk-list .row:not(.off)'); await page.click('#pk-go'); await shot('confirm',1200);
+  await page.click('#h-go'); await page.click('#pk-list .row:has-text("Doãn Quang")'); await shot('confirm',1200); /* khách 1:1: chạm dòng đi thẳng màn xác nhận */
   await page.click('#cf-go'); await page.waitForTimeout(900); await shot('lib-open',300);
   assert.deepEqual(SRV.checkins, ['Bùi Doãn Quang'], 'check-in đúng 1 lần');
   await page.click('#lib-list .row:nth-of-type(1)'); await page.click('#lib-list .row:nth-of-type(4)'); await page.click('#lib-go'); await shot('plan');
