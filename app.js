@@ -391,7 +391,7 @@ function show(id, dir){
   el.classList.remove('leave-fwd','leave-back','enter-fwd','enter-back');
   el.classList.add('on'); void el.offsetWidth;
   el.classList.add(dir==='fwd'?'enter-fwd':'enter-back');
-  el._t=setTimeout(function(){ el.classList.remove('enter-fwd','enter-back'); navClean(el); el._t=0; }, 700);
+  el._t=setTimeout(function(){ navClean(el); el._t=0; }, 700);   /* giữ class enter-*: các animation fill forwards (.st>*) cần nó */
   state.screen=id;
 }
 var HOOK={};
@@ -416,7 +416,7 @@ function countUp(el, to, dur, delay){
 var PILL={t:0, y0:0, drag:false};
 function notify(text, o){
   o=o||{}; var el=$('pill'); clearTimeout(PILL.t);
-  var was=el.classList.contains('on'), onAcid=(state.screen==='p-loop' && LOOPS.some(function(l){ return l.root.classList.contains('acid'); }));
+  var was=el.classList.contains('on'), onAcid=(state.screen==='p-loop' && LOOPS[0] && LOOPS[0].root.classList.contains('acid'));
   el.className='pill'+(was?' on':'')+(o.err?' err':'')+(onAcid?' onacid':'');
   el.innerHTML=(o.spin?'<i class="spin"></i>':ico(o.icon||(o.err?'i-x':'i-check')))+'<span class="tx">'+esc(text).replace(/(\d[\d:,\.\/×]*)/g,'<span class="n">$1</span>')+'</span>'+(o.action?'<button class="act">'+esc(o.action.label)+'</button>':'');
   var act=el.querySelector('.act'); if(act) act.onclick=function(e){ e.stopPropagation(); hidePill(); o.action.fn(); };
@@ -1421,7 +1421,7 @@ HOOK['p-done']=function(){
   if(!(live && body._sig===html)){ body.innerHTML=html; body._sig=html; if(live) cardsStill(body); }
   body.className='body'+(two?' halves':' st');
   if(!live) pg._after=function(){ cardsIn(body); };
-  if(pendingCount()) setTimeout(function(){ if(pendingCount() && state.screen==='p-done') notify('Đang đồng bộ '+pendingCount()+' mục · vẫn giữ trong máy', {spin:true}); }, 2500);
+  if(pendingCount()) setTimeout(function(){ if(pendingCount() && state.screen==='p-done') notify('Đang đồng bộ '+pendingCount()+' mục', {spin:true}); }, 2500);
 };
 function finish(){ state.lastDone=null; state.session=null; state.sumIdx=0; saveSession(); go('p-home','back'); refreshData(true); flush(); }
 
