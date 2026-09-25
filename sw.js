@@ -15,7 +15,7 @@ self.addEventListener('fetch',function(e){
       .catch(function(){ return caches.match(e.request).then(function(r){ return r||caches.match('./index.html'); }); }));
     return;
   }
-  if(/fonts\.gstatic|fonts\.googleapis|fontshare|cdn\.fontshare/.test(u.host)){    /* font: cache-first */
+  if(/fonts\.gstatic|fonts\.googleapis|fontshare|cdn\.fontshare/.test(u.host) || /\.(woff2?|ttf|otf)$/.test(u.pathname)){    /* font: cache-first */
     e.respondWith(caches.match(e.request).then(function(r){ return r||fetch(e.request).then(function(x){ var cp=x.clone(); caches.open(VER).then(function(c){ c.put(e.request,cp); }); return x; }); }));
   }
 });

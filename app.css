@@ -2,7 +2,7 @@
    B0DY · Coach app — v2 (Figma "Exploring UX journey", page 117:2)
    Token, khung 393×852, mọi component. Không framework, không build.
    ===================================================================== */
-@font-face{font-family:'SVN-Switzer';src:url('fonts/SVN-Switzer-Medium.woff2') format('woff2'),url('fonts/SVN-Switzer-Medium.woff') format('woff');font-weight:500;font-style:normal;font-display:swap}
+@font-face{font-family:'SVN-Switzer';src:url('fonts/SVN-Switzer-Medium.woff2') format('woff2'),url('fonts/SVN-Switzer-Medium.woff') format('woff'),url('fonts/SVN-Switzer-Medium.ttf') format('truetype'),url('fonts/SVN-Switzer-Medium.otf') format('opentype');font-weight:500;font-style:normal;font-display:swap}
 
 :root{
   --ink:#0A0A0A; --paper:#FAFAFA; --graphite:#4A4A4A; --slate:#767676; --ash:#B0B0B0;
