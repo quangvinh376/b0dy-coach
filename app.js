@@ -7,7 +7,7 @@
    ===================================================================== */
 'use strict';
 var $=function(id){ return document.getElementById(id); };
-var APP_VER='v2.1.1';
+var APP_VER='v2.1.2';
 
 /* ---------------- tiện ích ---------------- */
 function isoToday(d){ d=d||new Date(); return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2); }
@@ -1013,7 +1013,7 @@ function renderLib(animate){
     var d=document.createElement('div'); d.className='lab sec'; d.textContent=upper(g.name)+' · '+items.length; el.appendChild(d);
     items.forEach(function(e){
       var sel=s.plan.indexOf(e.name)>=0, l=lastFor(e.name), b=document.createElement('button'); b.className='row'+(sel?' sel':'')+(animate?' rowin':''); if(animate) b.style.animationDelay=Math.min(i++*16,200)+'ms';
-      b.innerHTML='<span class="lt"><span class="nm mq"><span>'+esc(exShort(e.name))+'</span></span><span class="lab">'+(l?'LẦN TRƯỚC '+l.rep+' × '+fmtN(l.kg)+' KG':'CHƯA TẬP')+'</span></span>'+ico(sel?'i-check':'i-plus','acid');
+      b.innerHTML='<span class="lt"><span class="nm mq"><span>'+esc(exShort(e.name))+'</span></span><span class="lab">'+(l?'LẦN TRƯỚC '+l.rep+' × '+fmtN(l.kg)+' KG':'CHƯA TẬP')+'</span></span>'+ico(sel?'i-check':'i-plus',sel?'acid':'paper');
       b.onclick=function(){ var k=s.plan.indexOf(e.name); if(k>=0){ if(planCounts(e.name)){ notify('Bài đã ghi set · không bỏ được', {err:true}); return; } s.plan.splice(k,1); } else s.plan.push(e.name); saveSession(); renderLib(false); };
       el.appendChild(b);
     });
@@ -1106,8 +1106,8 @@ function Loop(host, p, o){
   L.layout=function(){
     ring.size(); var rr=root.getBoundingClientRect();
     ring.cx=rr.width/2;
-    if(o.half){ ring.cy=rr.height/2+14; ring.h=162; var mid=q('.lp .mid'), top=Math.round(mid.offsetTop+mid.offsetHeight/2-46); root.querySelectorAll('.clock').forEach(function(c){ c.style.top=top+'px'; }); }
-    else { ring.cy=rr.height/2; ring.h=324; }
+    if(o.half){ ring.cy=rr.height/2+14; ring.h=162; var mid=q('.lp .mid'), top=Math.round((mid.offsetTop+root.clientHeight-28)/2-44.5); root.querySelectorAll('.clock').forEach(function(c){ c.style.top=top+'px'; }); }
+    else { ring.cy=rr.height/2+16; ring.h=324; }
   };
   function setLabel(){ var st=last(E().sets); return (st&&st[2]?'Đã đạt':'Chưa đạt')+' set '+p.setNo; }
   function paint(){
