@@ -360,7 +360,7 @@ var CLIP={hard:[], ell:[]};
     /* kéo thả xoá thẻ 2: giữ 250ms → nhấc → kéo tới vùng đỏ → thả */
     var t=await h.rect('#pl-grid .ptile:nth-child(2)'), dz=await h.rect('#pl-drop');
     await page.mouse.move(t.cx, t.cy); await page.mouse.down(); await h.wait(400);
-    check(await h.has('#pl-drop','show') && await h.has('#pl-grid .ptile.lift', 'lift'), 'giữ → nhấc thẻ, vùng xoá hiện');
+    check(await h.has('#pl-drop','show') && await h.has('.ptile.lift', 'lift'), 'giữ → nhấc thẻ, vùng xoá hiện');
     await page.mouse.move(t.cx, t.cy+40, {steps:5}); await page.mouse.move(dz.cx, dz.cy, {steps:12}); await h.wait(150);
     check(await h.has('#pl-drop','hot') && /Thả để xoá/.test(await h.txt('#pl-drop')), 'trên vùng xoá: '+(await h.txt('#pl-drop')));
     await page.mouse.up(); await h.wait(400);
