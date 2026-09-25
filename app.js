@@ -625,7 +625,7 @@ function renderHome(animate){
     var b=document.createElement('button'); b.className='tile'+(t.acid?' acid':'')+(animate?' rowin':''); if(animate) b.style.animationDelay=(120+i*50)+'ms';
     b.innerHTML='<div><div class="tl">'+t.l+'</div><div class="tv"><span class="n">'+t.v+'</span>'+(t.small?'<small> '+t.small+'</small>':'')+'</div></div>'+ico(t.ic, t.thin?'thin':'');
     if(animate && /^\d+$/.test(t.v)) countUp(b.querySelector('.n'), +t.v, 600, 300+i*60);
-    if(t.go) b.onclick=function(){ state.clFilter=t.q||''; go(t.go,'fwd'); };
+    if(t.go) b.onclick=function(){ if(t.q==='slow'||t.q==='today') openClientSheet(t.q); else { state.clFilter=t.q||''; go(t.go,'fwd'); } };
     el.appendChild(b);
   });
   $('h-go').textContent= loadSession() ? 'Tiếp tục buổi tập' : 'Vào buổi tập';
@@ -660,6 +660,35 @@ function renderBars(animate){
     });
   }
 }
+/* ---- WINDOW KHÁCH từ ô trang chủ: kind 'slow' = khách tập chậm · 'today' = khách đã tập hôm nay.
+   Cùng phong cách window thư viện (#lib): dimmer + sheet trượt từ dưới (.36s var(--eo)); vuốt handle >80px / chạm dimmer / "Đóng" → đóng.
+   Chạm một khách → đóng window rồi mở hồ sơ (quay lại về trang chủ). Không sửa go(): đóng ngay trong onclick trước khi chuyển màn. ---- */
+var CS_OPEN=false, CS_KIND='';
+function csClients(kind){
+  if(kind==='slow') return slowClients()||[];                       /* chưa có thống kê → rỗng */
+  return state.clients.filter(function(c){ return c.checked || (ciFor(c.name)&&ciFor(c.name).status==='ok'); });
+}
+function csMeta(m, kind){
+  if(kind==='today'){ var ci=ciFor(m.name), at=(ci && ci.status==='ok' && ci.at) || m.signed || ''; return 'ĐÃ TẬP HÔM NAY'+(at?' · '+at:''); }
+  return clientMeta(m)+' <svg class="ic s13 slow"><use href="#t-trend"/></svg>';
+}
+function openClientSheet(kind){ CS_KIND=kind; CS_OPEN=true; $('cs-q').value=''; renderClientSheet(true); $('cs-dim').classList.add('on'); $('csheet').classList.add('on'); }
+function closeClientSheet(silent){ if(!CS_OPEN) return; CS_OPEN=false; $('cs-dim').classList.remove('on'); $('csheet').classList.remove('on'); $('csheet').style.transform=''; }
+function renderClientSheet(animate){
+  var kind=CS_KIND, q=norm($('cs-q').value), el=$('cs-list'), title=kind==='slow'?'KHÁCH TẬP CHẬM':'KHÁCH HÔM NAY'; el.innerHTML=''; var i=0;
+  var all=csClients(kind), list=all.filter(function(m){ return !q || norm(m.name).indexOf(q)>=0; });
+  if(list.length){
+    var d=document.createElement('div'); d.className='lab sec'; d.textContent=title+' · '+list.length; el.appendChild(d);
+    list.forEach(function(m){ el.appendChild(clientRow(m, animate, i++, csMeta(m, kind), function(){ closeClientSheet(true); state.client=m; state.back='p-home'; go('p-profile','fwd'); })); });
+  } else { var e=document.createElement('div'); e.className='lab empty'; e.textContent= q && all.length ? 'KHÔNG TÌM THẤY TÊN NÀY' : 'CHƯA CÓ '+title; el.appendChild(e); }
+  el._fogTop=32; fogUpdate(el); if(!animate) mqInit(el);
+}
+(function(){ var y0=0, on=false, h=$('cs-handle');
+  h.addEventListener('touchstart', function(e){ on=true; y0=e.touches[0].clientY; }, {passive:true});
+  h.addEventListener('touchmove', function(e){ if(!on) return; var dy=e.touches[0].clientY-y0; if(dy>0) $('csheet').style.transform='translateY('+dy+'px)'; }, {passive:true});
+  h.addEventListener('touchend', function(e){ if(!on) return; on=false; var dy=(e.changedTouches[0].clientY-y0); $('csheet').style.transform=''; if(dy>80) closeClientSheet(); }, {passive:true});
+  h.addEventListener('click', function(){ closeClientSheet(); });
+})();
 function enterSession(){
   var s=loadSession();
   if(s){ state.session=s; if(s.plan && s.plan.length && s.started){ go('p-loop','fwd'); } else go('p-plan','fwd'); return; }

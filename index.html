@@ -255,6 +255,14 @@
   <div class="scroll list" id="lib-list"></div>
   <div class="foot"><button class="cta" id="lib-go" onclick="closeLib()">Chọn</button></div>
 </div>
+<!-- window khách từ ô trang chủ (khách tập chậm / khách hôm nay): cùng phong cách window thư viện -->
+<div class="dimmer" id="cs-dim" onclick="closeClientSheet()"></div>
+<div class="sheet" id="csheet">
+  <div class="handle" id="cs-handle"><i></i></div>
+  <div class="search g"><svg class="ic"><use href="#i-search"/></svg><input id="cs-q" type="search" placeholder="Tìm khách" autocomplete="off" oninput="renderClientSheet(false)"></div>
+  <div class="scroll list" id="cs-list"></div>
+  <div class="foot"><button class="cta" id="cs-go" onclick="closeClientSheet()">Đóng</button></div>
+</div>
 
 <!-- ================= 5–9 · VÒNG LẶP SET ================= -->
 <section class="page" id="p-loop" style="padding:0"><div class="split" id="loop-host"></div></section>
