@@ -7,7 +7,7 @@
    ===================================================================== */
 'use strict';
 var $=function(id){ return document.getElementById(id); };
-var APP_VER='v2.1.0';
+var APP_VER='v2.1.1';
 
 /* ---------------- tiện ích ---------------- */
 function isoToday(d){ d=d||new Date(); return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2); }
@@ -116,6 +116,32 @@ var EX_LIB=[
  ['Johnson Calf Raise','Calf Raise','Legs','johnson-calf-raise']
 ].map(function(r){ return {name:r[0], group:r[1], part:r[2], id:r[3]}; });
 var EX_BY_NAME={}; EX_LIB.forEach(function(e){ EX_BY_NAME[e.name]=e; });
+/* tên hiển thị rút gọn (≤ 4 từ): PD = Pulldown · OH = Overhead · Tri = Triceps · Ext = Extension · RDL = Romanian Deadlift · Alt = Alternating · 1-Arm = Single-Arm.
+   Tên đầy đủ vẫn là khoá dữ liệu (sheet, outbox, last). */
+var EX_SHORT={
+ 'Lat Pulldown (Wide Pronated Grip)':'PD Wide Pronated','Lat Pulldown (Medium Supinated Grip)':'PD Medium Supinated','Lat Pulldown (Neutral Grip)':'PD Neutral',
+ 'Seated Cable Row (Close Neutral Grip)':'Seated Row Close Neutral','Seated Cable Row (Wide/Medium Pronated Grip)':'Seated Row Wide Pronated','DB Bent-Over Row':'DB Bent-Over Row','T-Bar Row':'T-Bar Row',
+ 'Incline DB Press (15°)':'Incline DB Press 15°','Incline DB Press (35°)':'Incline DB Press 35°','Incline BB Press (35°)':'Incline BB Press 35°',
+ 'Push-Up':'Push-Up','Incline Push-Up':'Incline Push-Up','Weighted Push-Up':'Weighted Push-Up','Ring Push-Up':'Ring Push-Up',
+ 'Standing BB Overhead Press':'Standing BB OHP','Seated DB Shoulder Press (65°)':'Seated DB Press 65°','Arnold Press':'Arnold Press','Scott Press':'Scott Press',
+ 'DB Lateral Raise':'DB Lateral Raise','Single-Arm Cable Lateral Raise':'1-Arm Cable Lateral','Chest-Supported DB Rear Delt Raise (35°)':'DB Rear Delt 35°','Dual Cable Rear Delt Fly':'Cable Rear Delt Fly',
+ 'Incline DB Curl (65°)':'Incline DB Curl 65°','BB Curl':'BB Curl','Reverse BB Curl':'Reverse BB Curl','Alternating DB Curl (Offset Grip)':'Alt DB Curl Offset','Single-Arm Preacher Curl':'1-Arm Preacher Curl','DB Preacher Curl (Neutral Grip)':'DB Preacher Curl Neutral',
+ 'Cable Overhead Triceps Extension (Rope, Mid Pulley)':'Cable OH Tri Ext','Lying BB Triceps Extension':'Lying BB Tri Ext','Lying DB Triceps Extension':'Lying DB Tri Ext','Ring Triceps Extension':'Ring Tri Ext','Cable Triceps Pushdown (Rope)':'Cable Pushdown Rope',
+ 'Decline Knee Raise':'Decline Knee Raise','Hanging Leg Raise':'Hanging Leg Raise','Cable Crunch':'Cable Crunch','Ring Bent-Arm Pullover':'Ring Bent-Arm Pullover',
+ 'BB Back Squat':'BB Back Squat','BB Front Squat':'BB Front Squat','Zercher Squat':'Zercher Squat','BB Hack Squat':'BB Hack Squat','DB Hack Squat':'DB Hack Squat','Cyclist Squat':'Cyclist Squat','Goblet Squat':'Goblet Squat',
+ 'DB Split Squat':'DB Split Squat','BB Split Squat':'BB Split Squat','DB Bulgarian Split Squat':'DB Bulgarian Split Squat','BB Bulgarian Split Squat':'BB Bulgarian Split Squat','Leg Extension':'Leg Extension',
+ 'BB Romanian Deadlift':'BB RDL','DB Romanian Deadlift':'DB RDL','Deficit Romanian Deadlift':'Deficit RDL','Wide-Stance Good Morning':'Wide Good Morning','Good Morning':'Good Morning',
+ 'Lying Leg Curl':'Lying Leg Curl','Nordic Hamstring Curl':'Nordic Curl','Glute-Ham Raise':'Glute-Ham Raise','Hip Adduction Machine':'Hip Adduction','Hip Abduction Machine':'Hip Abduction','Glute Kickback':'Glute Kickback',
+ 'Standing Smith Calf Raise':'Standing Smith Calf','Seated Smith Calf Raise':'Seated Smith Calf','Soleus Push-Up':'Soleus Push-Up','Johnson Calf Raise':'Johnson Calf Raise'
+};
+var EX_ABBR=[[/\bLat Pulldown\b/gi,'PD'],[/\bPulldown\b/gi,'PD'],[/\bPull ?Down\b/gi,'PD'],[/\bRomanian Deadlift\b/gi,'RDL'],[/\bOverhead Press\b/gi,'OHP'],[/\bOverhead\b/gi,'OH'],[/\bTriceps\b/gi,'Tri'],[/\bExtension\b/gi,'Ext'],[/\bSingle-Arm\b/gi,'1-Arm'],[/\bAlternating\b/gi,'Alt'],[/\bDumbbell\b/gi,'DB'],[/\bBarbell\b/gi,'BB'],[/\bMachine\b/gi,''],[/\bGrip\b/gi,''],[/\bCable Row\b/gi,'Row'],[/\bChest-Supported\b/gi,''],[/\bRaise\b/gi,'']];
+function exShort(n){
+  n=String(n||''); if(EX_SHORT[n]) return EX_SHORT[n];
+  var t=n.replace(/\(([^)]*)\)/g,' $1 ').replace(/,/g,' ');
+  EX_ABBR.forEach(function(r){ t=t.replace(r[0], r[1]); });
+  var w=t.split(/\s+/).filter(Boolean); if(w.length>4) w=w.slice(0,4);
+  return w.join(' ')||n;
+}
 /* thư viện đang dùng: máy chủ trả {Nhóm:[Tên]} (sheet "Bài tập") → hợp với vùng cơ của bản nhúng */
 /* Bản nhúng là gốc; sheet "Bài tập" trên máy chủ chỉ BỔ SUNG bài chưa có (nhóm theo cột Nhóm của sheet).
    Nhờ vậy sheet cũ (Upper/Lower/…) không ghi đè thư viện mới; chạy installLibrary() rồi thì hai bên trùng nhau. */
@@ -336,7 +362,6 @@ function rm(){ return !!(RM_MQ && RM_MQ.matches); }
 function show(id, dir){
   dir=dir||'fwd';
   var el=$(id), cur=(state.screen && $(state.screen)) || document.querySelector('.page.on');
-  hidePill(true);
   if(cur && cur!==el){
     if(cur._t){ clearTimeout(cur._t); cur._t=0; }
     cur.classList.remove('enter-fwd','enter-back','leave-fwd','leave-back');
@@ -366,44 +391,20 @@ function countUp(el, to, dur, delay){
   setTimeout(function(){ var t0=performance.now(); (function f(t){ var p=Math.min(1,(t-t0)/dur); p=1-Math.pow(1-p,3); el.textContent=Math.round(to*p); if(p<1) requestAnimationFrame(f); })(t0); }, delay||0);
 }
 
-/* ---- PILL THÍCH ỨNG: thông báo sinh ra từ chính nút chính của màn.
-   Bắt đúng vị trí/kích thước CTA đang hiện → nở rộng để chứa nội dung → co về CTA. Không có CTA → nở từ góc phải-đáy.
-   o: {err, sticky, ms, icon, action:{label,fn}, anchor, dark, paper} ---- */
-var PILL={t:0, anchor:null, w0:48};
-function pillAnchor(o){
-  if(o.anchor) return o.anchor;
-  var sc=state.screen && $(state.screen); if(!sc) return null;
-  if(LIB_OPEN) return $('lib-go');
-  if(state.screen==='p-loop'){ var l=LOOPS[0]; return l ? l.cta() : null; }
-  var c=sc.querySelector('.nav .cta:not(.away):not([hidden])'); return c && c.offsetParent!==null ? c : null;
-}
+/* ---- PILL THÔNG BÁO: pill nhỏ đẩy từ đỉnh xuống, lớp phủ, không đụng layout.
+   icon + chữ (số tô Acid) · lỗi = icon/số đỏ + nút hành động · o: {err, sticky, ms, icon, spin, action:{label,fn}} ---- */
+var PILL={t:0};
 function notify(text, o){
   o=o||{}; var el=$('pill'); clearTimeout(PILL.t);
-  if(PILL.anchor){ PILL.anchor.classList.remove('under'); PILL.anchor=null; }
-  var a=pillAnchor(o), host=document.body.getBoundingClientRect(), r;
-  if(a){ r=a.getBoundingClientRect(); }
-  else { var sc=state.screen&&$(state.screen), rr=sc?sc.getBoundingClientRect():host; r={right:rr.right-24, bottom:rr.bottom-28, width:48}; }
-  var right=host.right-r.right, bottom=host.bottom-r.bottom;
-  var theme=o.err?'err':(o.dark||(a&&a.classList.contains('dark')))?'dark':(o.paper||(a&&a.classList.contains('paper')))?'paper':'';
-  el.className='pill'+(theme?' '+theme:'');
-  el.innerHTML=ico(o.icon||(o.err?'i-x':'i-check'))+'<span class="tx">'+esc(text).replace(/(\d[\d:,\.\/×]*)/g,'<span class="n">$1</span>')+'</span>'+(o.action?'<button class="act">'+esc(o.action.label)+'</button>':'');
+  var was=el.classList.contains('on'), onAcid=(state.screen==='p-loop' && LOOPS[0] && LOOPS[0].root.classList.contains('acid'));
+  el.className='pill'+(was?' on':'')+(o.err?' err':'')+(onAcid?' onacid':'');
+  el.innerHTML=(o.spin?'<i class="spin"></i>':ico(o.icon||(o.err?'i-x':'i-check')))+'<span class="tx">'+esc(text).replace(/(\d[\d:,\.\/×]*)/g,'<span class="n">$1</span>')+'</span>'+(o.action?'<button class="act">'+esc(o.action.label)+'</button>':'');
   var act=el.querySelector('.act'); if(act) act.onclick=function(e){ e.stopPropagation(); hidePill(); o.action.fn(); };
   el.onclick=function(){ if(!o.action) hidePill(); };
-  el.style.transition='none'; el.style.width='auto'; var w=Math.min(el.scrollWidth+1, host.width-48);
-  el.style.width=r.width+'px'; el.style.right=right+'px'; el.style.bottom=bottom+'px'; void el.offsetWidth; el.style.transition='';
-  PILL.anchor=a; PILL.w0=r.width; if(a) a.classList.add('under');
-  el.classList.add('on');
-  if(rm()){ el.style.width=w+'px'; el.classList.add('show'); }
-  else requestAnimationFrame(function(){ el.style.width=w+'px'; el.classList.add('show'); });
+  if(!was){ void el.offsetWidth; el.classList.add('on'); }
   if(!o.sticky) PILL.t=setTimeout(function(){ hidePill(); }, o.ms||2400);
 }
-function hidePill(instant){
-  clearTimeout(PILL.t); var el=$('pill'); if(!el.classList.contains('on')) return;
-  var a=PILL.anchor; PILL.anchor=null;
-  if(instant||rm()){ el.classList.remove('on','show'); if(a) a.classList.remove('under'); return; }
-  el.classList.remove('show'); el.style.width=PILL.w0+'px';
-  PILL.t=setTimeout(function(){ el.classList.remove('on'); if(a) a.classList.remove('under'); }, 300);
-}
+function hidePill(){ clearTimeout(PILL.t); $('pill').classList.remove('on'); }
 var hideIsl=hidePill;
 var BUSY_N=0;
 function busyLine(on){ BUSY_N=Math.max(0, BUSY_N+(on?1:-1)); $('busy').classList.toggle('on', BUSY_N>0); }
@@ -425,8 +426,11 @@ document.querySelectorAll('.scroll').forEach(function(el){
 /* ---- MARQUEE: tên/tiêu đề 1 dòng; dài quá → "…" → chạy trái 32px/s → giữ → mờ → lặp ---- */
 var MQ=[];
 function mqPrune(){ MQ=MQ.filter(function(m){ if(document.contains(m.el)) return true; clearTimeout(m.t); return false; }); }
+var MQ_RUN=false;   /* 25/09: tắt marquee — tên dài chỉ "…", tuyệt đối không clip chữ */
 function mqInit(root){
-  mqPrune(); MQ=MQ.filter(function(m){ if(root.contains(m.el)){ clearTimeout(m.t); return false; } return true; }); if(rm()) return;
+  mqPrune(); MQ=MQ.filter(function(m){ if(root.contains(m.el)){ clearTimeout(m.t); return false; } return true; });
+  root.querySelectorAll('.mq').forEach(function(el){ var inner=el.firstElementChild; el.classList.remove('run','fade'); el.classList.add('ell'); if(inner){ inner.style.transition='none'; inner.style.transform='none'; } });
+  if(!MQ_RUN || rm()) return;
   var pend=[];
   root.querySelectorAll('.mq').forEach(function(el){ var inner=el.firstElementChild; if(!inner) return; el.classList.remove('run','fade'); el.classList.add('ell'); inner.style.transition='none'; inner.style.transform='none'; pend.push(el); });
   pend.forEach(function(el){ var inner=el.firstElementChild, ov=el.scrollWidth-el.clientWidth; if(ov<=1) return; var m={el:el,inner:inner,ov:ov+24,t:0}; MQ.push(m); mqCycle(m); });
@@ -803,11 +807,11 @@ function perfHist(m){
 function renderPerf(animate){
   var m=state.client, q=norm($('pe-q').value), el=$('pe-list'), hist=perfHist(m); el.innerHTML=''; var i=0, any=false;
   libGroups().forEach(function(g){
-    var items=g.items.filter(function(e){ return !q || norm(e.name).indexOf(q)>=0; }); if(!items.length) return; any=true;
+    var items=g.items.filter(function(e){ return !q || norm(e.name).indexOf(q)>=0 || norm(exShort(e.name)).indexOf(q)>=0; }); if(!items.length) return; any=true;
     var d=document.createElement('div'); d.className='lab sec'; d.textContent=upper(g.name)+' · '+items.length; el.appendChild(d);
     items.forEach(function(e){
       var rows=hist[e.name]||[], b=document.createElement('button'); b.className='row r51'+(animate?' rowin':'')+(rows.length?'':' off'); if(animate) b.style.animationDelay=Math.min(i++*20,240)+'ms';
-      b.innerHTML='<span class="lt"><span class="nm mq"><span>'+esc(e.name)+'</span></span></span>'+ico('i-arr','dn');
+      b.innerHTML='<span class="lt"><span class="nm mq"><span>'+esc(exShort(e.name))+'</span></span></span>'+ico('i-arr','dn');
       var sub=document.createElement('div'); sub.className='xp';
       sub.innerHTML=rows.slice(0,12).map(function(r){ return '<div class="kv"><span>'+vnLong(r.d)+'</span><span class="v'+(r.ok?'':' er')+'">'+r.rep+' × '+fmtN(r.kg)+'<i>KG</i></span></div>'; }).join('');
       b.onclick=function(){ b.classList.toggle('open'); setTimeout(function(){ fogUpdate(el); },20); };
@@ -815,7 +819,7 @@ function renderPerf(animate){
     });
   });
   Object.keys(hist).forEach(function(ex){ if(libEntries().some(function(e){return e.name===ex})) return; if(q && norm(ex).indexOf(q)<0) return; any=true;
-    var b=document.createElement('button'); b.className='row r51'; b.innerHTML='<span class="lt"><span class="nm mq"><span>'+esc(ex)+'</span></span><span class="lab">BÀI CŨ</span></span>'+ico('i-arr','dn');
+    var b=document.createElement('button'); b.className='row'; b.innerHTML='<span class="lt"><span class="nm mq"><span>'+esc(exShort(ex))+'</span></span><span class="lab">BÀI CŨ</span></span>'+ico('i-arr','dn');
     var sub=document.createElement('div'); sub.className='xp'; sub.innerHTML=hist[ex].slice(0,12).map(function(r){ return '<div class="kv"><span>'+vnLong(r.d)+'</span><span class="v'+(r.ok?'':' er')+'">'+r.rep+' × '+fmtN(r.kg)+'<i>KG</i></span></div>'; }).join('');
     b.onclick=function(){ b.classList.toggle('open'); setTimeout(function(){ fogUpdate(el); },20); }; el.appendChild(b); el.appendChild(sub); });
   if(!any){ var e=document.createElement('div'); e.className='lab empty'; e.textContent='KHÔNG TÌM THẤY BÀI NÀY'; el.appendChild(e); }
@@ -869,8 +873,8 @@ function lastSessionDay(m){
   return d;
 }
 function cardHtml(m, no, cls, done){
-  var big=cls==='big', W=big?345:160, doneP=pct(done?no:no-1,m.total), addP=(m.total>0?100/m.total:0);
-  var fillPx=W*(doneP+(done?0:addP))/100, nW=String(no).length*(big?64:32)+(big?16:12), lt=!done && fillPx<nW*.55;
+  var big=cls==='big', W=345, doneP=pct(done?no:no-1,m.total), addP=(m.total>0?100/m.total:0);
+  var fillPx=W*(doneP+(done?0:addP))/100, nW=String(no).length*(big?64:34)+(big?16:12), lt=!done && fillPx<nW*.55;
   return '<div class="card '+cls+(done?' done':'')+'"><i class="fill b" style="width:'+doneP.toFixed(1)+'%"></i>'+(done?'':'<i class="fill a" style="width:'+addP.toFixed(2)+'%;left:'+doneP.toFixed(1)+'%"></i>')
         +'<div class="n'+(lt?' lt':'')+'">'+no+'</div><div class="of'+(lt?' lt':'')+'">/ '+m.total+'</div></div>';
 }
@@ -951,7 +955,7 @@ function renderPlan(animate){
   s.plan.forEach(function(n,i){
     var t=document.createElement('div'); t.className='ptile'+(animate?' rowin':''); if(animate) t.style.animationDelay=Math.min(i*30,240)+'ms'; t.dataset.i=i;
     var sets=planCounts(n);
-    t.innerHTML='<div><div class="no">'+pad2(i+1)+'</div><div class="nm">'+esc(n)+'</div></div><div class="ft"><span class="lab">'+esc(upper(exGroup(n)))+(sets?' · '+sets+' SET':'')+'</span>'+ico('i-drag')+'</div>';
+    t.innerHTML='<div><div class="no">'+pad2(i+1)+'</div><div class="nm">'+esc(exShort(n))+'</div></div><div class="ft"><span class="lab">'+esc(upper(exGroup(n)))+(sets?' · '+sets+' SET':'')+'</span>'+ico('i-drag')+'</div>';
     dragify(t); g.appendChild(t);
   });
   var add=document.createElement('button'); add.className='ptile add'+(animate?' rowin':''); if(animate) add.style.animationDelay=Math.min(s.plan.length*30,240)+'ms';
@@ -972,11 +976,11 @@ function dragify(t){
       DRAG={t:t, hole:hole, dx:ev.clientX-r.left, dy:ev.clientY-r.top, w:r.width, h:r.height, name:state.session.plan[+t.dataset.i], del:false};
       t.classList.add('lift');
       t.style.position='fixed'; t.style.left=r.left+'px'; t.style.top=r.top+'px'; t.style.width=r.width+'px'; t.style.height=r.height+'px'; t.style.margin='0'; t.style.zIndex='60';
-      var dz=$('pl-drop'); dz.textContent='Thả để xoá '+DRAG.name; dz.classList.add('show'); if(navigator.vibrate) navigator.vibrate(8);
+      var dz=$('pl-drop'); dz.textContent='Thả vào đây để xoá'; dz.classList.add('show'); if(navigator.vibrate) navigator.vibrate(8);
     }
     function move(ev){
       var d=DRAG; d.t.style.left=(ev.clientX-d.dx)+'px'; d.t.style.top=(ev.clientY-d.dy)+'px';
-      var dz=$('pl-drop'), zr=dz.getBoundingClientRect(); d.del=ev.clientY>=zr.top && ev.clientY<=zr.bottom+20; dz.classList.toggle('hot', d.del); d.t.classList.toggle('del', d.del);
+      var dz=$('pl-drop'), zr=dz.getBoundingClientRect(), del=ev.clientY>=zr.top && ev.clientY<=zr.bottom+20; if(del!==d.del){ d.del=del; dz.textContent= del ? 'Thả để xoá '+exShort(d.name) : 'Thả vào đây để xoá'; } dz.classList.toggle('hot', d.del); d.t.classList.toggle('del', d.del);
       if(d.del) return;
       d.t.style.pointerEvents='none'; var under=document.elementFromPoint(ev.clientX, ev.clientY); d.t.style.pointerEvents='';
       var tile=under && under.closest && under.closest('.ptile:not(.lift):not(.add):not(.hole)'); if(!tile) return;
@@ -999,17 +1003,17 @@ function dragify(t){
 }
 /* window thư viện bài */
 var LIB_OPEN=false;
-function openLib(){ LIB_OPEN=true; hidePill(true); $('lib-q').value=''; renderLib(true); $('lib-dim').classList.add('on'); $('lib').classList.add('on'); }
+function openLib(){ LIB_OPEN=true; $('lib-q').value=''; renderLib(true); $('lib-dim').classList.add('on'); $('lib').classList.add('on'); }
 function closeLib(silent){ if(!LIB_OPEN) return; LIB_OPEN=false; $('lib-dim').classList.remove('on'); $('lib').classList.remove('on'); if(!silent && state.session && state.screen==='p-plan') renderPlan(false); }
 function lastFor(name){ var s=state.session, p=s&&s.people[0], m=p&&findClient(p.name); return m&&m.last&&m.last[name]; }
 function renderLib(animate){
   var s=state.session, q=norm($('lib-q').value), el=$('lib-list'); el.innerHTML=''; var i=0, any=false;
   libGroups().forEach(function(g){
-    var items=g.items.filter(function(e){ return !q || norm(e.name).indexOf(q)>=0 || norm(g.name).indexOf(q)>=0; }); if(!items.length) return; any=true;
+    var items=g.items.filter(function(e){ return !q || norm(e.name).indexOf(q)>=0 || norm(exShort(e.name)).indexOf(q)>=0 || norm(g.name).indexOf(q)>=0; }); if(!items.length) return; any=true;
     var d=document.createElement('div'); d.className='lab sec'; d.textContent=upper(g.name)+' · '+items.length; el.appendChild(d);
     items.forEach(function(e){
       var sel=s.plan.indexOf(e.name)>=0, l=lastFor(e.name), b=document.createElement('button'); b.className='row'+(sel?' sel':'')+(animate?' rowin':''); if(animate) b.style.animationDelay=Math.min(i++*16,200)+'ms';
-      b.innerHTML='<span class="lt"><span class="nm mq"><span>'+esc(e.name)+'</span></span><span class="lab">'+(l?'LẦN TRƯỚC '+l.rep+' × '+fmtN(l.kg)+' KG':'CHƯA TẬP')+'</span></span>'+ico(sel?'i-check':'i-plus');
+      b.innerHTML='<span class="lt"><span class="nm mq"><span>'+esc(exShort(e.name))+'</span></span><span class="lab">'+(l?'LẦN TRƯỚC '+l.rep+' × '+fmtN(l.kg)+' KG':'CHƯA TẬP')+'</span></span>'+ico(sel?'i-check':'i-plus','acid');
       b.onclick=function(){ var k=s.plan.indexOf(e.name); if(k>=0){ if(planCounts(e.name)){ notify('Bài đã ghi set · không bỏ được', {err:true}); return; } s.plan.splice(k,1); } else s.plan.push(e.name); saveSession(); renderLib(false); };
       el.appendChild(b);
     });
@@ -1110,8 +1114,8 @@ function Loop(host, p, o){
     var ph=p.phase, acid=(ph==='rest-setup'||ph==='rest');
     root.classList.toggle('acid', acid);
     head.querySelector('.t1').classList.toggle('dimt', acid);
-    if(ph==='setup'){ exEl.textContent=ex(); subEl.textContent='Thiết lập set '+p.setNo; }
-    else if(ph==='active'){ exEl.textContent=ex(); subEl.textContent='Đang tập set '+p.setNo; }
+    if(ph==='setup'){ exEl.textContent=exShort(ex()); subEl.textContent='Thiết lập set '+p.setNo; }
+    else if(ph==='active'){ exEl.textContent=exShort(ex()); subEl.textContent='Đang tập set '+p.setNo; }
     else { exEl.textContent=setLabel(); subEl.textContent= ph==='rest-setup'?'Bắt đầu nghỉ':'Đang nghỉ'; }
     setup.hidden=ph!=='setup'; clock.hidden=!acid; nums.hidden=ph!=='active';
     q('.rh').textContent= ph==='rest-setup' ? 'ĐẶT THỜI GIAN NGHỈ' : '';
@@ -1122,7 +1126,7 @@ function Loop(host, p, o){
     g1.setAttribute('aria-label', ph==='rest-setup'?'Hoàn tác set':ph==='rest'?'Bước khác':'Quay lại');
     repsW.set(p.reps); kgW.set(p.kg); fReps.set(p.reps); fKg.set(p.kg); restW.set(p.restTotal); restW.render();
     if(ph!=='rest') inkTo(1);
-    if(ph==='rest'){ q('.ik1').textContent=setLabel(); q('.ikn').textContent='KẾ TIẾP · '+upper(ex())+' · SET '+(p.setNo+1); q('.ikr').textContent=p.reps; q('.ikk').textContent=fmtN(p.kg); q('.ikt').textContent=mmss(restLeft()); }
+    if(ph==='rest'){ q('.ik1').textContent=setLabel(); q('.ikn').textContent='KẾ TIẾP · '+upper(exShort(ex()))+' · SET '+(p.setNo+1); q('.ikr').textContent=p.reps; q('.ikk').textContent=fmtN(p.kg); q('.ikt').textContent=mmss(restLeft()); }
     /* vành nhịp: thiết lập = chase Paper, lực hút 0, không Acid (Figma 478:398) · đang tập = chase đầy đủ */
     ring.tint='ink'; ring.calm=(ph==='setup'); ring.dot=(ph==='active'); ring.slow=1;
     if(ph==='setup'){ ring.on=true; if(ring.alpha<.5){ ring.alpha=0; ring.fade(.75,460); } else ring.alpha=.75; }
@@ -1136,10 +1140,10 @@ function Loop(host, p, o){
     s.plan.forEach(function(n,i){
       var e=p.ex[n]||{sets:[]}, b=document.createElement('button'); b.className=e.done?'done':'';
       var sn=(i===p.cur) ? ((p.phase==='setup'||p.phase==='active') ? p.setNo : p.setNo+1) : e.sets.length+1;
-      b.innerHTML='<span class="no">'+pad2(i+1)+'</span><span class="nmx">'+esc(n)+'</span><span class="sn">Set '+sn+'</span>';
+      b.innerHTML='<span class="no">'+pad2(i+1)+'</span><span class="nmx">'+esc(exShort(n))+'</span><span class="sn">Set '+sn+'</span>';
       b.onclick=function(ev){ ev.stopPropagation(); switchEx(i); }; list.appendChild(b);
     });
-    q('.fdone').textContent='Đã xong '+ex();
+    q('.fdone').textContent='Đã xong '+exShort(ex());
   }
   function washTo(color, cy, swap){
     if(rm()){ swap(); return; }
@@ -1168,14 +1172,14 @@ function Loop(host, p, o){
     p.phase='rest-setup'; p.restStart=0; saveSession();
     ring.fade(0,170);
     var rec=p.reps+' × '+fmtN(p.kg)+' kg';
-    washTo('#D4FF00', ring.cy, function(){ paint(); notify((ok?'Đã ghi ':'Chưa đạt · ')+rec, {anchor:c1, ms:1800}); });
+    washTo('#D4FF00', ring.cy, function(){ paint(); notify((ok?'Đã ghi ':'Chưa đạt · ')+rec, {ms:1800}); });
     if(navigator.vibrate) navigator.vibrate(ok?12:[10,40,10]);
   }
   function undo(){
     var e=E(), st=e.sets.pop(); if(st && st[3]) unqueue(st[3]);
     p.setNo=e.sets.length+1; p.phase='setup'; saveSession();
     ring.on=true; ring.alpha=0; ring.scale=.55; ring.fade(.75,300);
-    washTo('#0A0A0A', ring.cy, function(){ paint(); notify('Đã hoàn tác set '+p.setNo, {anchor:c1}); });
+    washTo('#0A0A0A', ring.cy, function(){ paint(); notify('Đã hoàn tác set '+p.setNo); });
   }
   function startRest(){ var st=last(E().sets); if(st) release(st[3]); p.phase='rest'; p.restStart=Date.now(); saveSession(); crossfadeTop(); paint(); }
   function nextSet(){ closeFilm(true); p.phase='setup'; p.setNo=E().sets.length+1; saveSession(); ring.on=true; ring.alpha=0; ring.scale=.55; ring.fade(.75,300); washTo('#0A0A0A', ring.cy, paint); }
@@ -1187,13 +1191,13 @@ function Loop(host, p, o){
     var st=last(E().sets); if(st) release(st[3]);
     p.cur=i; p.phase='setup'; primePerson(p); saveSession();
     if(!ring.on){ ring.on=true; ring.alpha=0; ring.scale=.55; ring.fade(.75,300); washTo('#0A0A0A', ring.cy, paint); } else { crossfadeTop(); paint(); }
-    notify(ex()+' · set '+p.setNo, {anchor:c1});
+    notify(exShort(ex())+' · set '+p.setNo);
   }
   function doneEx(){
-    var e=E(); if(!e.sets.length){ notify('Chưa ghi set nào · '+ex(), {err:true, anchor:c1}); return; }
+    var e=E(); if(!e.sets.length){ notify('Chưa ghi set nào · '+exShort(ex()), {err:true}); return; }
     var st=last(e.sets); if(st) release(st[3]); e.done=true; saveSession();
     var next=-1; for(var k=1;k<=s.plan.length;k++){ var j=(p.cur+k)%s.plan.length, ee=p.ex[s.plan[j]]; if(!ee||!ee.done){ next=j; break; } }
-    if(next<0){ closeFilm(true); renderFilm(); notify('Đã xong hết bài · kết thúc buổi hoặc thêm bài', {anchor:c1}); setTimeout(openFilm, 1200); return; }
+    if(next<0){ closeFilm(true); renderFilm(); notify('Đã xong hết bài · kết thúc buổi hoặc thêm bài'); setTimeout(openFilm, 1200); return; }
     switchEx(next);
   }
   function endSession(){ closeFilm(true); var st=last(E().sets); if(st) release(st[3]); saveSession(); state.sumIdx=0; go('p-summary','fwd'); }
@@ -1243,7 +1247,13 @@ HOOK['p-summary']=function(){
   $('sm-l1').innerHTML='Đạt <span class="n">'+ok+'</span> / '+tot+' set'; $('sm-l2').textContent=mins+' phút · '+exs.length+' bài';
   $('p-summary')._after=function(){ countUp($('sm-l1').querySelector('.n'), ok, 600, 320); };
   var rows=$('sm-rows'); rows.innerHTML='';
-  exs.forEach(function(n,i){ var r=document.createElement('div'); r.className='exrow'; r.innerHTML='<span class="no">'+pad2(i+1)+'</span><span class="nm">'+esc(n)+'</span><span class="dots2">'+p.ex[n].sets.map(function(st,j){ return '<i class="'+(st[2]?'':'no')+'" style="animation-delay:'+Math.min(0.9,0.3+i*.08+j*.06).toFixed(2)+'s"></i>'; }).join('')+'</span>'; rows.appendChild(r); });
+  exs.forEach(function(n,i){
+    var r=document.createElement('div'), sets=p.ex[n].sets, W=164, sz=8, gp=6;      /* nửa phải = (345 − 16) / 2 · hạt 8 cách 6 · nhiều set → co lại cho vừa */
+    if(sets.length*sz+(sets.length-1)*gp>W){ gp=4; sz=Math.floor((W-gp*(sets.length-1))/sets.length); if(sz<4){ gp=2; sz=Math.max(2, Math.floor((W-gp*(sets.length-1))/sets.length)); } }
+    r.className='exrow';
+    r.innerHTML='<span class="lt"><span class="no">'+pad2(i+1)+'</span><span class="nm">'+esc(exShort(n))+'</span></span><span class="dots2" style="gap:'+gp+'px">'+sets.map(function(st,j){ return '<i class="'+(st[2]?'':'no')+'" style="width:'+sz+'px;height:'+sz+'px;animation-delay:'+Math.min(0.9,0.3+i*.08+j*.04).toFixed(2)+'s"></i>'; }).join('')+'</span>';
+    rows.appendChild(r);
+  });
   if(!exs.length){ var e=document.createElement('div'); e.className='lab empty'; e.textContent='CHƯA GHI SET NÀO'; rows.appendChild(e); }
   var f=$('sm-form'); f.innerHTML='';
   for(var i=1;i<=6;i++)(function(i){ var b=document.createElement('button'); b.textContent=i; b.className=p.form===i?'on':''; b.onclick=function(){ p.form=i; f.querySelectorAll('button').forEach(function(x,j){ x.classList.toggle('on', j+1===i); }); saveSession(); }; f.appendChild(b); })(i);
@@ -1274,7 +1284,7 @@ HOOK['p-done']=function(){
     body.appendChild(w);
   });
   $('p-done')._after=function(){ body.querySelectorAll('.card').forEach(function(c){ c.classList.add('in'); }); body.querySelectorAll('.card .n').forEach(function(n){ countUp(n, +n.textContent, 700, 420); }); };
-  if(pendingCount()) setTimeout(function(){ if(pendingCount() && state.screen==='p-done') notify('Đang đồng bộ '+pendingCount()+' mục · vẫn giữ trong máy'); }, 2500);
+  if(pendingCount()) setTimeout(function(){ if(pendingCount() && state.screen==='p-done') notify('Đang đồng bộ '+pendingCount()+' mục · vẫn giữ trong máy', {spin:true}); }, 2500);
 };
 function finish(){ state.lastDone=null; state.session=null; state.sumIdx=0; saveSession(); go('p-home','back'); refreshData(true); flush(); }
 
