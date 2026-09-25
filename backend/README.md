@@ -64,3 +64,6 @@ Những gì đổi (chỉ trong `lbMembers_` và một dòng gọi ở `lbCoach_
 `lbMembers_(withDone)`: `lbCoach_` gọi với `true` (trả cả khách hết gói); `lbCheckin_` vẫn gọi mặc định (chỉ khách còn buổi) nên check-in khách hết gói vẫn bị chặn như cũ. App nhận dạng 1:2 khi `kind` khớp `1:2`, `1-2`, `đôi`, `duo`, `cặp` (không phân biệt hoa thường); thiếu trường → coi là 1:1.
 
 Lưu ý: `coach` đi qua Cloudflare Worker `b0dy-kiosk-api`. Worker chỉ chuyển tiếp JSON nên trường mới tự đi qua; nếu Worker có cache phản hồi `coach`, xoá cache hoặc chờ hết hạn. Nếu danh sách khách hết gói quá dài theo thời gian, thêm điều kiện lọc theo `end` (ví dụ chỉ 12 tháng gần nhất) ngay chỗ `if (left <= 0 && !withDone) continue;`.
+
+## 6. IP test ngoài phòng (`addip`, v2.3.1)
+Xem `backend/IpAllow.md`: sửa `ipOk_` nhận thêm danh sách `TEST_IPS`, thêm `apiAddIp_` + `case 'addip'`. App: màn Admin có nút **Thêm IP này để test**.

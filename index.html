@@ -85,10 +85,12 @@
     <div class="lab" style="margin-top:32px">IP CỦA THIẾT BỊ NÀY</div>
     <div class="ipval" id="am-ip">—</div>
     <div class="lab" id="am-note" style="margin-top:14px">CẬP NHẬT ĐỂ LẤY IP NÀY LÀM IP CỦA PHÒNG</div>
+    <div class="lab" id="am-test" style="margin-top:32px">IP TEST ĐÃ THÊM · —</div>
   </div>
   <div class="nav">
     <button class="ghost" onclick="adminDone()" aria-label="Xong"><svg class="ic s24"><use href="#i-back"/></svg></button>
-    <button class="cta" onclick="registerIp()">Cập nhật IP phòng</button>
+    <button class="cta paper" onclick="addTestIp()">Thêm IP test</button>
+    <button class="cta" onclick="registerIp()">Đặt IP phòng</button>
   </div>
 </section>
 
@@ -262,7 +264,7 @@
   <div class="handle" id="cs-handle"><i></i></div>
   <div class="search g"><svg class="ic"><use href="#i-search"/></svg><input id="cs-q" type="search" placeholder="Tìm khách" autocomplete="off" oninput="renderClientSheet(false)"></div>
   <div class="scroll list" id="cs-list"></div>
-  <div class="foot"><button class="cta" id="cs-go" onclick="closeClientSheet()">Đóng</button></div>
+  <div class="foot"><button class="cta paper" id="cs-go" onclick="closeClientSheet()">Đóng</button></div>
 </div>
 
 <!-- ================= 5–9 · VÒNG LẶP SET ================= -->
