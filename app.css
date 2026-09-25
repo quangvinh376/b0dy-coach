@@ -15,12 +15,15 @@
   --eo:cubic-bezier(.22,.85,.22,1);        /* vào/ra màn */
   --eio:cubic-bezier(.65,0,.35,1);         /* biến hình trên màn */
   --rail:24px;
+  --sat:0px;                               /* safe-area đỉnh (PWA: env()) */
   --top:56px;                              /* khối đỉnh cách đỉnh màn 56 (Figma) */
   --bot:28px;
   color-scheme:dark;
 }
 /* PWA (status bar "black"): web view bắt đầu dưới thanh trạng thái (~54) → còn 2px là tới mốc 56 của thiết kế */
-@media (display-mode:standalone){ :root{ --top:max(2px,env(safe-area-inset-top,0px)); } }
+/* PWA (status bar "black-translucent"): web view phủ cả thanh trạng thái → nền của app (Ink/Acid) tràn lên tận mép trên;
+   khối đỉnh lùi theo safe-area (iPhone Dynamic Island ≈ 59 + 2 = 61; máy cũ 56). */
+@media (display-mode:standalone){ :root{ --sat:env(safe-area-inset-top,0px); --top:max(56px,calc(env(safe-area-inset-top,0px) + 2px)); } }
 
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 html{background:var(--ink)}
@@ -63,22 +66,37 @@ svg{display:block}
 .mq.run>span{display:inline-block;padding-right:24px;will-change:transform}
 .mq.fade{opacity:0}
 
-/* ============ TRANG & CHUYỂN MÀN (hệ chuyển động của app check-in) ============
-   Tiến: trượt trái · lùi: trượt phải. Trong màn: các tầng nội dung hiện lần lượt (.st). */
-.page{position:absolute;inset:0;display:none;flex-direction:column;background:var(--ink);
+/* ============ TRANG & CHUYỂN MÀN ============
+   Nguyên tắc: chỉ thứ THAY ĐỔI mới chuyển động. Nội dung (head/body) trượt 24px + mờ; nav đáy đứng yên
+   (nút giống nhau giữa hai màn: .still · nút mới: .swap mờ vào · nút mất: .fade · tab đổi .cur: .curswap đổi màu mềm).
+   Trang trong suốt để nội dung cũ mờ đi ngay dưới nội dung mới. */
+.page{position:absolute;inset:0;display:none;flex-direction:column;background:transparent;
       padding:var(--top) var(--rail) var(--bot)}
 .page.on{display:flex}
-.page.enter-fwd{animation:inF .46s var(--eo) both;z-index:2}
-.page.enter-back{animation:inB .46s var(--eo) both;z-index:2}
-.page.leave-fwd{animation:outF .22s ease both;pointer-events:none;z-index:1}
-.page.leave-back{animation:outB .22s ease both;pointer-events:none;z-index:1}
-@keyframes inF{from{opacity:0;transform:translateX(40px)}to{opacity:1;transform:none}}
-@keyframes inB{from{opacity:0;transform:translateX(-40px)}to{opacity:1;transform:none}}
-@keyframes outF{to{opacity:0;transform:translateX(-26px)}}
-@keyframes outB{to{opacity:0;transform:translateX(26px)}}
-@keyframes rise{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:none}}
+.page.enter-fwd,.page.enter-back{z-index:2}
+.page.leave-fwd,.page.leave-back{pointer-events:none;z-index:1}
+.page.enter-fwd>*:not(.nav):not(.split):not(.sfoot),.page.enter-fwd>.sfoot>*:not(.nav){animation:inF .42s var(--eo) both}
+.page.enter-back>*:not(.nav):not(.split):not(.sfoot),.page.enter-back>.sfoot>*:not(.nav){animation:inB .42s var(--eo) both}
+.page.leave-fwd>*:not(.nav):not(.split):not(.sfoot),.page.leave-fwd>.sfoot>*:not(.nav){animation:outF .2s ease both}
+.page.leave-back>*:not(.nav):not(.split):not(.sfoot),.page.leave-back>.sfoot>*:not(.nav){animation:outB .2s ease both}
+.page.enter-fwd>.split,.page.enter-back>.split{animation:fadein .32s ease both}
+.page.leave-fwd>.split,.page.leave-back>.split{animation:fadeout .2s ease both}
+@keyframes inF{from{opacity:0;transform:translateX(24px)}to{opacity:1;transform:none}}
+@keyframes inB{from{opacity:0;transform:translateX(-24px)}to{opacity:1;transform:none}}
+@keyframes outF{to{opacity:0;transform:translateX(-16px)}}
+@keyframes outB{to{opacity:0;transform:translateX(16px)}}
+@keyframes fadein{from{opacity:0}to{opacity:1}}
+@keyframes fadeout{to{opacity:0}}
+.nav .gone{visibility:hidden}
+.page.leave-fwd .nav .fade,.page.leave-back .nav .fade{animation:fadeout .15s linear both}
+.page.enter-fwd .nav .swap,.page.enter-back .nav .swap{animation:rise .34s .06s cubic-bezier(.2,.75,.2,1) both}
+.nav .curswap{animation:curin .26s var(--eio) both}
+.nav .curswap:not(.cur){animation:curout .26s var(--eio) both}
+@keyframes curin{from{background:transparent;color:var(--paper);border-color:var(--hair)}}
+@keyframes curout{from{background:var(--paper);color:var(--ink);border-color:var(--paper)}}
+@keyframes rise{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
 .st>*{opacity:0}
-.enter-fwd .st>*,.enter-back .st>*{animation:rise .6s cubic-bezier(.2,.75,.2,1) forwards}
+.enter-fwd .st>*,.enter-back .st>*{animation:rise .5s cubic-bezier(.2,.75,.2,1) forwards}
 .st>*:nth-child(1){animation-delay:.06s}
 .st>*:nth-child(2){animation-delay:.14s}
 .st>*:nth-child(3){animation-delay:.26s}
@@ -126,19 +144,23 @@ svg{display:block}
 .cta.line{background:none;border:1px solid var(--red);color:var(--red)}
 
 /* ============ PILL THÔNG BÁO — đẩy từ đỉnh xuống, lớp phủ, không đụng layout ============
-   38 cao · bo 22 · fill Ink · viền Paper 14% (trên Acid: không viền) · icon 18 + chữ 14/18 · số Mono Acid · nút hành động 28 */
-.pill{position:absolute;left:50%;top:max(8px,calc(var(--top) - 46px));z-index:70;height:38px;border-radius:22px;background:var(--ink);color:var(--paper);border:1px solid var(--hair);
-      display:flex;align-items:center;gap:8px;padding:0 14px 0 12px;white-space:nowrap;max-width:calc(100% - 48px);box-shadow:0 8px 24px rgba(0,0,0,.35);
-      opacity:0;pointer-events:none;transform:translate(-50%,-14px) scale(.96);transition:transform .22s var(--eo),opacity .18s linear}
-.pill.on{opacity:1;pointer-events:auto;transform:translate(-50%,0) scale(1);transition:transform .34s var(--eo),opacity .2s linear}
-.pill.onacid{border-color:transparent;box-shadow:0 8px 24px rgba(0,0,0,.18)}
+   Cấu hình cố định: [icon 18] [chữ 14/18, ≤ 1 dòng] [nút 28 nếu có]. Viền luôn có để nổi trên mọi nền (Ink lẫn Acid).
+   Tắt: vuốt lên · chạm · tự tắt (2.4s; lỗi 6s). Số/giờ trong chữ: Mono Acid (đỏ khi lỗi). */
+.pill{position:absolute;left:50%;top:max(10px,calc(var(--sat) + 6px));z-index:70;height:38px;border-radius:22px;background:var(--ink);color:var(--paper);border:1px solid rgba(250,250,250,.22);
+      display:flex;align-items:center;gap:8px;padding:0 14px 0 12px;white-space:nowrap;max-width:calc(100% - 48px);box-shadow:0 10px 28px rgba(0,0,0,.4),0 1px 0 rgba(250,250,250,.06) inset;
+      opacity:0;pointer-events:none;touch-action:none;transform:translate(-50%,-16px) scale(.96);transition:transform .2s var(--eio),opacity .16s linear}
+.pill.on{opacity:1;pointer-events:auto;transform:translate(-50%,0) scale(1);transition:transform .38s cubic-bezier(.2,.9,.25,1.12),opacity .2s linear}
+.pill.drag{transition:none}
+.pill.onacid{border-color:rgba(10,10,10,.18);box-shadow:0 10px 28px rgba(0,0,0,.18)}
 .pill .ic{width:18px;height:18px;color:var(--acid);flex:none}
 .pill.err .ic{color:var(--red)}
 .pill .spin{width:16px;height:16px;border-radius:50%;border:2px solid var(--hair);border-top-color:var(--acid);animation:ptrspin .9s linear infinite;flex:none}
 .pill .tx{font-size:14px;line-height:18px;letter-spacing:-.14px;overflow:hidden;text-overflow:ellipsis;min-width:0}
 .pill .tx .n{font-family:var(--mono);color:var(--acid);font-variant-numeric:tabular-nums;letter-spacing:0}
 .pill.err .tx .n{color:var(--red)}
-.pill .act{height:28px;padding:0 10px;border-radius:14px;background:var(--acid);color:var(--ink);font-size:13px;line-height:16px;letter-spacing:-.13px;margin:0 -6px 0 4px;flex:none}
+.pill .act{height:28px;padding:0 12px;border-radius:14px;background:var(--acid);color:var(--ink);font-size:13px;line-height:16px;letter-spacing:-.13px;margin:0 -8px 0 4px;flex:none;
+           transition:transform .12s var(--eo)}
+.pill .act:active{transform:scale(.95)}
 .pill.err .act{background:var(--red);color:var(--paper)}
 
 /* vạch bận Acid mép trên (không chặn thao tác) */
@@ -375,7 +397,7 @@ svg{display:block}
 .sheet .handle{padding-bottom:12px;display:flex;align-items:center;justify-content:center;flex:none}
 .sheet .handle i{width:75px;height:6px;border-radius:100px;background:rgba(250,250,250,.35)}
 .sheet .search{margin-top:0}
-.sheet .list{flex:1;min-height:0;margin-top:32px;padding-bottom:16px}
+.sheet .list{flex:1;min-height:0;margin-top:0;padding:32px 0 16px}
 .sheet .list .sec:first-child{margin-top:0}
 .sheet .foot{flex:none;height:48px;display:flex;justify-content:center;align-items:center}
 
@@ -400,7 +422,15 @@ svg{display:block}
 .loop.acid .ink .ghost{border-color:var(--hair);color:var(--paper)}
 .loop.acid .ink .wheel .hint{color:var(--slate)}
 /* thiết lập set: reps 112 · × 72 · kg 112 — khối giữa, tâm lệch xuống 13 */
-.setup{position:absolute;left:var(--rail);right:var(--rail);top:calc(50% + 13px);transform:translateY(-50%);display:flex;flex-direction:column;align-items:center;gap:32px;z-index:1}
+.setup{position:absolute;left:var(--rail);right:var(--rail);top:calc(50% + 16px);transform:translateY(-50%);display:flex;flex-direction:column;align-items:center;gap:32px;z-index:1;
+       transition:opacity .24s var(--eio),transform .24s var(--eio)}
+.setup.gone{opacity:0;transform:translateY(-50%) scale(.97)}
+.loop .clock{transition:opacity .24s var(--eio),transform .24s var(--eio)}
+.loop .clock.gone{opacity:0;transform:translateY(calc(-50% + 8px))}
+.two .loop .clock.gone{transform:translateY(8px)}
+.nums,.judge,.c1{transition:opacity .2s var(--eio)}
+.nums.gone,.judge.gone,.c1.gone{opacity:0}
+.c1.tx0{opacity:0;transition:opacity .11s linear}
 .setup .wheel{height:126px}
 .setup .x{font-family:var(--mono);font-size:72px;line-height:68px;letter-spacing:-2.16px;color:rgba(250,250,250,.9);text-align:center}
 /* số nhỏ ở đáy khi đang tập: 40/38 · nhãn 11 + icon 13 · cột 108 / 136 */
@@ -427,17 +457,16 @@ svg{display:block}
 /* nút chấm set */
 .judge{display:flex;gap:8px}
 /* bộ đếm nghỉ: y=386 */
-.loop .clock{position:absolute;left:var(--rail);right:var(--rail);top:calc(330px + var(--top));display:flex;justify-content:center;z-index:1}
+.loop .clock{position:absolute;left:var(--rail);right:var(--rail);top:calc(50% - 40px);display:flex;justify-content:center;z-index:1}
 .loop.acid .wheel .hint{color:var(--ink55)}
 /* lớp mực Ink dâng (bản sao theme Ink của màn nghỉ) */
 .ink{position:absolute;inset:0;background:var(--ink);color:var(--paper);transform:translateY(-100%);pointer-events:none;z-index:4;overflow:hidden;will-change:transform}
-.ink>.lp{transform:translateY(100%);will-change:transform}
+.ink>.inkc{position:absolute;inset:0;transform:translateY(100%);will-change:transform}
 .ink *{pointer-events:none!important}
 .ink .wheel .hint{color:var(--slate)}
 .ink .cta{background:var(--acid);color:var(--ink)}
 .ink .ghost{border-color:var(--hair);color:var(--paper)}
-.nxt{display:flex;flex-direction:column;gap:12px}
-.nextlab{font-family:var(--mono);font-size:11px;line-height:13px;letter-spacing:.88px;text-transform:uppercase;color:var(--slate);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.nxt{display:flex;flex-direction:column}
 /* màng menu 93% + blur 20 · danh sách bước tiếp căn phải, đáy 40 */
 .film{position:absolute;inset:0;z-index:6;background:rgba(212,255,0,.93);-webkit-backdrop-filter:blur(20px);backdrop-filter:blur(20px);color:var(--ink);
       opacity:0;pointer-events:none;transition:opacity .28s var(--eo),background-color .2s linear}
@@ -462,13 +491,14 @@ svg{display:block}
 .two .loop:first-child .lp{padding-top:var(--top)}
 .two .lp .head .t1{font-size:22px;line-height:26px;letter-spacing:-.33px}
 .two .lp .head .sub{font-size:22px;line-height:26px;letter-spacing:-.33px}
-.two .setup{flex-direction:row;gap:12px;top:50%;align-items:flex-start;justify-content:center}
+.two .setup{gap:8px;top:calc(50% + 14px)}
 .two .setup .wheel{height:77px}
-.two .setup .wheel.w-reps{width:120px}
-.two .setup .wheel.w-kg{width:160px}
 .two .setup .wheel .v{font-size:60px;letter-spacing:-1.8px;height:56px;line-height:56px}
 .two .setup .wheel .hint{top:64px}
-.two .setup .x{font-size:40px;line-height:38px;letter-spacing:-1.2px;padding-top:9px;width:40px}
+.two .setup .x{font-size:40px;line-height:38px;letter-spacing:-1.2px}
+/* vạch ngăn hai nửa (đổi màu theo nền nửa dưới) */
+.two .loop+.loop::before{content:'';position:absolute;left:0;right:0;top:0;height:1px;background:var(--hair);z-index:8;pointer-events:none}
+.two .loop.acid+.loop::before,.two .loop+.loop.acid::before{background:var(--inkline)}
 .two .loop .clock{top:auto}
 .two .wheel{height:89px}
 .two .clock .wheel{width:345px}
@@ -476,7 +506,11 @@ svg{display:block}
 .two .clock .wheel .hint{top:76px}
 .two .lp .foot{gap:0}
 .two .lp .foot .nav{margin-top:0}
-.two .nxt{margin-bottom:28px}
+.two .nxt{margin-bottom:0}
+.two .loop .ink .nav{position:absolute;left:0;right:0;bottom:0;opacity:0;transform:translateY(8px);transition:opacity .2s linear,transform .26s var(--eo)}
+.two .loop.navon .ink .nav{opacity:1;transform:none}
+.two .loop .ink .nums{transition:transform .26s var(--eo)}
+.two .loop.navon .ink .nums{transform:translateY(-48px)}
 .two .film .inner{gap:20px}
 .two .film .exl{gap:20px}
 .two .film .exl button .nmx,.two .film .exl button .sn,.two .film .act{font-size:16px;line-height:19px;letter-spacing:-.16px}

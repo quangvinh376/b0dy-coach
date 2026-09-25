@@ -35,7 +35,7 @@ var {chromium}=require('playwright'); var serve=require('./serve'); var fs=requi
   await page.click('#lib-list .row:nth-of-type(1)'); await page.click('#lib-list .row:nth-of-type(2)'); await page.click('#lib-list .row:nth-of-type(4)'); await page.click('#lib-list .row:nth-of-type(6)'); await shot('lib-4');
   await page.click('#lib-go'); await shot('plan-4');
   await page.click('#pl-go'); await shot('loop-setup',1200);
-  async function tap(i){ await page.evaluate(function(i){ document.querySelectorAll('#loop-host .loop')[i].dispatchEvent(new PointerEvent('pointerdown',{bubbles:true})); }, i); await page.waitForTimeout(250); }
+  async function tap(i){ await page.evaluate(function(i){ setFocus(i); }, i); await page.waitForTimeout(150); }
   await tap(0); await shot('loop-setup-nav',300);
   await page.click('#loop-host .loop:nth-child(1) .c1'); await shot('loop-active',900); await tap(0);
   await page.click('#loop-host .loop:nth-child(1) .j1'); await shot('loop-rest-setup',900); await tap(0);

@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <meta name="color-scheme" content="dark">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<!-- "black" (đặc): web view nằm dưới thanh trạng thái và chạm đáy màn hình (iOS 26). Không dùng black-translucent. -->
-<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<!-- "black-translucent": web view phủ cả thanh trạng thái → màu nền app (Ink/Acid) tràn lên mép trên; layout lùi theo env(safe-area-inset-top). theme-color đổi động theo màn (app.js syncTheme). -->
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="B0DY">
 <title>B0DY — Coach</title>
 <meta name="theme-color" content="#0A0A0A">
@@ -63,7 +63,7 @@
 <div class="busy" id="busy"><i></i></div>
 <div class="ptr" id="ptr"><svg viewBox="0 0 28 28"><circle class="bg" cx="14" cy="14" r="11"/><circle class="fg" cx="14" cy="14" r="11"/></svg></div>
 
-<!-- pill thích ứng: thông báo nở ra từ chính nút chính của màn -->
+<!-- pill thông báo: đẩy từ đỉnh, vuốt lên để tắt -->
 <div class="pill" id="pill" role="status" aria-live="polite"></div>
 
 <!-- ================= 0 · PIN ================= -->
