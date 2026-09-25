@@ -65,5 +65,5 @@ Những gì đổi (chỉ trong `lbMembers_` và một dòng gọi ở `lbCoach_
 
 Lưu ý: `coach` đi qua Cloudflare Worker `b0dy-kiosk-api`. Worker chỉ chuyển tiếp JSON nên trường mới tự đi qua; nếu Worker có cache phản hồi `coach`, xoá cache hoặc chờ hết hạn. Nếu danh sách khách hết gói quá dài theo thời gian, thêm điều kiện lọc theo `end` (ví dụ chỉ 12 tháng gần nhất) ngay chỗ `if (left <= 0 && !withDone) continue;`.
 
-## 6. IP test ngoài phòng (`addip`, v2.3.1)
-Xem `backend/IpAllow.md`: sửa `ipOk_` nhận thêm danh sách `TEST_IPS`, thêm `apiAddIp_` + `case 'addip'`. App: màn Admin có nút **Thêm IP này để test**.
+## 6. Hai IP được check-in (`iplist` / `addip` / `delip`, v2.3.2)
+Xem `backend/IpAllow.md`: `ipOk_` nhận `STUDIO_IP` hoặc `STUDIO_IP2`; thêm `apiIpList_`, `apiAddIp_`, `apiDelIp_` + 3 `case`. App: màn Admin hiện 2 ô IP, nút **Thêm IP**, × để xoá.

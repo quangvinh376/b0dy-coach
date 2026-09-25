@@ -1,44 +1,61 @@
-# IP test ngoài phòng — sửa `Code.gs` (v2.3.1)
+# Hai IP được check-in — sửa `Code.gs` (v2.3.2)
 
-Nút **Thêm IP này để test** trong màn Admin của app gọi action `addip` (kèm PIN admin) → máy chủ ghi IP hiện tại của thiết bị vào Script Property `TEST_IPS` (danh sách, phân cách bằng dấu phẩy). IP phòng (`STUDIO_IP`) không đổi, khoá IP vẫn giữ cho coach. Muốn bỏ IP test: xoá trong Project Settings ▸ Script Properties ▸ `TEST_IPS`.
+Màn Admin của app lưu **tối đa 2 IP**, cả hai đều được check-in: ô 1 = `STUDIO_IP` (IP phòng, giữ nguyên), ô 2 = `STUDIO_IP2`. Nút **Thêm IP** ghi IP của thiết bị đang mở app vào ô trống; nút × xoá ô đó (xoá xong mới thêm được IP mới). Ba action mới `iplist` / `addip` / `delip`, đều cần PIN admin.
 
-## 1. Thay hàm `ipOk_` trong `Code.gs`
+## 1. Thay hàm `ipOk_`
 
 ```js
 function ipOk_(p) {
   if (adminOk_(p)) return true; // admin duoc truy cap tu xa
-  var props = PropertiesService.getScriptProperties();
-  var want = props.getProperty('STUDIO_IP');
-  if (!want) return true; // chua dang ky IP phong -> tam cho qua
+  var ips = ipList_();
+  if (!ips[0] && !ips[1]) return true; // chua dang ky IP nao -> tam cho qua
   var ip = String(p.ip || '').trim();
-  if (ip === String(want).trim()) return true;
-  /* IP test (Script Property TEST_IPS: "1.2.3.4, 5.6.7.8") — thêm bằng nút "Thêm IP này để test" ở màn Admin */
-  var test = String(props.getProperty('TEST_IPS') || '').split(',').map(function (s) { return s.trim(); }).filter(String);
-  return ip !== '' && test.indexOf(ip) >= 0;
+  return ip !== '' && (ip === ips[0] || ip === ips[1]);
+}
+function ipList_() {
+  var props = PropertiesService.getScriptProperties();
+  return [String(props.getProperty('STUDIO_IP') || '').trim(), String(props.getProperty('STUDIO_IP2') || '').trim()];
 }
 ```
 
-## 2. Thêm hàm `apiAddIp_` (cạnh `apiSetIp_`)
+## 2. Thêm 3 hàm (cạnh `apiSetIp_`)
 
 ```js
+function apiIpList_(p) {
+  if (!adminOk_(p)) return { ok: false, error: 'sai_pin' };
+  return { ok: true, ips: ipList_() };
+}
 function apiAddIp_(p) {
   if (!adminOk_(p)) return { ok: false, error: 'sai_pin' };
   var ip = String(p.ip || '').trim();
   if (!ip) return { ok: false, error: 'thieu_ip' };
-  var props = PropertiesService.getScriptProperties();
-  var list = String(props.getProperty('TEST_IPS') || '').split(',').map(function (s) { return s.trim(); }).filter(String);
-  if (list.indexOf(ip) < 0) list.push(ip);
-  props.setProperty('TEST_IPS', list.join(','));
-  return { ok: true, ip: ip, ips: list };
+  var props = PropertiesService.getScriptProperties(), ips = ipList_();
+  if (ips.indexOf(ip) < 0) {
+    if (!ips[0]) props.setProperty('STUDIO_IP', ip);
+    else if (!ips[1]) props.setProperty('STUDIO_IP2', ip);
+    else return { ok: false, error: 'full' };
+  }
+  return { ok: true, ips: ipList_() };
+}
+function apiDelIp_(p) {
+  if (!adminOk_(p)) return { ok: false, error: 'sai_pin' };
+  var slot = Number(p.slot);
+  if (slot !== 1 && slot !== 2) return { ok: false, error: 'sai_slot' };
+  PropertiesService.getScriptProperties().deleteProperty(slot === 1 ? 'STUDIO_IP' : 'STUDIO_IP2');
+  return { ok: true, ips: ipList_() };
 }
 ```
 
 ## 3. Thêm `case` trong `api_()` (cạnh `case 'setip'`)
 
 ```js
-      case 'addip':   out = apiAddIp_(p); break;
+      case 'iplist':  out = apiIpList_(p); break;
+      case 'addip':   out = apiAddIp_(p);  break;
+      case 'delip':   out = apiDelIp_(p);  break;
 ```
+
+`setip` cũ vẫn giữ (ghi đè ô 1) nhưng app không dùng nữa.
 
 ## 4. Deploy ▸ Manage deployments ▸ ✏️ ▸ Version: New version ▸ Deploy
 
-Sau đó trên máy cần test: mở app ▸ nhập PIN admin ▸ **Thêm IP này để test** ▸ pill "Đã thêm IP test". Check-in từ mạng đó sẽ được nhận. Lưu ý IP nhà mạng di động đổi thường xuyên; mỗi lần đổi mạng bấm thêm lại.
+Sau đó trên máy cần thêm: mở app ▸ PIN admin ▸ danh sách hiện 2 ô ▸ **Thêm IP** (ô trống nhận IP thiết bị này). Đủ 2 ô thì nút báo "Đã đủ 2 IP · xoá bớt": bấm × ở ô muốn bỏ rồi thêm lại.

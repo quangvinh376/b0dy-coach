@@ -7,7 +7,7 @@
    ===================================================================== */
 'use strict';
 var $=function(id){ return document.getElementById(id); };
-var APP_VER='v2.3.1';
+var APP_VER='v2.3.2';
 
 /* ---------------- tiện ích ---------------- */
 function isoToday(d){ d=d||new Date(); return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2); }
@@ -337,7 +337,11 @@ function demoApi(body){
     if(body.action==='ping') return res({ok:true,pong:1});
     if(body.action==='admin') return res(body.apin==='0000' ? {ok:true} : {ok:false,error:'sai_pin'});
     if(body.action==='setip') return res(body.apin==='0000' ? {ok:true, ip:body.ip||'demo'} : {ok:false,error:'sai_pin'});
-    if(body.action==='addip') return res(body.apin==='0000' ? {ok:true, ip:body.ip||'demo', ips:[body.ip||'demo']} : {ok:false,error:'sai_pin'});
+    if(body.action==='iplist'||body.action==='addip'||body.action==='delip'){ if(body.apin!=='0000') return res({ok:false,error:'sai_pin'});
+      var ips=[]; try{ ips=JSON.parse(SES('demo_ips')||'null')||['203.0.113.7','']; }catch(e){ ips=['203.0.113.7','']; }
+      if(body.action==='addip'){ var ip=body.ip||'198.51.100.'+(1+Math.floor(Math.random()*200)); if(ips.indexOf(ip)<0){ var f=ips.indexOf(''); if(f<0) return res({ok:false,error:'full'}); ips[f]=ip; } }
+      if(body.action==='delip'){ var s=+body.slot; if(s===1||s===2) ips[s-1]=''; }
+      SES('demo_ips', JSON.stringify(ips)); return res({ok:true, ips:ips}); }
     if(body.pin==='0000') return res({ok:false,error:'sai_pin'});
     if(body.action==='coach'){ var snap={}; db.clients.forEach(function(c){ snap[c.name]=c.snap; });
       return res({ok:true, coach:'Quyết Hán', members:db.clients.map(function(c){return {name:c.name,done:c.done,total:c.total,left:c.left,coach:c.coach,start:c.start,exp:c.exp,kind:c.kind||'',checked:db.checked[c.name]===isoToday(),signed:db.checked[c.name]===isoToday()?(db.at[c.name]||''):''}}), snapshot:JSON.parse(JSON.stringify(snap)), library:null, today:isoToday()}); }
@@ -624,23 +628,36 @@ HOOK['p-pin']=function(){ startPin(); warm(); };
 
 /* ---- ADMIN ---- */
 function openAdminPanel(pin){ state.apin=pin; state.pin=''; state.clients=[]; go('p-admin','fwd'); }
-HOOK['p-admin']=function(){ $('am-ip').textContent=state.ip||'—'; $('am-note').textContent='CẬP NHẬT ĐỂ LẤY IP NÀY LÀM IP CỦA PHÒNG'; refreshIp().then(function(){ if(state.screen==='p-admin') $('am-ip').textContent=state.ip||'—'; }); };
-/* IP test: thêm IP hiện tại vào danh sách được check-in ngoài phòng (Script Property TEST_IPS, backend/README.md mục 6) */
-function addTestIp(){
-  if(state._setip) return; state._setip=true; busyLine(true);
-  refreshIp().then(function(){ $('am-ip').textContent=state.ip||'—'; return api({action:'addip', pin:state.apin, apin:state.apin}, 1, 800, 0, 30000); })
-  .then(function(res){ busyLine(false); state._setip=false;
-    if(res&&res.ok){ $('am-test').textContent='IP TEST ĐÃ THÊM · '+(res.ips||[]).length; notify('Đã thêm IP test'); }
-    else notify(res&&res.error==='unknown_action'?'Backend chưa có addip':'Không thêm được', {err:true}); })
-  .catch(function(){ busyLine(false); state._setip=false; notify('Máy chủ chậm', {err:true}); });
+/* ADMIN — tối đa 2 IP được check-in (cả hai đều hợp lệ): ô 1 = IP phòng (STUDIO_IP), ô 2 = STUDIO_IP2. Thêm = lấy IP thiết bị này vào ô trống; × để xoá. */
+var ADM={ips:['','']};
+HOOK['p-admin']=function(){ $('am-ip').textContent=state.ip||'—'; renderIps(); refreshIp().then(function(){ if(state.screen==='p-admin') $('am-ip').textContent=state.ip||'—'; renderIps(); }); loadIps(); };
+function renderIps(){
+  var el=$('am-list'), ips=ADM.ips, n=ips.filter(String).length; el.innerHTML='';
+  $('am-note').textContent='IP ĐƯỢC CHECK-IN · '+n+'/2';
+  ips.forEach(function(ip,i){
+    var b=document.createElement('div'); b.className='row'+(ip?'':' off');
+    b.innerHTML='<span class="lt"><span class="nm mono">'+(ip?esc(ip):'—')+'</span><span class="lab">'+(i===0?'IP PHÒNG':'IP THỨ 2')+(ip && ip===state.ip?' · THIẾT BỊ NÀY':'')+'</span></span>'+(ip?'<button class="ghost x" aria-label="Xoá IP">'+ico('i-x')+'</button>':'');
+    var x=b.querySelector('.x'); if(x) x.onclick=function(){ delIp(i+1); };
+    el.appendChild(b);
+  });
+  var add=$('am-add'); var full=n>=2, dup=!!state.ip && ips.indexOf(state.ip)>=0;
+  add.classList.toggle('off', full || dup || !state.ip || !!ADM.busy); add.textContent= dup ? 'IP này đã có' : full ? 'Đã đủ 2 IP · xoá bớt' : 'Thêm IP';
 }
-function registerIp(){
-  if(state._setip) return; state._setip=true; busyLine(true);
-  refreshIp().then(function(){ $('am-ip').textContent=state.ip||'—'; return api({action:'setip', pin:state.apin, apin:state.apin}, 1, 800, 0, 30000); })
-  .then(function(res){ busyLine(false); state._setip=false;
-    if(res&&res.ok){ $('am-note').textContent='IP PHÒNG HIỆN TẠI ĐANG LÀ IP NÀY'; notify('Đã lưu IP phòng'); }
-    else notify('Không lưu được', {err:true}); })
-  .catch(function(){ busyLine(false); state._setip=false; notify('Máy chủ chậm', {err:true}); });
+function ipsFrom(res){ ADM.ips=[String((res.ips&&res.ips[0])||res.ip||''), String((res.ips&&res.ips[1])||'')]; renderIps(); }
+function loadIps(){ api({action:'iplist', pin:state.apin, apin:state.apin}, 1, 800, 0, 30000).then(function(res){ if(res&&res.ok) ipsFrom(res); else if(res&&res.error==='unknown_action') notify('Backend chưa có iplist', {err:true}); }).catch(function(){}); }
+function addIp(){
+  if(ADM.busy) return; ADM.busy=true; busyLine(true); renderIps();
+  refreshIp().then(function(){ $('am-ip').textContent=state.ip||'—'; return api({action:'addip', pin:state.apin, apin:state.apin}, 1, 800, 0, 30000); })
+  .then(function(res){ busyLine(false); ADM.busy=false;
+    if(res&&res.ok){ ipsFrom(res); notify('Đã thêm IP'); }
+    else { renderIps(); notify(res&&res.error==='full'?'Đã đủ 2 IP':res&&res.error==='unknown_action'?'Backend chưa có addip':'Không thêm được', {err:true}); } })
+  .catch(function(){ busyLine(false); ADM.busy=false; renderIps(); notify('Máy chủ chậm', {err:true}); });
+}
+function delIp(slot){
+  if(ADM.busy) return; ADM.busy=true; busyLine(true);
+  api({action:'delip', slot:slot, pin:state.apin, apin:state.apin}, 1, 800, 0, 30000).then(function(res){ busyLine(false); ADM.busy=false;
+    if(res&&res.ok){ ipsFrom(res); notify('Đã xoá IP'); } else { renderIps(); notify('Không xoá được', {err:true}); } })
+  .catch(function(){ busyLine(false); ADM.busy=false; renderIps(); notify('Máy chủ chậm', {err:true}); });
 }
 function adminDone(){ state.apin=''; go('p-pin','back'); }
 
