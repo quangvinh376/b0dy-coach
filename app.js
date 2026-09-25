@@ -745,7 +745,7 @@ function renderBars(animate){
       heroDay(b.dataset.k, +b.dataset.v);
       if(navigator.vibrate) try{ navigator.vibrate(4); }catch(e){}
     }
-    function up(){ if(!HB.scrub) return; HB.scrub=false; el.classList.remove('scrub'); clearTimeout(HB.t); HB.t=setTimeout(heroMonth, 900); }
+    function up(){ if(!HB.scrub) return; HB.scrub=false; el.classList.remove('scrub'); clearTimeout(HB.t); heroMonth(); }   /* nhả tay: về trạng thái mặc định NGAY */
     el.addEventListener('pointerdown', function(e){
       if(!el.children.length) return; e.preventDefault();
       try{ el.setPointerCapture(e.pointerId); }catch(x){}
