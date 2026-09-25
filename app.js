@@ -602,11 +602,32 @@ function statsFor(name){ var s=state.stats; return (s && s.perClient && s.perCli
 function slowClients(){ var s=state.stats; if(!s||!s.perClient) return null; return state.clients.filter(function(c){ var p=s.perClient[c.name]; return c.left>0 && p && (+p.m||0)<10; }); }
 HOOK['p-home']=function(dir, quiet){ renderHome(!quiet); };
 function homeRange(r){ state.homeRange=r; $('h-7d').classList.toggle('on', r==='7d'); $('h-1m').classList.toggle('on', r==='1m'); renderBars(true); }
+/* tween số: từ from → to trong dur ms, ease-out cubic (cùng ngôn ngữ countUp). Huỷ tween cũ trên cùng phần tử. */
+function tweenNum(el, from, to, dur){
+  if(el._tw) cancelAnimationFrame(el._tw); el._tw=0;
+  if(rm() || from===to || !(dur>0)){ el.textContent=String(to); return; }
+  var t0=performance.now();
+  (function f(t){ var p=Math.min(1,(t-t0)/dur); p=1-Math.pow(1-p,3); el.textContent=Math.round(from+(to-from)*p); el._tw= p<1 ? requestAnimationFrame(f) : 0; })(t0);
+}
+/* trạng thái hero khi scrub biểu đồ: mode 'month' | 'day' · total = tổng tháng · cur = cột đang chọn */
+var HB={mode:'month', total:null, cur:null, scrub:false, t:0};
+function heroL1(text, fade){ var l1=$('h-month'); l1.classList.remove('sw'); l1.textContent=text; if(fade && !rm()){ void l1.offsetWidth; l1.classList.add('sw'); } }
+function heroNum(){ var n=$('h-taught').querySelector('.n'); return n ? (parseInt(n.textContent,10)||0) : 0; }
+function heroL2(to){ var ht=$('h-taught'), from=heroNum(); ht.innerHTML='Đã dạy <span class="n">'+from+'</span> buổi'; tweenNum(ht.querySelector('.n'), from, to, 260); }
+function heroDay(k, v){ var sw=HB.mode!=='day'; HB.mode='day'; heroL1(k.slice(8,10)+'/'+k.slice(5,7), sw); heroL2(v); }
+function heroMonth(){
+  clearTimeout(HB.t); HB.t=0; if(HB.cur){ HB.cur.classList.remove('hit'); HB.cur=null; }
+  if(HB.mode==='month') return; HB.mode='month';
+  heroL1('Tháng '+TODAY_ISO.slice(5,7), true);
+  if(HB.total==null) $('h-taught').textContent='Đã dạy — buổi'; else heroL2(HB.total);
+}
 function renderHome(animate){
   var s=state.stats, m=monthOf(TODAY_ISO), cur=s && s.month===m;
   $('h-name').textContent=state.loading?'Đang tải…':coachName(state.coach);
-  $('h-month').textContent='Tháng '+TODAY_ISO.slice(5,7);
+  clearTimeout(HB.t); HB.t=0; HB.mode='month'; HB.cur=null; HB.scrub=false;
+  heroL1('Tháng '+TODAY_ISO.slice(5,7), false);
   var total=cur ? (s.monthTotal!=null ? s.monthTotal : Object.keys(s.days||{}).reduce(function(a,k){ return k.slice(0,7)===m ? a+(+s.days[k]||0) : a; },0)) : null;
+  HB.total=total;
   var ht=$('h-taught');
   if(total==null) ht.textContent='Đã dạy — buổi';
   else { ht.innerHTML='Đã dạy <span class="n">'+total+'</span> buổi'; if(animate) countUp(ht.querySelector('.n'), total, 700, 420); }
@@ -630,34 +651,42 @@ function renderHome(animate){
   });
   $('h-go').textContent= loadSession() ? 'Tiếp tục buổi tập' : 'Vào buổi tập';
 }
-/* cột 2px, cách đều; quá khứ Paper · hôm nay Acid · tương lai 16% (dự phóng tăng dần). Chạm cột → hiện giá trị. */
+/* cột 2px, cách đều; quá khứ Paper · hôm nay Acid · ngày trống / tương lai 1px 16%. Cao = v/max·64 (tối thiểu 2px).
+   Chạm + kéo ngang (scrub): cột gần ngón tay nhất sáng Acid, hero đổi thành ngày dd/mm + số buổi ngày đó; nhấc tay ~900ms thì về tháng. */
 function renderBars(animate){
-  var s=state.stats, days=(s&&s.days)||{}, el=$('h-bars'), tip=$('h-tip'), list=[], m=monthOf(TODAY_ISO);
+  var s=state.stats, days=(s&&s.days)||{}, el=$('h-bars'), list=[], m=monthOf(TODAY_ISO);
   if(state.homeRange==='7d'){ for(var i=6;i>=0;i--) list.push(isoAdd(TODAY_ISO,-i)); }
   else { var p=TODAY_ISO.split('-'), n=new Date(+p[0],+p[1],0).getDate(); for(var d=1; d<=n; d++) list.push(m+'-'+pad2(d)); }
   var max=1; list.forEach(function(k){ max=Math.max(max, +days[k]||0); });
-  var ti=list.indexOf(TODAY_ISO), todayH=Math.max(8, Math.round((+days[TODAY_ISO]||0)/max*64)), futN=Math.max(1, list.length-1-ti);
-  el.classList.remove('in'); tip.classList.remove('on'); el.innerHTML=''; el.appendChild(tip);
+  clearTimeout(HB.t); HB.t=0; HB.cur=null; HB.scrub=false; if(HB.mode==='day') heroMonth();
+  el.classList.remove('in'); el.innerHTML='';
   list.forEach(function(k,i){
     var b=document.createElement('i'), v=+days[k]||0, fut=k>TODAY_ISO;
-    b.className= k===TODAY_ISO ? 'on' : fut ? 'off' : '';
-    b.style.height= fut ? Math.round(todayH+(64-todayH)*((i-ti)/futN))+'px' : Math.max(8, Math.round(v/max*64))+'px';
-    b.dataset.k=k; b.dataset.v=v;
-    if(animate) b.style.transitionDelay=(i*8)+'ms';
+    b.className= k===TODAY_ISO ? 'on' : (fut || !v) ? 'off' : '';
+    b.style.height= (fut || !v) ? '1px' : Math.max(2, Math.round(v/max*64))+'px';
+    b.dataset.k=k; b.dataset.v=fut?0:v;
+    if(animate) b.style.transitionDelay=(i*8)+'ms, 0ms';   /* chỉ trễ transform; màu đổi tức thì khi chọn */
     el.appendChild(b);
   });
   requestAnimationFrame(function(){ requestAnimationFrame(function(){ el.classList.add('in'); }); });
-  if(!el._tip){ el._tip=1;
+  if(!el._scrub){ el._scrub=1;
+    var cx=[];
+    function pick(x){ var best=-1, bd=1e9; for(var j=0;j<cx.length;j++){ var dd=Math.abs(cx[j]-x); if(dd<bd){ bd=dd; best=j; } } return best>=0 ? el.children[best] : null; }
+    function sel(b){
+      if(!b || b===HB.cur) return;
+      if(HB.cur) HB.cur.classList.remove('hit'); HB.cur=b; b.classList.add('hit');
+      heroDay(b.dataset.k, +b.dataset.v);
+      if(navigator.vibrate) try{ navigator.vibrate(4); }catch(e){}
+    }
+    function up(){ if(!HB.scrub) return; HB.scrub=false; clearTimeout(HB.t); HB.t=setTimeout(heroMonth, 900); }
     el.addEventListener('pointerdown', function(e){
-      var bars=el.querySelectorAll('i'), best=null, bd=1e9, r=el.getBoundingClientRect();
-      bars.forEach(function(b){ var br=b.getBoundingClientRect(), d=Math.abs(br.left+1-e.clientX); if(d<bd){ bd=d; best=b; } });
-      if(!best) return;
-      bars.forEach(function(b){ b.classList.remove('hit'); }); best.classList.add('hit');
-      var k=best.dataset.k, v=+best.dataset.v, fut=k>TODAY_ISO;
-      tip.textContent=vn(k).slice(0,5)+' · '+(fut?'DỰ KIẾN':v+' BUỔI');
-      var x=best.getBoundingClientRect().left+1-r.left; tip.style.left=Math.max(40, Math.min(r.width-40, x))+'px'; tip.classList.add('on');
-      clearTimeout(el._tt); el._tt=setTimeout(function(){ tip.classList.remove('on'); best.classList.remove('hit'); }, 2200);
+      if(!el.children.length) return; e.preventDefault();
+      try{ el.setPointerCapture(e.pointerId); }catch(x){}
+      cx=[]; for(var j=0;j<el.children.length;j++){ var br=el.children[j].getBoundingClientRect(); cx.push(br.left+br.width/2); }
+      clearTimeout(HB.t); HB.t=0; HB.scrub=true; sel(pick(e.clientX));
     });
+    el.addEventListener('pointermove', function(e){ if(HB.scrub) sel(pick(e.clientX)); });
+    el.addEventListener('pointerup', up); el.addEventListener('pointercancel', up); el.addEventListener('lostpointercapture', up);
   }
 }
 function enterSession(){

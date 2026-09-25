@@ -216,17 +216,18 @@ svg{display:block}
 
 /* ============ 1 · TRANG CHỦ (rail 12) ============ */
 .hero{margin-top:32px}
-.hero .l1{font-size:22px;line-height:26px;letter-spacing:-.33px}
-.hero .l2{font-size:22px;line-height:26px;letter-spacing:-.33px;color:var(--acid)}
-.bars{margin-top:16px;height:64px;display:flex;align-items:flex-end;justify-content:space-between;position:relative;touch-action:manipulation}
-.bars i{width:2px;flex:none;background:var(--paper);transform-origin:bottom;transform:scaleY(0);transition:transform .5s var(--eo),background-color .16s linear}
+.hero .l1{font-size:22px;line-height:26px;letter-spacing:-.33px;white-space:nowrap}
+.hero .l1.sw{animation:l1sw .16s linear}            /* crossfade khi đổi tháng ↔ ngày */
+@keyframes l1sw{from{opacity:0}to{opacity:1}}
+.hero .l2{font-size:22px;line-height:26px;letter-spacing:-.33px;color:var(--acid);white-space:nowrap}
+.hero .l2 .n{font-variant-numeric:tabular-nums}
+/* biểu đồ: touch-action:none để scrub ngang bằng ngón tay không bị trình duyệt cuộn trang */
+.bars{margin-top:16px;height:64px;display:flex;align-items:flex-end;justify-content:space-between;position:relative;touch-action:none;user-select:none;-webkit-user-select:none;cursor:ew-resize}
+.bars i{width:2px;flex:none;background:var(--paper);transform-origin:bottom;transform:scaleY(0);transition:transform .5s var(--eo),background-color .18s linear}
 .bars i.on{background:var(--acid)}
 .bars i.off{background:rgba(250,250,250,.16)}
 .bars i.hit{background:var(--acid)}
 .bars.in i{transform:scaleY(1)}
-.btip{position:absolute;bottom:calc(100% + 8px);transform:translateX(-50%);background:var(--paper);color:var(--ink);font-family:var(--mono);font-size:11px;line-height:13px;letter-spacing:.88px;
-      padding:3px 10px;border-radius:12px;white-space:nowrap;opacity:0;transition:opacity .16s linear;pointer-events:none;z-index:2}
-.btip.on{opacity:1}
 .range{display:flex;justify-content:center;gap:16px;margin-top:24px}
 .range button{width:50px;padding:3px 0;border-radius:12px;display:flex;justify-content:center;font-family:var(--mono);font-size:11px;line-height:13px;letter-spacing:.88px;color:var(--gray)}
 .range button.on{background:var(--paper);color:var(--ink)}
