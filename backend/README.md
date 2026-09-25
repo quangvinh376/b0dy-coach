@@ -40,3 +40,6 @@ App v2 vẫn gửi `SET`, `BÀI`, `CHECKOUT`, `ĐO`, `MỤC TIÊU` với `id` ch
 ## 4. Tuỳ chọn: ngày hết hạn gói
 
 Màn Hồ sơ hiện "Hết hạn" từ `member.exp` (hoặc `member.end` nếu thiếu). Nếu muốn đúng cột **Ngày hết hạn** của tab MEMBERS, thêm trường `exp` (chuỗi `yyyy-MM-dd`) vào từng phần tử `members` trong phản hồi của action `coach`.
+
+## Loại gói 1:1 / 1:2 (`kind`) — cần cho màn Chọn khách (v2.2)
+Màn Chọn khách chia nhóm "KHÁCH 1:1 SẴN SÀNG TẬP" / "KHÁCH 1:2 SẴN SÀNG TẬP" và chỉ cho ghép cặp với khách 1:2. App đọc trường `kind` (hoặc `type`) của từng phần tử `members` trong action `coach`; nhận dạng 1:2 khi chuỗi khớp `1:2`, `1-2`, `đôi`, `duo`, `cặp` (không phân biệt hoa thường). Thiếu trường này → mọi khách được coi là 1:1. Đề nghị Apps Script trả `kind` = giá trị cột **Loại gói** của tab MEMBERS (ví dụ `PT 1:2 · 24 buổi`).
