@@ -7,7 +7,7 @@
    ===================================================================== */
 'use strict';
 var $=function(id){ return document.getElementById(id); };
-var APP_VER='v2.1.2';
+var APP_VER='v2.1.3';
 
 /* ---------------- tiện ích ---------------- */
 function isoToday(d){ d=d||new Date(); return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2); }
@@ -451,7 +451,7 @@ function mqStopAll(){ MQ.forEach(function(m){ clearTimeout(m.t); m.el.classList.
    ===================================================================== */
 var DEG=Math.PI/180, WSTEP=26, openWheel=null;
 function Wheel(host, opts){
-  var line=host.querySelector('.line'), nodes=[], pos=opts.index||0, reveal=0, raf=0, revealRaf=0, closeTimer=0, api;
+  var line=host.querySelector('.line'), P=parseFloat(getComputedStyle(line).perspective)||0, K=P?(P-opts.z)/P:1, nodes=[], pos=opts.index||0, reveal=0, raf=0, revealRaf=0, closeTimer=0, api;
   for(var i=0;i<9;i++){ var el=document.createElement('div'); el.className='v'; line.appendChild(el); nodes.push(el); }
   function render(){
     var base=Math.round(pos);
@@ -461,7 +461,7 @@ function Wheel(host, opts){
       var off=idx-pos, c=Math.cos(off*WSTEP*DEG);
       if(c<=0.03){ el.style.opacity=0; continue; }
       el.textContent=(reveal<0.02 && Math.abs(off)<0.001 && opts.live) ? opts.live() : opts.format(opts.values[idx]);
-      el.style.transform='rotateX('+(-off*WSTEP)+'deg) translateZ('+opts.z+'px)';
+      el.style.transform='rotateX('+(-off*WSTEP)+'deg) translateZ('+opts.z+'px) scale('+K+')';
       var w=Math.max(0,1-Math.abs(off));
       el.style.opacity=Math.pow(c,1.8)*Math.max(w, reveal*(opts.ghost+(1-opts.ghost)*w));
     }
@@ -725,7 +725,7 @@ function renderMeasureList(animate){
   $('ms-count').textContent='LẦN ĐO · '+list.length;
   list.forEach(function(ms,i){
     var b=document.createElement('button'); b.className='row r51'+(animate?' rowin':''); if(animate) b.style.animationDelay=Math.min(i*24,280)+'ms';
-    b.innerHTML='<span class="lt"><span class="nm">'+vnLong(ms.d)+'</span></span>'+ico('i-arr','dn');
+    b.innerHTML='<span class="lt"><span class="nm">'+vnLong(ms.d)+'</span></span>'+ico('i-chev','dn');
     var sub=document.createElement('div'); sub.className='xp';
     sub.innerHTML=METRICS.map(function(x){ var v=ms[x.id]; return '<div class="kv'+(v==null?' none':'')+'"><span>'+x.name+'</span><span class="v">'+(v==null?'—':fmtN(v)+'<i>'+x.unit+'</i>')+'</span></div>'; }).join('');
     b.onclick=function(){ var open=b.classList.toggle('open'); el.querySelectorAll('.row.open').forEach(function(r){ if(r!==b) r.classList.remove('open'); }); setTimeout(function(){ fogUpdate(el); },20); };
@@ -810,8 +810,8 @@ function renderPerf(animate){
     var items=g.items.filter(function(e){ return !q || norm(e.name).indexOf(q)>=0 || norm(exShort(e.name)).indexOf(q)>=0; }); if(!items.length) return; any=true;
     var d=document.createElement('div'); d.className='lab sec'; d.textContent=upper(g.name)+' · '+items.length; el.appendChild(d);
     items.forEach(function(e){
-      var rows=hist[e.name]||[], b=document.createElement('button'); b.className='row r51'+(animate?' rowin':'')+(rows.length?'':' off'); if(animate) b.style.animationDelay=Math.min(i++*20,240)+'ms';
-      b.innerHTML='<span class="lt"><span class="nm mq"><span>'+esc(exShort(e.name))+'</span></span></span>'+ico('i-arr','dn');
+      var rows=hist[e.name]||[], b=document.createElement('button'); b.className='row r51'+(animate?' rowin':'')+(rows.length?'':' nohist'); if(animate) b.style.animationDelay=Math.min(i++*20,240)+'ms';
+      b.innerHTML='<span class="lt"><span class="nm mq"><span>'+esc(exShort(e.name))+'</span></span></span>'+ico('i-chev','dn');
       var sub=document.createElement('div'); sub.className='xp';
       sub.innerHTML=rows.slice(0,12).map(function(r){ return '<div class="kv"><span>'+vnLong(r.d)+'</span><span class="v'+(r.ok?'':' er')+'">'+r.rep+' × '+fmtN(r.kg)+'<i>KG</i></span></div>'; }).join('');
       b.onclick=function(){ b.classList.toggle('open'); setTimeout(function(){ fogUpdate(el); },20); };
@@ -819,7 +819,7 @@ function renderPerf(animate){
     });
   });
   Object.keys(hist).forEach(function(ex){ if(libEntries().some(function(e){return e.name===ex})) return; if(q && norm(ex).indexOf(q)<0) return; any=true;
-    var b=document.createElement('button'); b.className='row'; b.innerHTML='<span class="lt"><span class="nm mq"><span>'+esc(exShort(ex))+'</span></span><span class="lab">BÀI CŨ</span></span>'+ico('i-arr','dn');
+    var b=document.createElement('button'); b.className='row'; b.innerHTML='<span class="lt"><span class="nm mq"><span>'+esc(exShort(ex))+'</span></span><span class="lab">BÀI CŨ</span></span>'+ico('i-chev','dn');
     var sub=document.createElement('div'); sub.className='xp'; sub.innerHTML=hist[ex].slice(0,12).map(function(r){ return '<div class="kv"><span>'+vnLong(r.d)+'</span><span class="v'+(r.ok?'':' er')+'">'+r.rep+' × '+fmtN(r.kg)+'<i>KG</i></span></div>'; }).join('');
     b.onclick=function(){ b.classList.toggle('open'); setTimeout(function(){ fogUpdate(el); },20); }; el.appendChild(b); el.appendChild(sub); });
   if(!any){ var e=document.createElement('div'); e.className='lab empty'; e.textContent='KHÔNG TÌM THẤY BÀI NÀY'; el.appendChild(e); }
