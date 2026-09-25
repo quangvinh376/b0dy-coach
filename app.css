@@ -242,12 +242,27 @@ svg{display:block}
 #p-home .nav{margin-top:32px}
 
 /* ============ KHÁCH HÀNG · CHỌN KHÁCH ============ */
-.chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:32px;flex:none}
-.chips:empty{display:none}
-.chip{height:32px;border-radius:16px;border:1px solid var(--acid);color:var(--acid);display:inline-flex;align-items:center;gap:8px;padding:0 12px 0 16px;font-size:14px;line-height:17px;letter-spacing:-.14px;
-      animation:chipin .22s var(--eo)}
+/* vùng chip: 0fr → 1fr mở chiều cao mượt để danh sách bên dưới trượt xuống thay vì nhảy */
+.chipw{display:grid;grid-template-rows:0fr;flex:none;transition:grid-template-rows .26s var(--eo)}
+.chipw.on{grid-template-rows:1fr}
+.chips{min-height:0;overflow:hidden}
+.chiprow{display:flex;flex-wrap:wrap;gap:8px;padding-top:32px}
+.chip{height:32px;max-width:100%;border-radius:16px;border:1px solid var(--acid);color:var(--acid);display:inline-flex;align-items:center;gap:8px;padding:0 12px 0 16px;font-size:14px;line-height:17px;letter-spacing:-.14px;
+      transition:opacity .22s var(--eo),transform .22s var(--eo)}
+.chip>span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .chip .ic{width:16px;height:16px}
-@keyframes chipin{from{opacity:0;transform:scale(.92)}to{opacity:1;transform:none}}
+.chip.pre,.chip.out{opacity:0;transform:scale(.9)}
+.chip.out{transition-duration:.16s;pointer-events:none}
+/* icon dòng chọn khách: hai svg chồng nhau trong .icw để crossfade + / ✓ không làm tên nhảy */
+#p-pick .icw{position:relative;width:20px;height:20px;flex:none}
+#p-pick .icw .ic{position:absolute;left:0;top:0;transition:opacity .18s var(--eo),transform .18s var(--eo)}
+#p-pick .icw .ic.icin,#p-pick .icw .ic.icout{opacity:0;transform:scale(.8)}
+#p-pick .row .ic.paper{color:var(--paper)}
+@media (prefers-reduced-motion:reduce){
+  .chipw{transition:none}
+  .chip,#p-pick .icw .ic{transition:opacity .2s linear}
+  .chip.pre,.chip.out,#p-pick .icw .ic.icin,#p-pick .icw .ic.icout{transform:none}
+}
 
 /* ============ XÁC NHẬN · XONG ============ */
 .card{position:relative;background:rgba(250,250,250,.07);border-radius:4px;overflow:hidden}

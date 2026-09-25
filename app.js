@@ -309,11 +309,11 @@ function ciFor(name){ var c=CI[name]; return (c && c.day===TODAY_ISO) ? c : null
 var DEMO_DB=null;
 function demoDb(){
   if(DEMO_DB) return DEMO_DB;
-  function mk(name,done,total,measures,target,exp){ return {name:name,done:done,total:total,left:total-done,coach:'Quyết',start:'2026-06-17',end:'',exp:exp||'2026-11-21',snap:{measures:measures,target:target||{},main:'weight',last:{},plans:{}}}; }
+  function mk(name,done,total,measures,target,exp,kind){ return {name:name,done:done,total:total,left:total-done,coach:'Quyết',start:'2026-06-17',end:'',exp:exp||'2026-11-21',kind:kind||'',snap:{measures:measures,target:target||{},main:'weight',last:{},plans:{}}}; }
   var D=[
-    mk('Bùi Doãn Quang',14,24,[{d:'2026-07-28',weight:75.2,arm:41.8,waist:85,hip:97,chest:97},{d:'2026-08-11',weight:74.5,waist:84},{d:'2026-08-25',weight:74.5,arm:41.8,waist:85,hip:97,chest:97,thigh:56},{d:'2026-09-08',weight:72.4,arm:40,waist:82,hip:96,chest:98,thigh:56},{d:'2026-09-22',weight:75,arm:40,waist:82,hip:96,chest:98,thigh:56}],{weight:65}),
-    mk('Nguyễn Quang Vinh',11,12,[{d:'2026-08-20',weight:68.5,waist:78},{d:'2026-09-05',weight:68,waist:77}],{weight:65},'2027-01-17'),
-    mk('Lê Trường Giang',21,24,[{d:'2026-06-01',weight:81},{d:'2026-08-01',weight:82.5,arm:37.5,chest:103},{d:'2026-09-01',weight:83.2}],{weight:85}),
+    mk('Bùi Doãn Quang',14,24,[{d:'2026-07-28',weight:75.2,arm:41.8,waist:85,hip:97,chest:97},{d:'2026-08-11',weight:74.5,waist:84},{d:'2026-08-25',weight:74.5,arm:41.8,waist:85,hip:97,chest:97,thigh:56},{d:'2026-09-08',weight:72.4,arm:40,waist:82,hip:96,chest:98,thigh:56},{d:'2026-09-22',weight:75,arm:40,waist:82,hip:96,chest:98,thigh:56}],{weight:65},'','PT 1:2'),
+    mk('Nguyễn Quang Vinh',11,12,[{d:'2026-08-20',weight:68.5,waist:78},{d:'2026-09-05',weight:68,waist:77}],{weight:65},'2027-01-17','PT 1:2'),
+    mk('Lê Trường Giang',21,24,[{d:'2026-06-01',weight:81},{d:'2026-08-01',weight:82.5,arm:37.5,chest:103},{d:'2026-09-01',weight:83.2}],{weight:85},'','PT 1:2'),
     mk('Đỗ Thành Công',7,8,[{d:'2026-09-01',weight:70}],{}),
     mk('Nguyễn Châu Khang',0,24,[],{}),
     mk('Nguyễn Thành Long',3,12,[{d:'2026-09-02',weight:71.4,arm:34.5,chest:97}],{weight:75}),
@@ -335,7 +335,7 @@ function demoApi(body){
     if(body.action==='setip') return res(body.apin==='0000' ? {ok:true, ip:body.ip||'demo'} : {ok:false,error:'sai_pin'});
     if(body.pin==='0000') return res({ok:false,error:'sai_pin'});
     if(body.action==='coach'){ var snap={}; db.clients.forEach(function(c){ snap[c.name]=c.snap; });
-      return res({ok:true, coach:'Quyết Hán', members:db.clients.map(function(c){return {name:c.name,done:c.done,total:c.total,left:c.left,coach:c.coach,start:c.start,exp:c.exp,checked:db.checked[c.name]===isoToday(),signed:db.checked[c.name]===isoToday()?(db.at[c.name]||''):''}}), snapshot:JSON.parse(JSON.stringify(snap)), library:null, today:isoToday()}); }
+      return res({ok:true, coach:'Quyết Hán', members:db.clients.map(function(c){return {name:c.name,done:c.done,total:c.total,left:c.left,coach:c.coach,start:c.start,exp:c.exp,kind:c.kind||'',checked:db.checked[c.name]===isoToday(),signed:db.checked[c.name]===isoToday()?(db.at[c.name]||''):''}}), snapshot:JSON.parse(JSON.stringify(snap)), library:null, today:isoToday()}); }
     if(body.action==='stats'){ var st=JSON.parse(JSON.stringify(db.stats)); var t=0; Object.keys(st.days).forEach(function(k){ t+=st.days[k]; }); st.monthTotal=t; return res(st); }
     if(body.action==='checkin_coach'){ var c=db.clients.filter(function(x){return x.name===body.name})[0]; if(!c) return res({ok:false,error:'khong_phai_khach_cua_ban'});
       if(db.checked[c.name]===isoToday()) return res({ok:false,error:'da_checkin',at:db.at[c.name]});
@@ -837,26 +837,68 @@ function doneToday(m){
   if(m.checked) return m.signed||'';
   return null;
 }
+/* gói 1:2 (2 khách/buổi) — chỉ khách này mới được ghép; backend chưa gửi kind thì coi là 1:1 */
+function isDuo(m){ return /1\s*[:\-–]\s*2|đôi|duo|cặp/i.test(String(m&&m.kind||'')); }
+function pickMeta(m, at){ return at!=null ? 'ĐÃ TẬP HÔM NAY · '+(at||'—') : clientMeta(m); }
+/* chip tên khách 1:2 đã chọn — vào/ra bằng transition (ngắt được), xoá sau khi mờ hết */
+function pickChip(n){
+  var c=document.createElement('button'); c.className='chip pre'; c.setAttribute('data-name', n);
+  c.innerHTML='<span>'+esc(firstName(n))+'</span>'+ico('i-x'); c.onclick=function(){ togglePick(n); }; return c;
+}
+function pickChipsSync(){
+  var chips=$('pk-chips'), wrap=$('pk-chipw'), go=$('pk-go'), keep={};
+  state.sel.forEach(function(n){ keep[n]=1; var c=chips.querySelector('.chip[data-name="'+n.replace(/"/g,'\\"')+'"]');
+    if(c){ if(c._t){ clearTimeout(c._t); c._t=null; } c.classList.remove('out','pre'); return; }
+    c=pickChip(n); chips.appendChild(c); c.offsetWidth; c.classList.remove('pre'); });
+  [].slice.call(chips.querySelectorAll('.chip')).forEach(function(c){ var n=c.getAttribute('data-name'); if(keep[n] || c._t) return;
+    c.classList.add('out'); c._t=setTimeout(function(){ if(c.parentNode) c.parentNode.removeChild(c); }, 170); });
+  wrap.classList.toggle('on', !!state.sel.length);
+  go.classList.toggle('away', !state.sel.length); go.textContent='Xác nhận · 1:'+(state.sel.length>1?'2':'1');
+  clearTimeout(pickChipsSync._f); pickChipsSync._f=setTimeout(function(){ fogUpdate($('pk-list')); }, 280);
+}
+/* đổi icon của một dòng bằng crossfade nhỏ (cũ mờ + co .8 ra, mới vào .18s) — không rebuild danh sách */
+function pickIcon(b, name, cls){
+  var w=b.querySelector('.icw'), old=w.querySelector('.ic:not(.icout)'); if(old && old.getAttribute('data-i')===name) return;
+  var d=document.createElement('span'); d.innerHTML=ico(name, cls+' icin'); var nu=d.firstChild; nu.setAttribute('data-i', name);
+  [].slice.call(w.querySelectorAll('.ic')).forEach(function(o){ o.classList.add('icout'); setTimeout(function(){ if(o.parentNode) o.parentNode.removeChild(o); }, 190); });
+  w.appendChild(nu); nu.offsetWidth; nu.classList.remove('icin');
+}
+function pickRow(m, animate, i){
+  var at=doneToday(m), duo=isDuo(m), sel=duo && state.sel.indexOf(m.name)>=0, b;
+  if(at!=null) b=clientRow(m, animate, i, pickMeta(m, at), null, 'i-arr');
+  else if(duo) b=clientRow(m, animate, i, clientMeta(m), function(){ togglePick(m.name); }, sel?'i-check':'i-plus', sel?'acid':'paper');
+  else b=clientRow(m, animate, i, clientMeta(m), function(){ state.sel=[m.name]; if(navigator.vibrate) navigator.vibrate(6); go('p-confirm','fwd'); }, 'i-arr');
+  var ic=b.querySelector('.ic'), w=document.createElement('span'); w.className='icw'; ic.setAttribute('data-i', ic.querySelector('use').getAttribute('href').slice(1)); b.replaceChild(w, ic); w.appendChild(ic);
+  b.setAttribute('data-name', m.name); if(duo) b.classList.add('duo'); if(sel) b.classList.add('sel'); if(at!=null) b.classList.add('off');
+  return b;
+}
 function renderPick(animate){
-  var q=norm($('pk-q').value), el=$('pk-list'), chips=$('pk-chips'); el.innerHTML=''; chips.innerHTML='';
-  state.sel.forEach(function(n){ var c=document.createElement('button'); c.className='chip'; c.innerHTML='<span>'+esc(firstName(n))+'</span>'+ico('i-x'); c.onclick=function(){ togglePick(n); }; chips.appendChild(c); });
-  var list=state.clients.filter(function(m){ return m.left>0 && (!q || norm(m.name).indexOf(q)>=0); }), i=0;
-  var d=document.createElement('div'); d.className='lab sec'; d.textContent=(q?'KẾT QUẢ':'KHÁCH')+' · '+list.length; el.appendChild(d);
-  list.forEach(function(m){
-    var at=doneToday(m), sel=state.sel.indexOf(m.name)>=0;
-    var b=clientRow(m, animate, i++, at!=null ? 'ĐÃ TẬP HÔM NAY · '+(at||'—') : clientMeta(m), function(){ togglePick(m.name); }, sel?'i-check':'i-plus', sel?'acid':'paper');
-    if(sel) b.classList.add('sel'); if(at!=null) b.classList.add('off');
-    el.appendChild(b);
-  });
-  if(!list.length){ var e=document.createElement('div'); e.className='lab empty'; e.textContent=q?'KHÔNG TÌM THẤY TÊN NÀY':'CHƯA CÓ KHÁCH'; el.appendChild(e); }
-  var go=$('pk-go'); go.classList.toggle('away', !state.sel.length); go.textContent='Xác nhận · 1:'+(state.sel.length>1?'2':'1');
+  var q=norm($('pk-q').value), el=$('pk-list'); el.innerHTML='';
+  /* chỉ khách 1:2 còn buổi, chưa tập hôm nay mới giữ được chip (1:1 đi thẳng màn xác nhận, quay lại thì bỏ chọn) */
+  state.sel=state.sel.filter(function(n){ var m=findClient(n); return m && m.left>0 && isDuo(m) && doneToday(m)==null; });
+  var all=state.clients.filter(function(m){ return m.left>0 && (!q || norm(m.name).indexOf(q)>=0); }), i=0;
+  var done=all.filter(function(m){ return doneToday(m)!=null; }), ready=all.filter(function(m){ return doneToday(m)==null; });
+  var solo=ready.filter(function(m){ return !isDuo(m); }), duo=ready.filter(isDuo);
+  function sec(t, list){
+    if(!list.length) return;
+    var d=document.createElement('div'); d.className='lab sec'; d.textContent=t+' · '+list.length; el.appendChild(d);
+    list.forEach(function(m){ el.appendChild(pickRow(m, animate, i++)); });
+  }
+  sec('KHÁCH 1:1 SẴN SÀNG TẬP', solo); sec('KHÁCH 1:2 SẴN SÀNG TẬP', duo); sec('KHÁCH ĐÃ TẬP HÔM NAY', done);
+  if(!all.length){ var e=document.createElement('div'); e.className='lab empty'; e.textContent=q?'KHÔNG TÌM THẤY TÊN NÀY':'CHƯA CÓ KHÁCH'; el.appendChild(e); }
+  pickChipsSync();
   fogUpdate(el); if(!animate) mqInit(el);
 }
 function togglePick(name){
-  var k=state.sel.indexOf(name);
+  var k=state.sel.indexOf(name), m=findClient(name);
   if(k>=0) state.sel.splice(k,1);
-  else { if(state.sel.length>=2){ notify('Một buổi tối đa 2 khách', {err:true}); return; } state.sel.push(name); }
-  renderPick(false);
+  else { if(!m || !isDuo(m)) return; if(state.sel.length>=2){ notify('Tối đa 2 khách', {err:true}); return; } state.sel.push(name); if(navigator.vibrate) navigator.vibrate(6); }
+  /* cập nhật đúng dòng + chip, không dựng lại danh sách */
+  var el=$('pk-list'); [].slice.call(el.querySelectorAll('.row.duo')).forEach(function(b){
+    var on=state.sel.indexOf(b.getAttribute('data-name'))>=0; if(on===b.classList.contains('sel')) return;
+    b.classList.toggle('sel', on); pickIcon(b, on?'i-check':'i-plus', on?'acid':'paper');
+  });
+  pickChipsSync();
 }
 
 /* =====================================================================
