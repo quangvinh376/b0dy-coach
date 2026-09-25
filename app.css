@@ -21,9 +21,8 @@
   color-scheme:dark;
 }
 /* PWA (status bar "black"): web view bắt đầu dưới thanh trạng thái (~54) → còn 2px là tới mốc 56 của thiết kế */
-/* PWA (status bar "black-translucent"): web view phủ cả thanh trạng thái → nền của app (Ink/Acid) tràn lên tận mép trên;
-   khối đỉnh lùi theo safe-area (iPhone Dynamic Island ≈ 59 + 2 = 61; máy cũ 56). */
-@media (display-mode:standalone){ :root{ --sat:env(safe-area-inset-top,0px); --top:max(56px,calc(env(safe-area-inset-top,0px) + 2px)); } }
+/* PWA (status bar "black"): web view bắt đầu ngay dưới thanh trạng thái (~54) → còn 2px là tới mốc 56 của thiết kế. iOS 26 không cho vẽ dưới thanh. */
+@media (display-mode:standalone){ :root{ --sat:0px; --top:max(2px,env(safe-area-inset-top,0px)); } }
 
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 html{background:var(--ink)}
@@ -89,7 +88,7 @@ svg{display:block}
 @keyframes fadeout{to{opacity:0}}
 .nav .gone{visibility:hidden}
 .page.leave-fwd .nav .fade,.page.leave-back .nav .fade{animation:fadeout .15s linear both}
-.page.enter-fwd .nav .swap,.page.enter-back .nav .swap{animation:rise .34s .06s cubic-bezier(.2,.75,.2,1) both}
+.page.enter-fwd .nav .swap:not(.away),.page.enter-back .nav .swap:not(.away){animation:rise .34s .06s cubic-bezier(.2,.75,.2,1) both}
 .nav .curswap{animation:curin .26s var(--eio) both}
 .nav .curswap:not(.cur){animation:curout .26s var(--eio) both}
 @keyframes curin{from{background:transparent;color:var(--paper);border-color:var(--hair)}}
@@ -196,6 +195,7 @@ svg{display:block}
      transition:transform .12s var(--eo)}
 .row:active{transform:scale(.985)}
 .row.off{opacity:.4;pointer-events:none}
+.row .lab .ic.slow{width:13px;height:13px;vertical-align:-2px;margin-left:2px;stroke-width:2.2;color:var(--gray);display:inline-block}
 .row .lt{min-width:0;flex:1 1 0;overflow:hidden;display:flex;flex-direction:column;gap:6px;text-align:left}
 .row .nm{font-size:22px;line-height:26px;letter-spacing:-.33px}
 .row .nm.mq{padding-bottom:.16em;margin-bottom:-.16em}
@@ -249,6 +249,9 @@ svg{display:block}
 .bars i.on{background:var(--acid)}
 .bars i.off{background:rgba(250,250,250,.16)}
 .bars i.hit{background:var(--acid)}
+/* đang chạm: chỉ cột được chọn sáng Acid, mọi cột khác Paper mờ hẳn */
+.bars.scrub i{opacity:.22;background:var(--paper)}
+.bars.scrub i.hit{opacity:1;background:var(--acid)}
 .bars.in i{transform:scaleY(1)}
 .range{display:flex;justify-content:center;gap:16px;margin-top:24px}
 .range button{width:50px;padding:3px 0;border-radius:12px;display:flex;justify-content:center;font-family:var(--mono);font-size:11px;line-height:13px;letter-spacing:.88px;color:var(--gray)}
@@ -428,8 +431,9 @@ svg{display:block}
 .sheet .foot{flex:none;height:48px;display:flex;justify-content:center;align-items:center}
 
 /* ============ VÒNG LẶP SET ============ */
-.loop{position:absolute;inset:0;overflow:hidden;overflow:clip;background:var(--ink);color:var(--paper);display:flex;flex-direction:column;transition:background-color .18s linear}
-.loop.acid{background:var(--acid);color:var(--ink)}
+.loop{position:absolute;inset:0;overflow:hidden;overflow:clip;background:var(--ink);color:var(--paper);display:flex;flex-direction:column}
+.loop.acid{color:var(--ink)}          /* màu chữ đổi lúc vòng loang phủ nửa màn */
+.loop.bga{background:var(--acid)}     /* nền đổi khi vòng loang phủ kín */
 .loop canvas{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
 .lp{position:absolute;inset:0;display:flex;flex-direction:column;padding:var(--top) var(--rail) var(--bot);pointer-events:none}
 .lp .head,.lp .foot{pointer-events:auto}
@@ -470,8 +474,8 @@ svg{display:block}
 .fld.reps .line{perspective-origin:48px 119px}
 .fld.kg .line{perspective-origin:calc(100% - 48px) 119px}
 .fld .v{position:absolute;left:0;right:0;top:100px;height:38px;line-height:38px;font-family:var(--mono);font-size:40px;letter-spacing:-1.2px;font-variant-numeric:tabular-nums;backface-visibility:hidden;will-change:transform,opacity}
-.fld.reps .v{text-align:left;left:48px}
-.fld.kg .v{text-align:right;right:48px}
+.fld.reps .v{text-align:left;left:48px;transform-origin:0 50%}
+.fld.kg .v{text-align:right;right:48px;transform-origin:100% 50%}
 .fld .hint{position:absolute;top:44px;display:flex;align-items:center;gap:6px;font-family:var(--mono);font-size:11px;line-height:13px;letter-spacing:.88px;text-transform:uppercase;color:var(--slate);transition:opacity .16s linear;white-space:nowrap}
 .fld.reps .hint{left:0}
 .fld.kg .hint{right:0}
@@ -495,12 +499,14 @@ svg{display:block}
 .nxt{display:flex;flex-direction:column}
 /* màng menu 93% + blur 20 · danh sách bước tiếp căn phải, đáy 40 */
 .film{position:absolute;inset:0;z-index:6;background:rgba(212,255,0,.93);-webkit-backdrop-filter:blur(20px);backdrop-filter:blur(20px);color:var(--ink);
-      opacity:0;pointer-events:none;transition:opacity .28s var(--eo),background-color .2s linear}
+      opacity:0;pointer-events:none;transition:opacity .28s var(--eo)}
+.film.notr{transition:none}
+.film.alldone .exl,.film.alldone hr,.film.alldone .fdone{display:none}
 .film.dark{background:rgba(10,10,10,.93);color:var(--paper)}
 .film.on{opacity:1;pointer-events:auto}
 .film:not(.on) *{pointer-events:none!important}
-.film .inner{position:absolute;left:var(--rail);right:var(--rail);bottom:40px;display:flex;flex-direction:column;align-items:flex-end;gap:24px;transform:translateY(16px);transition:transform .28s cubic-bezier(.2,.7,.3,1)}
-.film.on .inner{transform:none}
+.film .inner{position:absolute;left:var(--rail);right:var(--rail);bottom:40px;display:flex;flex-direction:column;align-items:flex-end;gap:24px}
+.film .inner>*,.film .exl>button{will-change:transform,opacity}
 .film .exl{width:100%;display:flex;flex-direction:column;align-items:flex-end;gap:24px}
 .film .exl button{display:flex;align-items:flex-end;justify-content:flex-end;gap:8px;max-width:100%;color:inherit}
 .film .exl button .no{font-family:var(--mono);font-size:11px;line-height:18px;letter-spacing:.88px;opacity:.55;flex:none}
@@ -539,18 +545,21 @@ svg{display:block}
 .two .lp .foot{gap:0}
 .two .lp .foot .nav{margin-top:0}
 .two .nxt{margin-bottom:0}
-.two .loop .ink .nav{position:absolute;left:0;right:0;bottom:0;opacity:0;transform:translateY(8px);transition:opacity .2s linear,transform .26s var(--eo)}
-.two .loop.navon .ink .nav{opacity:1;transform:none}
-.two .loop .ink .nums{transition:transform .26s var(--eo)}
-.two .loop.navon .ink .nums{transform:translateY(-48px)}
+.two .loop .ink .nav{display:none}
 .two .film .inner{gap:20px}
 .two .film .exl{gap:20px}
 .two .film .exl button .nmx,.two .film .exl button .sn,.two .film .act{font-size:16px;line-height:19px;letter-spacing:-.16px}
-.two .loop>.lp .nav{opacity:0;transform:translateY(8px);transition:opacity .2s linear,transform .26s var(--eo);pointer-events:none}
-.two .loop.navon>.lp .nav{opacity:1;transform:none;pointer-events:auto}
-.two .loop>.lp .nav{position:absolute;left:0;right:0;bottom:0}
-.two .loop>.lp .nums{transition:transform .26s var(--eo)}
-.two .loop.navon>.lp .nums{transform:translateY(-48px)}
+/* 1:2 — chạm section: toàn bộ section mờ (blur 40) và nút chức năng hiện ở GIỮA section (.ovl); bánh xe/số vẫn kéo được trực tiếp khi chưa mở */
+.two .loop>.lp .foot{position:static}
+.two .loop>.lp .nav{position:absolute;left:var(--rail);right:var(--rail);top:50%;transform:translateY(-50%) scale(.96);justify-content:center;gap:12px;z-index:5;
+                    opacity:0;pointer-events:none;transition:opacity .22s linear,transform .3s var(--eo)}
+.two .loop>.lp .nav .sp{display:none}
+.two .loop.ovl>.lp .nav{opacity:1;transform:translateY(-50%);pointer-events:auto}
+.two .loop .dimable:not(.nav),.two .loop .ink .head,.two .loop .ink .clock{transition:filter .32s var(--eio),opacity .32s var(--eio)}
+.two .loop.ovl .dimable:not(.nav),.two .loop.ovl .ink .head,.two .loop.ovl .ink .clock{filter:blur(40px);opacity:.45;pointer-events:none}
+/* nút ở giữa nằm trên lớp mực đã dâng qua nửa màn → tông Ink */
+.loop.acid.inkd>.lp .nav .ghost{border-color:var(--hair);color:var(--paper)}
+.loop.acid.inkd>.lp .nav .cta.dark{background:var(--acid);color:var(--ink)}
 
 /* ============ TỔNG KẾT (rail 12, nội dung 24) ============ */
 #sm-scroll{padding:32px 12px 0}

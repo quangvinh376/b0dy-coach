@@ -6,7 +6,7 @@
    - Ngữ cảnh MOCK API (không ?demo, máy chủ giả như test/flow11.js): A (PIN sai) · N offline/outbox/check-in lỗi
    Ảnh: test/uc/<id>-fail.png khi FAIL, <id>-note.png cho mục "cần chủ dự án quyết". Mã thoát 1 nếu có FAIL hoặc pageerror. */
 var {chromium}=require('playwright'); var serve=require('./serve'); var fs=require('fs'); var path=require('path');
-var CHROME='/opt/pw-browsers/chromium-1194/chrome-linux/chrome', PORT=19117, OUT=path.join(__dirname,'uc');
+var CHROME='/opt/pw-browsers/chromium-1194/chrome-linux/chrome', PORT=+process.env.PORT||19117, OUT=path.join(__dirname,'uc');
 var RES=[], PAGEERR=[], CONS=[], CUR=null, P=null;
 fs.rmSync(OUT,{recursive:true,force:true}); fs.mkdirSync(OUT,{recursive:true});
 
@@ -17,7 +17,7 @@ function near(a, b, tol){ return Math.abs(a-b)<=tol; }
 async function shot(page, name){ try{ await page.screenshot({path:path.join(OUT, name+'.png')}); }catch(e){} }
 async function run(id, name, fn){
   CUR={id:id, name:name, fails:[], notes:[]}; RES.push(CUR);
-  try{ await fn(); }catch(e){ CUR.fails.push('EXC '+String(e&&e.message||e).split('\n')[0]); }
+  try{ await fn(); }catch(e){ CUR.fails.push('EXC '+String(e&&e.message||e).split('\n').slice(0,3).join(' | ')); }
   if(CUR.fails.length && P) await shot(P, id+'-fail');
   console.log((CUR.fails.length?'FAIL ':'PASS ')+id+' '+name+(CUR.fails.length?'\n   - '+CUR.fails.join('\n   - '):'')+(CUR.notes.length?'\n   · '+CUR.notes.join('\n   · '):''));
 }
@@ -198,7 +198,7 @@ var CLIP={hard:[], ell:[]};
     secs=await h.ev(function(){ return [].map.call(document.querySelectorAll('#cl-list .sec'), function(d){ return d.textContent; }); });
     names=await h.ev(function(){ return [].map.call(document.querySelectorAll('#cl-list .row .nm'), function(e){ return e.textContent; }); });
     check(secs[0]==='KHÁCH TẬP CHẬM · '+slow.length && names.join()===slow.join(), 'lọc tập chậm: '+secs.join('|')+' / '+names.join(','));
-    check((await h.ev(function(){ return [].every.call(document.querySelectorAll('#cl-list .row .lab'), function(l){ return /TẬP CHẬM/.test(l.textContent); }); })), 'meta có · TẬP CHẬM');
+    check((await h.ev(function(){ return [].every.call(document.querySelectorAll('#cl-list .row .lab'), function(l){ return !!l.querySelector('.ic.slow') && !/TẬP CHẬM/.test(l.textContent); }); })), 'meta có icon chậm tiến độ (không chữ)');
     await page.click('#p-clients .nav .ghost:nth-child(1)'); await h.waitScreen('p-home'); await h.wait(900);
     await page.click('#h-tiles .tile:nth-child(3)'); await h.waitScreen('p-clients'); await h.wait(700);
     check((await h.count('#cl-list .row'))===0 && (await h.txt('#cl-list .empty'))==='CHƯA CÓ KHÁCH HÔM NAY', 'khách hôm nay (chưa ai): '+(await h.txt('#cl-list')));
@@ -230,7 +230,7 @@ var CLIP={hard:[], ell:[]};
     await page.click('#mn-grid .mt:nth-child(3)'); await page.click('#mn-pad button:has-text("8")'); await page.click('#mn-pad button:has-text("1")');
     check((await h.txt('#mn-grid .mt.on .v span'))==='81', 'ô eo nhập 81');
     await page.click('#p-measure-new .cta'); await h.waitScreen('p-measure'); await h.wait(700);
-    check(/Đã lưu 2 số đo/.test(await h.pillText()), 'pill lưu: '+(await h.pillText()));
+    check(/^Đã lưu số đo$/.test(await h.pillText()), 'pill lưu: '+(await h.pillText()));
     check((await h.count('#ms-list .row'))===n0+1 && (await h.txt('#ms-count'))==='LẦN ĐO · '+(n0+1), 'lần đo mới xuất hiện: '+(await h.txt('#ms-count')));
     var d=await h.ev(function(){ return vnLong(TODAY_ISO); }); check((await h.txt('#ms-list .row:nth-of-type(1) .nm'))===d, 'dòng đầu là hôm nay: '+(await h.txt('#ms-list .row:nth-of-type(1) .nm')));
     await page.click('#ms-list .row:nth-of-type(1)'); await h.wait(300);
@@ -248,7 +248,7 @@ var CLIP={hard:[], ell:[]};
     check(!(await h.count('#p-target .dimx')), 'blur tiêu điểm được gỡ sau khi nhả');
     await page.click('#p-target .cta'); await h.waitScreen('p-profile'); await h.wait(600);
     check(/Mục tiêu 66 kg/.test(await h.txt('#pf-target')) && (await h.txt('#pf-mval'))==='Nặng 72,4 kg', 'hồ sơ về cân nặng (72,4 vừa nhập) + mục tiêu 66: '+(await h.txt('#pf-target'))+' / '+(await h.txt('#pf-mval')));
-    check(/Mục tiêu cân nặng 66 kg/.test(await h.pillText()), 'pill mục tiêu: '+(await h.pillText()));
+    check(/^Đã đặt mục tiêu$/.test(await h.pillText()), 'pill mục tiêu: '+(await h.pillText()));
     /* --- hiệu suất --- */
     await page.click('button.row:has-text("Hiệu suất tập")'); await h.waitScreen('p-perf'); await h.wait(900);
     var nh=await h.count('#pe-list .row:not(.nohist)'); check(nh>=2, 'bài có lịch sử: '+nh);
@@ -258,7 +258,7 @@ var CLIP={hard:[], ell:[]};
     await page.click('#pe-list .row:not(.nohist)'); await h.wait(200); check(!(await h.count('#pe-list .row.open')), 'đóng bài');
     await page.fill('#pe-q','lat pull'); await h.wait(200);
     var pn=await h.ev(function(){ return [].map.call(document.querySelectorAll('#pe-list .row .nm'), function(e){ return e.textContent; }); });
-    check(pn.length===3 && pn.every(function(t){ return /^PD /.test(t); }), 'tìm "lat pull": '+pn.join(','));
+    check(pn.length===1 && /^PD /.test(pn[0]), 'tìm "lat pull" (chỉ bài có dữ liệu): '+pn.join(','));
     await page.fill('#pe-q','zzzz'); await h.wait(200); check((await h.txt('#pe-list .empty'))==='KHÔNG TÌM THẤY BÀI NÀY', 'không tìm thấy bài');
     await page.fill('#pe-q',''); await h.wait(200); await h.clip('perf');
     await page.click('#p-perf .nav .ghost'); await h.waitScreen('p-profile'); await h.wait(500);
@@ -324,7 +324,7 @@ var CLIP={hard:[], ell:[]};
     check(c2.tb==='matrix(1, 0, 0, 1, 0, 0)' && c2.ta==='matrix(1, 0, 0, 1, 0, 0)', 'vệt vẫn nguyên sau 300ms');
     await h.clip('confirm-1');
     await page.click('#cf-go'); await h.waitScreen('p-plan'); await h.wait(700);
-    check(await h.pillOn() && /^Đã check-in Thành Công · buổi 8$/.test(await h.pillText()), 'pill check-in: '+(await h.pillText()));
+    check(await h.pillOn() && /^Đã check-in$/.test(await h.pillText()), 'pill check-in: '+(await h.pillText()));
     check((await h.ev(function(){ return CI['Đỗ Thành Công'].status; }))==='ok', 'CI ok');
     await h.wait(3500); check(!(await h.pillOn()), 'pill tự tắt sau 3,5s');
   });
@@ -393,7 +393,7 @@ var CLIP={hard:[], ell:[]};
     await page.click(L+'.c1'); await h.wait(500); await page.click(L+'.j1'); await h.wait(900);
     check(await h.has(L.trim(),'acid') && (await h.txt(L+'.lp .head .sub'))==='Bắt đầu nghỉ' && (await h.txt(L+'.ex'))==='Đã đạt set 1', 'màn acid Bắt đầu nghỉ: '+(await h.txt(L+'.ex')));
     check((await h.txt(L+'.c1'))==='Bắt đầu nghỉ' && (await h.css(L+'.c1','backgroundColor'))==='rgb(10, 10, 10)', 'CTA dark "Bắt đầu nghỉ"');
-    check(/^Đã ghi 11 × 25 kg$/.test(await h.pillText()), 'pill ghi set: '+(await h.pillText()));
+    check(/^Đã ghi set 1$/.test(await h.pillText()), 'pill ghi set: '+(await h.pillText()));
     /* H2 — pill trên nền Acid có viền */
     var bc=await h.css('#pill','borderTopColor'); check(await h.has('#pill','onacid') && bc!=='rgba(0, 0, 0, 0)' && bc!=='transparent', 'pill trên Acid có viền: '+bc);
     check((await h.ev(function(){ return document.querySelector('meta[name=theme-color]').getAttribute('content'); }))==='#D4FF00', 'theme-color Acid khi nghỉ');
@@ -403,7 +403,7 @@ var CLIP={hard:[], ell:[]};
     await page.click(L+'.g1'); await h.wait(900);
     var u=await h.ev(function(){ var p=state.session.people[0]; return {ph:p.phase, sets:p.ex[state.session.plan[p.cur]].sets.length, q:OUT.q.filter(function(e){return e.type==='SET'}).length, set:p.setNo}; });
     check(u.ph==='setup' && u.sets===0 && u.q===0 && u.set===1 && !(await h.has(L.trim(),'acid')), 'hoàn tác xoá set: '+JSON.stringify(u));
-    check(/^Đã hoàn tác set 1$/.test(await h.pillText()), 'pill hoàn tác: '+(await h.pillText()));
+    check(/^Đã hoàn tác$/.test(await h.pillText()), 'pill hoàn tác: '+(await h.pillText()));
     await page.click(L+'.c1'); await h.wait(500); await page.click(L+'.j1'); await h.wait(900);
     await page.click(L+'.c1'); await h.wait(700);
     check((await h.ev(function(){ return state.session.people[0].phase; }))==='rest' && (await h.txt(L+'.lp .head .sub'))==='Đang nghỉ', 'đang nghỉ');
@@ -431,12 +431,11 @@ var CLIP={hard:[], ell:[]};
     await page.click(L+'.c1'); await h.wait(450); await page.click(L+'.film .exl button:nth-child(1)'); await h.wait(800);
     check((await h.txt(L+'.lp .head .sub'))==='Thiết lập set 2' && !(await h.has(L.trim(),'acid')), 'chạm bài đang tập → set mới: '+(await h.txt(L+'.lp .head .sub')));
     await page.click(L+'.c1'); await h.wait(500); await page.click(L+'.j0'); await h.wait(900);
-    check((await h.txt(L+'.ex'))==='Chưa đạt set 2' && /^Chưa đạt · 11 × 25 kg$/.test(await h.pillText()), 'set chưa đạt: '+(await h.txt(L+'.ex'))+' / '+(await h.pillText()));
+    check((await h.txt(L+'.ex'))==='Chưa đạt set 2' && /^Chưa đạt set 2$/.test(await h.pillText()), 'set chưa đạt: '+(await h.txt(L+'.ex'))+' / '+(await h.pillText()));
     await page.click(L+'.c1'); await h.wait(700); await page.click(L+'.g1'); await h.wait(450);
     check(await h.has(L+'.film','on'), 'ghost khi nghỉ → menu');
     await page.click(L+'.film .exl button:nth-child(2)'); await h.wait(900);
     check((await h.txt(L+'.ex'))===plan[1] && (await h.txt(L+'.lp .head .sub'))==='Thiết lập set 1', 'đổi bài: '+(await h.txt(L+'.ex'))+' / '+(await h.txt(L+'.lp .head .sub')));
-    check((await h.pillText())===plan[1]+' · set 1', 'pill đổi bài: '+(await h.pillText()));
     /* "Đã xong bài" khi chưa có set → pill lỗi (gọi thẳng, vì menu chỉ mở khi nghỉ) */
     await h.ev(function(){ document.querySelector('#loop-host .fdone').click(); }); await h.wait(400);
     check(await h.has('#pill','err') && /^Chưa ghi set nào/.test(await h.pillText()), 'Đã xong bài khi chưa có set → pill lỗi: '+(await h.pillText()));
@@ -499,20 +498,20 @@ var CLIP={hard:[], ell:[]};
     check(sep.c!=='none' && sep.bg==='rgba(250, 250, 250, 0.14)' && sep.h==='1px' && sep.top==='0px', 'vạch ngăn: '+JSON.stringify(sep));
     /* chọn một nửa: chạm vùng trống (x=12, giữa nửa) */
     var r1=await h.rect('#loop-host .loop:nth-child(1)'), r2=await h.rect('#loop-host .loop:nth-child(2)');
-    check(!(await h.count('#loop-host .loop.navon')), 'ban đầu không nửa nào chọn');
-    await h.tapAt(12, r1.cy); await h.wait(350);
-    check((await h.has('#loop-host .loop:nth-child(1)','navon')) && !(await h.has('#loop-host .loop:nth-child(2)','navon')), 'chạm nửa 1 → nửa 1 navon');
+    check(!(await h.count('#loop-host .loop.ovl')), 'ban đầu không nửa nào mở nút');
+    await h.tapAt(12, r1.cy); await h.wait(400);
+    check((await h.has('#loop-host .loop:nth-child(1)','ovl')) && !(await h.has('#loop-host .loop:nth-child(2)','ovl')), 'chạm nửa 1 → nửa 1 mở nút (ovl)');
     check((await h.css('#loop-host .loop:nth-child(1) .lp .nav','opacity'))==='1' && (await h.css('#loop-host .loop:nth-child(2) .lp .nav','opacity'))==='0', 'nút chức năng chỉ hiện ở nửa 1');
-    await h.tapAt(12, r2.cy); await h.wait(350);
-    check(!(await h.has('#loop-host .loop:nth-child(1)','navon')) && (await h.has('#loop-host .loop:nth-child(2)','navon')), 'chạm nửa 2 → chuyển');
-    await h.tapAt(12, r2.cy); await h.wait(350);
-    check(!(await h.count('#loop-host .loop.navon')), 'chạm lại vùng trống nửa đang chọn → bỏ chọn');
-    /* chạm nửa chưa chọn ngay trên bánh xe: chỉ chọn, không kéo */
+    var nv=await h.rect('#loop-host .loop:nth-child(1) .lp .nav'); check(Math.abs(nv.cy-r1.cy)<6, 'nút ở giữa section: '+nv.cy.toFixed(0)+' vs '+r1.cy.toFixed(0));
+    check((await h.css('#loop-host .loop:nth-child(1) .setup .w-reps','filter'))!=='none', 'section mở nút → bánh xe bị blur');
+    await h.tapAt(12, r2.cy); await h.wait(400);
+    check(!(await h.has('#loop-host .loop:nth-child(1)','ovl')) && (await h.has('#loop-host .loop:nth-child(2)','ovl')), 'chạm nửa 2 → chuyển');
+    await h.tapAt(12, r2.cy); await h.wait(400);
+    check(!(await h.count('#loop-host .loop.ovl')), 'chạm lại vùng trống nửa đang mở → tắt');
+    /* bánh xe kéo được TRỰC TIẾP, không cần chọn section trước; kéo bánh xe không mở nút */
     var reps0=await h.ev(function(){ return state.session.people[0].reps; });
     await h.drag('#loop-host .loop:nth-child(1) .setup .w-reps', 0, -44, {steps:6}); await h.wait(300);
-    check((await h.has('#loop-host .loop:nth-child(1)','navon')) && (await h.ev(function(){ return state.session.people[0].reps; }))===reps0, 'chạm nửa chưa chọn trên bánh xe: chỉ chọn, không đổi số');
-    await h.drag('#loop-host .loop:nth-child(1) .setup .w-reps', 0, -44, {steps:6}); await h.wait(300);
-    check((await h.ev(function(){ return state.session.people[0].reps; }))===reps0+1, 'nửa đã chọn: kéo bánh xe đổi số');
+    check((await h.ev(function(){ return state.session.people[0].reps; }))===reps0+1 && !(await h.has('#loop-host .loop:nth-child(1)','ovl')), 'kéo bánh xe đổi số ngay, không mở nút');
     await h.clip('loop-two-setup'); await shot(page, 'K-two-setup-note');
     var hb=await h.rect('#loop-host .loop:nth-child(1) .lp .head'), ra=await h.rect('#loop-host .loop:nth-child(1) .setup .w-reps'), kb=await h.rect('#loop-host .loop:nth-child(1) .setup .w-kg'), nb=await h.rect('#loop-host .loop:nth-child(1) .lp .nav');
     note('1:2 @393×852 nửa 1: head.bottom='+hb.b.toFixed(0)+' · hộp reps top='+ra.y.toFixed(0)+' · hộp kg bottom='+kb.b.toFixed(0)+' · nav top='+nb.y.toFixed(0)+' (hộp reps chớm đè head '+Math.max(0,hb.b-ra.y).toFixed(0)+'px — ảnh K-two-setup-note.png)');
@@ -611,7 +610,7 @@ var CLIP={hard:[], ell:[]};
         check(near(xx.cy-r.y, c, 3), 'nửa '+i+' tâm × ≈ ring.cy: '+(xx.cy-r.y).toFixed(1)+' vs '+c);
         var hd=await hl.rect(L+'.lp .head'); var expc=(hd.b-r.y)+((r.h-28)-(hd.b-r.y))/2; check(near(c, expc, 2), 'nửa '+i+' ring.cy = giữa vùng trống: '+c+' vs '+expc.toFixed(1));
         var a=await hl.rect(L+'.setup .w-reps'), k=await hl.rect(L+'.setup .w-kg'), nv2=await hl.rect(L+'.lp .nav');
-        check(a.y>=hd.b-1 && k.b<=nv2.y+1, 'nửa '+i+' thiết lập không đè head/nav: reps.y '+a.y.toFixed(0)+' head.b '+hd.b.toFixed(0)+' kg.b '+k.b.toFixed(0)+' nav.y '+nv2.y.toFixed(0)); }
+        check(a.y>=hd.b-1 && k.b<=r.y+r.h-27, 'nửa '+i+' thiết lập không đè head/đáy: reps.y '+a.y.toFixed(0)+' head.b '+hd.b.toFixed(0)+' kg.b '+k.b.toFixed(0)+' đáy '+(r.y+r.h-28).toFixed(0)); }
       await hl.clip('L'+vp.width+'-two');
     });
     await ctxL.close();
@@ -630,7 +629,7 @@ var CLIP={hard:[], ell:[]};
     else if(p.pin!=='1234') out={ok:false,error:'sai_pin'};
     else if(p.action==='coach') out={ok:true, coach:'Quyết Hán', members:members, snapshot:{}, library:null, today:new Date().toISOString().slice(0,10)};
     else if(p.action==='stats') out={ok:true, month:new Date().toISOString().slice(0,7), days:{}, monthTotal:5, perClient:{}, com:{month:new Date().toISOString().slice(0,7), total:1000000}, hist:{}};
-    else if(p.action==='checkin_coach'){ if(SRV.ciFail) out={ok:false,error:'loi_thu'}; else { SRV.checkins.push(p.name); var m=members.filter(function(x){return x.name===p.name})[0]; m.done++; m.left--; out={ok:true,row:5,member:m,at:'17:05'}; } }
+    else if(p.action==='checkin_coach'){ SRV.ciCalls=(SRV.ciCalls||0)+1; if(SRV.ciFail) out={ok:false,error:'loi_thu'}; else { SRV.checkins.push(p.name); var m=members.filter(function(x){return x.name===p.name})[0]; m.done++; m.left--; out={ok:true,row:5,member:m,at:'17:05'}; } }
     else if(p.action==='log'){ SRV.logs=SRV.logs.concat(p.events); out={ok:true,written:p.events.length}; }
     r.fulfill({status:200, contentType:'application/json', body:JSON.stringify(out)});
   }
@@ -655,16 +654,17 @@ var CLIP={hard:[], ell:[]};
 
   await run('N', 'Check-in thất bại → pill lỗi "Thử lại" tự tắt, thử lại thành công; set offline vẫn lưu, gửi lại khi có mạng', async function(){
     await pm.click('#h-go'); await hm.waitScreen('p-pick'); await hm.wait(500); await pm.click('#pk-list .row:has-text("Doãn Quang")'); await hm.waitScreen('p-confirm'); await hm.wait(1200);
-    SRV.ciFail=true; await pm.click('#cf-go'); await hm.waitScreen('p-plan'); await hm.wait(700);
-    check(await hm.pillOn() && await hm.has('#pill','err') && /^Chưa check-in · Doãn Quang$/.test(await hm.pillText()) && (await hm.txt('#pill .act'))==='Thử lại', 'pill lỗi check-in: '+(await hm.pillText())+' ['+(await hm.txt('#pill .act'))+']');
+    SRV.ciFail=true; await pm.click('#cf-go'); await hm.wait(900);
+    check((await hm.ev(function(){ return state.screen; }))==='p-confirm' && !(await hm.ev(function(){ return !!state.session; })), 'check-in lỗi → Ở LẠI màn xác nhận, không tạo buổi');
+    check(await hm.pillOn() && await hm.has('#pill','err') && /^Chưa check-in$/.test(await hm.pillText()) && (await hm.txt('#pill .act'))==='Thử lại', 'pill lỗi check-in: '+(await hm.pillText())+' ['+(await hm.txt('#pill .act'))+']');
     check((await hm.ev(function(){ return CI['Bùi Doãn Quang'].status; }))==='fail' && SRV.checkins.length===0, 'CI fail, máy chủ không ghi');
     await shot(pm, 'N-ci-fail-note');
-    await hm.wait(6300); check(!(await hm.pillOn()), 'pill lỗi tự tắt ≤ 6,5s');
-    note('Pill lỗi check-in tự tắt sau 6s: coach có thể không kịp bấm "Thử lại"; check-in chỉ được thử lại tự động khi check-out (retryFailedCheckins) — xem ảnh N-ci-fail-note.png');
-    await hm.ev(function(){ sendCheckin(findClient('Bùi Doãn Quang')); }); await hm.wait(600);
-    check(await hm.pillOn() && (await hm.txt('#pill .act'))==='Thử lại', 'pill lỗi lần 2');
-    SRV.ciFail=false; await pm.click('#pill .act'); await hm.wait(700);
-    check(/^Đã check-in Doãn Quang · buổi 15$/.test(await hm.pillText()) && !(await hm.has('#pill','err')), 'thử lại thành công: '+(await hm.pillText()));
+    var nReq=SRV.ciCalls||0; await hm.wait(6300); check(!(await hm.pillOn()), 'pill lỗi tự tắt ≤ 6,5s');
+    await hm.wait(2000); check((SRV.ciCalls||0)===nReq, 'KHÔNG tự thử lại check-in (không spam)');
+    await pm.click('#cf-go'); await hm.wait(700);
+    check(await hm.pillOn() && (await hm.txt('#pill .act'))==='Thử lại', 'bấm Check-in lần 2 → pill lỗi lần 2 (một lần gọi)');
+    SRV.ciFail=false; await pm.click('#pill .act'); await hm.waitScreen('p-plan'); await hm.wait(500);
+    check(/^Đã check-in$/.test(await hm.pillText()) && !(await hm.has('#pill','err')), 'thử lại thành công → vào Bài tập hôm nay: '+(await hm.pillText()));
     check(SRV.checkins.join()==='Bùi Doãn Quang' && (await hm.ev(function(){ return CI['Bùi Doãn Quang'].status+CI['Bùi Doãn Quang'].no; }))==='ok15', 'máy chủ ghi 1 lần, CI ok');
     /* offline */
     await pm.click('#lib-list .row:nth-of-type(1)'); await pm.click('#lib-go'); await hm.wait(400); await pm.click('#pl-go'); await hm.waitScreen('p-loop'); await hm.wait(1200);
