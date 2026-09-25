@@ -7,7 +7,7 @@
    ===================================================================== */
 'use strict';
 var $=function(id){ return document.getElementById(id); };
-var APP_VER='v2.3.0';
+var APP_VER='v2.3.1';
 
 /* ---------------- tiện ích ---------------- */
 function isoToday(d){ d=d||new Date(); return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2); }
@@ -337,6 +337,7 @@ function demoApi(body){
     if(body.action==='ping') return res({ok:true,pong:1});
     if(body.action==='admin') return res(body.apin==='0000' ? {ok:true} : {ok:false,error:'sai_pin'});
     if(body.action==='setip') return res(body.apin==='0000' ? {ok:true, ip:body.ip||'demo'} : {ok:false,error:'sai_pin'});
+    if(body.action==='addip') return res(body.apin==='0000' ? {ok:true, ip:body.ip||'demo', ips:[body.ip||'demo']} : {ok:false,error:'sai_pin'});
     if(body.pin==='0000') return res({ok:false,error:'sai_pin'});
     if(body.action==='coach'){ var snap={}; db.clients.forEach(function(c){ snap[c.name]=c.snap; });
       return res({ok:true, coach:'Quyết Hán', members:db.clients.map(function(c){return {name:c.name,done:c.done,total:c.total,left:c.left,coach:c.coach,start:c.start,exp:c.exp,kind:c.kind||'',checked:db.checked[c.name]===isoToday(),signed:db.checked[c.name]===isoToday()?(db.at[c.name]||''):''}}), snapshot:JSON.parse(JSON.stringify(snap)), library:null, today:isoToday()}); }
@@ -624,6 +625,15 @@ HOOK['p-pin']=function(){ startPin(); warm(); };
 /* ---- ADMIN ---- */
 function openAdminPanel(pin){ state.apin=pin; state.pin=''; state.clients=[]; go('p-admin','fwd'); }
 HOOK['p-admin']=function(){ $('am-ip').textContent=state.ip||'—'; $('am-note').textContent='CẬP NHẬT ĐỂ LẤY IP NÀY LÀM IP CỦA PHÒNG'; refreshIp().then(function(){ if(state.screen==='p-admin') $('am-ip').textContent=state.ip||'—'; }); };
+/* IP test: thêm IP hiện tại vào danh sách được check-in ngoài phòng (Script Property TEST_IPS, backend/README.md mục 6) */
+function addTestIp(){
+  if(state._setip) return; state._setip=true; busyLine(true);
+  refreshIp().then(function(){ $('am-ip').textContent=state.ip||'—'; return api({action:'addip', pin:state.apin, apin:state.apin}, 1, 800, 0, 30000); })
+  .then(function(res){ busyLine(false); state._setip=false;
+    if(res&&res.ok){ $('am-test').textContent='IP TEST ĐÃ THÊM · '+(res.ips||[]).length; notify('Đã thêm IP test'); }
+    else notify(res&&res.error==='unknown_action'?'Backend chưa có addip':'Không thêm được', {err:true}); })
+  .catch(function(){ busyLine(false); state._setip=false; notify('Máy chủ chậm', {err:true}); });
+}
 function registerIp(){
   if(state._setip) return; state._setip=true; busyLine(true);
   refreshIp().then(function(){ $('am-ip').textContent=state.ip||'—'; return api({action:'setip', pin:state.apin, apin:state.apin}, 1, 800, 0, 30000); })
@@ -748,7 +758,7 @@ function renderClientSheet(animate){
   var all=csClients(kind), list=all.filter(function(m){ return !q || norm(m.name).indexOf(q)>=0; });
   if(list.length){
     var d=document.createElement('div'); d.className='lab sec'; d.textContent=title+' · '+list.length; el.appendChild(d);
-    list.forEach(function(m){ el.appendChild(clientRow(m, animate, i++, csMeta(m, kind), function(){ closeClientSheet(true); state.client=m; state.back='p-home'; go('p-profile','fwd'); })); });
+    list.forEach(function(m){ el.appendChild(clientRow(m, animate, i++, csMeta(m, kind), function(){ closeClientSheet(true); state.client=m; state.back='p-home'; go('p-profile','fwd'); }, kind==='today'?false:undefined)); });   /* khách hôm nay: không icon mũi tên */
   } else { var e=document.createElement('div'); e.className='lab empty'; e.textContent= q && all.length ? 'KHÔNG TÌM THẤY TÊN NÀY' : 'CHƯA CÓ '+title; el.appendChild(e); }
   el._fogTop=32; fogUpdate(el); if(!animate) mqInit(el);
 }
@@ -1266,7 +1276,7 @@ function renderLib(animate){
     });
   });
   if(!any){ var em=document.createElement('div'); em.className='lab empty'; em.textContent='KHÔNG TÌM THẤY BÀI NÀY'; el.appendChild(em); }
-  $('lib-go').textContent=s.plan.length?'Chọn · '+s.plan.length+' bài':'Đóng';
+  $('lib-go').textContent=s.plan.length?'Chọn · '+s.plan.length+' bài':'Đóng'; $('lib-go').classList.toggle('paper', !s.plan.length);   /* Đóng = Paper · Chọn = Acid */
   el._fogTop=32; fogUpdate(el); if(!animate) mqInit(el);
 }
 (function(){ var y0=0, on=false, h=$('lib-handle');
@@ -1617,7 +1627,7 @@ function ptrProgress(p){ $('ptr').querySelector('.fg').style.strokeDashoffset=(6
 function ptrMove(d, anim){
   var sc=state.screen&&$(state.screen); if(!sc) return;
   sc.classList.toggle('ptr-anim', !!anim);
-  for(var i=0;i<sc.children.length;i++) sc.children[i].style.transform= d ? 'translateY('+d.toFixed(1)+'px)' : '';
+  sc.style.transform= d ? 'translateY('+d.toFixed(1)+'px)' : '';   /* kéo cả trang (con của trang có animation fill forwards nên transform inline trên con bị đè) */
   var ptr=$('ptr'), p=Math.min(1, d/PTR.T);
   ptr.style.opacity=d?String(Math.min(1, d/24)):'0'; ptr.style.transform='scale('+(0.6+0.4*p).toFixed(3)+')';
 }
