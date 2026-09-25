@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <meta name="color-scheme" content="dark">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<!-- "black-translucent": web view phủ cả thanh trạng thái → màu nền app (Ink/Acid) tràn lên mép trên; layout lùi theo env(safe-area-inset-top). theme-color đổi động theo màn (app.js syncTheme). -->
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<!-- "black" (đặc): trên iOS 26 web app KHÔNG được vẽ dưới thanh trạng thái (black-translucent chỉ đẩy layout xuống, thanh vẫn đen) → giữ black, web view bắt đầu ngay dưới thanh. -->
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
 <meta name="apple-mobile-web-app-title" content="B0DY">
 <title>B0DY — Coach</title>
 <meta name="theme-color" content="#0A0A0A">
@@ -255,6 +255,14 @@
   <div class="search g"><svg class="ic"><use href="#i-search"/></svg><input id="lib-q" type="search" placeholder="Tìm bài tập" autocomplete="off" oninput="renderLib(false)"></div>
   <div class="scroll list" id="lib-list"></div>
   <div class="foot"><button class="cta" id="lib-go" onclick="closeLib()">Chọn</button></div>
+</div>
+<!-- window khách từ ô trang chủ (khách tập chậm / khách hôm nay): cùng phong cách window thư viện -->
+<div class="dimmer" id="cs-dim" onclick="closeClientSheet()"></div>
+<div class="sheet" id="csheet">
+  <div class="handle" id="cs-handle"><i></i></div>
+  <div class="search g"><svg class="ic"><use href="#i-search"/></svg><input id="cs-q" type="search" placeholder="Tìm khách" autocomplete="off" oninput="renderClientSheet(false)"></div>
+  <div class="scroll list" id="cs-list"></div>
+  <div class="foot"><button class="cta" id="cs-go" onclick="closeClientSheet()">Đóng</button></div>
 </div>
 
 <!-- ================= 5–9 · VÒNG LẶP SET ================= -->

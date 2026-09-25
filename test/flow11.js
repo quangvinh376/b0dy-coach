@@ -2,7 +2,7 @@
    Kiểm: check-in gửi 1 lần, SET giữ (hold) tới khi sang set kế, hoàn tác không gửi, offline vẫn ghi, mở lại app khôi phục buổi. */
 var {chromium}=require('playwright'); var serve=require('./serve'); var fs=require('fs'); var assert=require('assert');
 (async function(){
-  var srv=await serve(8125), browser=await chromium.launch({executablePath:'/opt/pw-browsers/chromium-1194/chrome-linux/chrome'});
+  var PORT=+process.env.PORT||8125; var srv=await serve(PORT), browser=await chromium.launch({executablePath:'/opt/pw-browsers/chromium-1194/chrome-linux/chrome'});
   var ctx=await browser.newContext({viewport:{width:393,height:852}, deviceScaleFactor:2, hasTouch:true, isMobile:true});
   var SRV={checkins:[], logs:[], offline:false, coachCalls:0, stats:0};
   var members=[{name:'Bùi Doãn Quang',done:14,total:24,left:10,coach:'Quyết',exp:'2026-11-21'},{name:'Nguyễn Quang Vinh',done:11,total:12,left:1,coach:'Quyết'}];
@@ -23,7 +23,7 @@ var {chromium}=require('playwright'); var serve=require('./serve'); var fs=requi
   var page=await ctx.newPage(), errors=[]; page.on('pageerror', function(e){ errors.push(String(e)); });
   fs.mkdirSync('test/out11',{recursive:true}); var n=0;
   async function shot(name, wait){ await page.waitForTimeout(wait||600); await page.screenshot({path:'test/out11/'+(++n<10?'0':'')+n+'-'+name+'.png'}); }
-  await page.goto('http://localhost:8125/');
+  await page.goto('http://localhost:'+PORT+'/');
   for(var k of ['9','9','9','9']) await page.click('#pin-pad button:has-text("'+k+'")'); await shot('pin-wrong',900);
   assert.equal(await page.textContent('#pin-err'), 'MÃ PIN KHÔNG ĐÚNG');
   for(var k of ['1','2','3','4']) await page.click('#pin-pad button:has-text("'+k+'")'); await shot('home',1200);

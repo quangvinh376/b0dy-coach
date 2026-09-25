@@ -1,13 +1,13 @@
 /* Chụp từng màn của luồng demo (?demo) — không mạng ngoài: mock font. Kết quả: test/out/*.png + danh sách lỗi JS */
 var {chromium}=require('playwright'); var serve=require('./serve'); var fs=require('fs');
 (async function(){
-  var srv=await serve(8123), browser=await chromium.launch({executablePath:'/opt/pw-browsers/chromium-1194/chrome-linux/chrome'});
+  var PORT=+process.env.PORT||8123; var srv=await serve(PORT), browser=await chromium.launch({executablePath:'/opt/pw-browsers/chromium-1194/chrome-linux/chrome'});
   var ctx=await browser.newContext({viewport:{width:393,height:852}, deviceScaleFactor:2, hasTouch:true, isMobile:true});
   await ctx.route(/fontshare|fonts\.googleapis|fonts\.gstatic/, function(r){ r.fulfill({status:200, contentType:'text/css', body:''}); });
   var page=await ctx.newPage(), errors=[]; page.on('pageerror', function(e){ errors.push(String(e)); }); page.on('console', function(m){ if(m.type()==='error') errors.push('console: '+m.text()); });
   fs.mkdirSync('test/out',{recursive:true});
   var n=0; async function shot(name, wait){ await page.waitForTimeout(wait||700); await page.screenshot({path:'test/out/'+(++n<10?'0':'')+n+'-'+name+'.png'}); }
-  await page.goto('http://localhost:8123/?demo'); await shot('pin');
+  await page.goto('http://localhost:'+PORT+'/?demo'); await shot('pin');
   for(var k of ['1','2','3','4']) await page.click('#pin-pad button:has-text("'+k+'")'); await shot('home',1200);
   await page.click('#h-7d'); await shot('home-7d');
   await page.click('#p-home .nav .ghost:nth-child(2)'); await shot('clients');
