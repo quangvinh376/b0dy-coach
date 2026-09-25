@@ -472,7 +472,7 @@ var RING_DOTS=(function(){ var seed=987654321, d=[]; function rnd(){ seed=(seed*
   for(var i=0;i<RING.N;i++) d.push({a:rnd()*Math.PI*2, b:rnd()*Math.PI*2, tr:Math.sqrt(rnd()), r:0.75+1.9*Math.pow(rnd(),2.2), al:0.10+0.26*rnd(), s1:rnd(), s2:rnd()}); return d; })();
 function Ring(cv){
   var ctx=cv.getContext('2d'), W=393, Hh=852, buf=new Array(RING.N), cyw=Math.cos(RING.YAW), syw=Math.sin(RING.YAW), cpt=Math.cos(RING.PITCH), spt=Math.sin(RING.PITCH);
-  var r={on:false, alpha:1, scale:1, cx:0, cy:0, h:324, slow:1, tint:'ink'};
+  var r={on:false, alpha:1, scale:1, cx:0, cy:0, h:324, slow:1, tint:'ink', dot:true};
   function wrapDist(d){ d=d-Math.round(d); return Math.abs(d); }
   function falloff(d,w){ var u=d/w; return u>=1?0:Math.pow(1-u*u,2); }
   function phase(t){ return t-Math.floor(t); }
@@ -495,7 +495,7 @@ function Ring(cv){
     }
     buf.sort(function(p,q){ return q.z-p.z; });
     for(var j=0;j<RING.N;j++){ var p=buf[j]; if(p.rr<0.22) continue; ctx.globalAlpha=p.a; ctx.fillStyle='rgb('+p.c[0]+','+p.c[1]+','+p.c[2]+')'; ctx.beginPath(); ctx.arc(p.x,p.y,p.rr,0,6.2832); ctx.fill(); }
-    ctx.globalAlpha=0.9*r.alpha; ctx.fillStyle=r.tint==='acid'?'rgb(10,10,10)':'rgb(250,250,250)'; ctx.beginPath(); ctx.arc(r.cx,r.cy,6.2*SC,0,6.2832); ctx.fill(); ctx.globalAlpha=1;
+    if(r.dot){ ctx.globalAlpha=0.9*r.alpha; ctx.fillStyle=r.tint==='acid'?'rgb(10,10,10)':'rgb(250,250,250)'; ctx.beginPath(); ctx.arc(r.cx,r.cy,6.2*SC,0,6.2832); ctx.fill(); } ctx.globalAlpha=1;
   };
   r.fade=function(to, ms){ var from=r.alpha, t0=performance.now(); (function step(now){ var k=Math.min(1,(now-t0)/ms), e=1-Math.pow(1-k,3); r.alpha=from+(to-from)*e; r.scale=to>from?0.55+0.45*e:1; if(k<1) requestAnimationFrame(step); else if(to===0) r.on=false; })(t0); };
   r.size(); return r;
@@ -652,7 +652,7 @@ function renderClients(animate){
    ===================================================================== */
 HOOK['p-profile']=function(dir, quiet){
   var m=state.client; if(!m) return;
-  $('pf-name').textContent=m.name;
+  $('pf-name').textContent=firstName(m.name);
   $('pf-done').textContent='Đã tập '+m.done; $('pf-left').textContent='Còn '+m.left+' buổi';
   var mt=$('pf-meter'); mt.classList.remove('in'); mt.innerHTML='<i class="b" style="width:'+pct(m.done,m.total).toFixed(1)+'%"></i>';
   $('pf-pkg').textContent=m.total+' buổi'; $('pf-exp').textContent=m.exp?vn(m.exp):(m.end?vn(m.end):'—');
@@ -841,7 +841,7 @@ HOOK['p-confirm']=function(dir, quiet){
     var lines= at!=null
       ? '<div class="a ac">Buổi thứ '+no+' đã xong</div><div class="b">Còn '+m.left+' buổi</div><div class="lab">ĐÃ KÝ LÚC <span class="ac">'+(at||'—')+'</span> · '+vnFull(TODAY_ISO)+'</div>'
       : '<div class="a">'+(resumed?'Đang ghi buổi '+no:'Buổi thứ '+no)+'</div><div class="b">Đã tập '+m.done+', còn '+m.left+' buổi</div>'+(two?'':'<div class="lab">'+(lastSessionDay(m)?'BUỔI TẬP GẦN NHẤT · '+vnFull(lastSessionDay(m)):'CHƯA CÓ BUỔI NÀO')+'</div>');
-    w.innerHTML='<div class="head"><span class="t1 mq"><span>'+esc(m.name)+'</span></span></div>'+cardHtml(m, no, two?'sm':'big', at!=null)+'<div class="lines'+(two?' sm':'')+'">'+lines+'</div>';
+    w.innerHTML='<div class="head"><span class="t1 mq"><span>'+esc(firstName(m.name))+'</span></span></div>'+cardHtml(m, no, two?'sm':'big', at!=null)+'<div class="lines'+(two?' sm':'')+'">'+lines+'</div>';
     body.appendChild(w);
   });
   var go=$('cf-go'), back=$('cf-back');
@@ -926,13 +926,13 @@ function dragify(t){
       var r=t.getBoundingClientRect(), hole=document.createElement('div'); hole.className='ptile hole'; hole.innerHTML=t.innerHTML;
       t.parentNode.insertBefore(hole, t);
       DRAG={t:t, hole:hole, dx:ev.clientX-r.left, dy:ev.clientY-r.top, w:r.width, h:r.height, name:state.session.plan[+t.dataset.i], del:false};
-      t.classList.add('lift'); t.classList.toggle('ok', !planCounts(DRAG.name));
+      t.classList.add('lift');
       t.style.position='fixed'; t.style.left=r.left+'px'; t.style.top=r.top+'px'; t.style.width=r.width+'px'; t.style.height=r.height+'px'; t.style.margin='0'; t.style.zIndex='60';
       var dz=$('pl-drop'); dz.classList.add('show'); if(navigator.vibrate) navigator.vibrate(8);
     }
     function move(ev){
       var d=DRAG; d.t.style.left=(ev.clientX-d.dx)+'px'; d.t.style.top=(ev.clientY-d.dy)+'px';
-      var dz=$('pl-drop'), zr=dz.getBoundingClientRect(); d.del=ev.clientY>=zr.top && ev.clientY<=zr.bottom+20; dz.classList.toggle('hot', d.del);
+      var dz=$('pl-drop'), zr=dz.getBoundingClientRect(); d.del=ev.clientY>=zr.top && ev.clientY<=zr.bottom+20; dz.classList.toggle('hot', d.del); d.t.classList.toggle('del', d.del);
       if(d.del) return;
       d.t.style.pointerEvents='none'; var under=document.elementFromPoint(ev.clientX, ev.clientY); d.t.style.pointerEvents='';
       var tile=under && under.closest && under.closest('.ptile:not(.lift):not(.add):not(.hole)'); if(!tile) return;
@@ -1016,17 +1016,17 @@ function Loop(host, p, o){
   var s=state.session, root=document.createElement('div'); root.className='loop'; root.innerHTML=
    '<canvas></canvas>'+
    '<div class="lp">'+
-     '<div class="head"><span class="who"'+(o.half?'':' hidden')+'>'+esc(p.name)+'</span><span class="t1 mq"><span class="ex"></span></span><span class="sub"></span></div>'+
+     '<div class="head"><span class="who"'+(o.half?'':' hidden')+'>'+esc(firstName(p.name))+'</span><span class="t1 mq"><span class="ex"></span></span><span class="sub"></span></div>'+
      '<div class="mid">'+
-       '<div class="setup"><div class="wheel w-reps"><div class="line"></div><div class="hint"><span>SỐ REPS</span>'+UD+'</div></div><div class="x">×</div><div class="wheel w-kg"><div class="line"></div><div class="hint"><span>MỨC TẠ · KG</span>'+UD+'</div></div></div>'+
+       '<div class="setup"><div class="wheel w-reps"><div class="line"></div><div class="hint"><span>SỐ REPS</span>'+UD+'</div></div><div class="x"><svg viewBox="0 0 16 16"><path d="M3 3l10 10M13 3L3 13"/></svg></div><div class="wheel w-kg"><div class="line"></div><div class="hint"><span>MỨC TẠ · KG</span>'+UD+'</div></div></div>'+
        '<div class="clock" hidden><div class="wheel w-rest"><div class="line"></div><div class="hint"><span class="rh">ĐẶT THỜI GIAN NGHỈ</span>'+UD+'</div></div></div>'+
      '</div>'+
      '<div class="foot">'+
-       '<div class="nums" hidden><div class="fld reps"><div class="line"></div><div class="hint"><span>REPS</span>'+UD+'</div></div><div class="fld kg"><div class="line"></div><div class="unit">KG</div><div class="hint"><span>MỨC TẠ</span>'+UD+'</div></div></div>'+
+       '<div class="nums" hidden><div class="fld reps"><div class="line"></div><div class="hint"><span>REPS</span>'+UD+'</div></div><div class="fld kg"><div class="line"></div><div class="unit">KG</div><div class="hint"><span>KG</span>'+UD+'</div></div></div>'+
        '<div class="nav"><button class="ghost g1" aria-label="Lối khác">'+ico('i-back','s24')+'</button><span class="sp"></span><div class="judge" hidden><button class="cta line j0">Chưa đạt</button><button class="cta j1">Đạt</button></div><button class="cta c1">Bắt đầu set</button></div>'+
      '</div>'+
    '</div>'+
-   '<div class="ink"><div class="lp"><div class="head"><span class="who"'+(o.half?'':' hidden')+'>'+esc(p.name)+'</span><span class="t1 dimt ik1"></span><span class="sub">Đang nghỉ</span></div>'+
+   '<div class="ink"><div class="lp"><div class="head"><span class="who"'+(o.half?'':' hidden')+'>'+esc(firstName(p.name))+'</span><span class="t1 dimt ik1"></span><span class="sub">Đang nghỉ</span></div>'+
      '<div class="mid"><div class="clock"><div class="wheel"><div class="line"><div class="v ikt"></div></div></div></div></div>'+
      '<div class="foot"><div class="nextlab ikn"></div><div class="nums"><div class="fld reps"><div class="line"><div class="v ikr"></div></div><div class="hint"><span>REPS</span>'+UD+'</div></div><div class="fld kg"><div class="line"><div class="v ikk"></div></div><div class="unit">KG</div><div class="hint"><span>MỨC TẠ</span>'+UD+'</div></div></div>'+
      '<div class="nav"><button class="ghost" tabindex="-1">'+ico('i-up','s24')+'</button><span class="sp"></span><button class="cta" tabindex="-1">Vào set</button></div></div></div></div>'+
@@ -1065,6 +1065,7 @@ function Loop(host, p, o){
     inkTo(1);
     if(ph==='rest'){ q('.ik1').textContent=exEl.textContent; q('.ikn').textContent='KẾ TIẾP · SET '+(p.setNo+1)+' · '+ex(); q('.ikr').textContent=p.reps; q('.ikk').textContent=fmtN(p.kg); }
     ring.tint='ink';
+    ring.dot=(ph==='active');
     if(ph==='setup'){ ring.on=true; ring.slow=.45; if(ring.alpha<.5){ ring.alpha=0; ring.fade(.6,460); } else ring.alpha=.6; }
     else if(ph==='active'){ ring.on=true; ring.slow=1; if(ring.alpha<1){ ring.fade(1,400); } }
     else { ring.on=false; ring.alpha=0; }
@@ -1163,7 +1164,7 @@ function Loop(host, p, o){
 HOOK['p-summary']=function(){
   var s=state.session, p=s.people[state.sumIdx], two=s.people.length>1;
   $('sm-title').textContent='Tổng kết buổi '+p.no;
-  $('sm-who').hidden=!two; $('sm-who').firstElementChild.textContent=p.name;
+  $('sm-who').firstElementChild.textContent=firstName(p.name);
   var exs=s.plan.filter(function(n){ return p.ex[n] && p.ex[n].sets.length; }), tot=0, ok=0;
   exs.forEach(function(n){ p.ex[n].sets.forEach(function(st){ tot++; if(st[2]) ok++; }); });
   var mins=Math.max(1, Math.round((Date.now()-(s.startedAt||Date.now()))/60000));
@@ -1195,7 +1196,7 @@ HOOK['p-done']=function(){
   s.people.forEach(function(p){
     var m=findClient(p.name)||{name:p.name,total:0,left:0}, ci=ciFor(p.name), st=ci?ci.status:'ok';
     var w=document.createElement('div'); w.className=two?'half':'';
-    w.innerHTML='<div class="head"><span class="t1 mq"><span>'+esc(m.name)+'</span></span></div>'+cardHtml(m, p.no, two?'sm':'big', true)
+    w.innerHTML='<div class="head"><span class="t1 mq"><span>'+esc(firstName(m.name))+'</span></span></div>'+cardHtml(m, p.no, two?'sm':'big', true)
       +'<div class="lines'+(two?' sm':'')+'"><div class="a ac">Buổi thứ '+p.no+' đã xong</div><div class="b">'+(st==='ok'?'Còn '+m.left+' buổi':st==='pending'?'Đang check-in…':'<span class="er">Chưa check-in</span>')+'</div><div class="lab">ĐÃ KÝ LÚC <span class="ac">'+(p.signedAt||nowHM())+'</span> · '+vnFull(TODAY_ISO)+'</div></div>';
     body.appendChild(w);
   });

@@ -196,8 +196,8 @@ svg{display:block}
 .hero{margin-top:32px}
 .hero .l1{font-size:22px;line-height:26px;letter-spacing:-.015em}
 .hero .l2{font-size:22px;line-height:26px;letter-spacing:-.015em;color:var(--acid)}
-.bars{margin-top:16px;height:64px;display:flex;align-items:flex-end;gap:3px}
-.bars i{flex:1;min-width:1px;background:rgba(250,250,250,.32);transform-origin:bottom;transform:scaleY(0);transition:transform .5s var(--eo)}
+.bars{margin-top:16px;height:64px;display:flex;align-items:flex-end;justify-content:space-between}
+.bars i{width:3px;flex:none;background:rgba(250,250,250,.32);transform-origin:bottom;transform:scaleY(0);transition:transform .5s var(--eo)}
 .bars i.on{background:var(--acid)}
 .bars i.off{background:rgba(250,250,250,.14)}
 .bars.in i{transform:scaleY(1)}
@@ -312,8 +312,8 @@ svg{display:block}
 .ptile.add{background:none;border:1px solid var(--hair);justify-content:space-between}
 .ptile.add .nm{color:var(--acid);display:flex;align-items:center;gap:8px;margin-top:0}
 .ptile.add .nm .ic{color:var(--acid)}
-.ptile.lift{z-index:5;background:#1C1C1C;box-shadow:0 12px 40px rgba(0,0,0,.6);transition:none;border-color:var(--red)}
-.ptile.lift.ok{border-color:var(--hair)}
+.ptile.lift{z-index:5;background:#1C1C1C;box-shadow:0 12px 40px rgba(0,0,0,.6);transition:none;border-color:var(--hair)}
+.ptile.lift.del{border-color:var(--red)}
 .ptile.hole{background:none;border:1px dashed var(--hair)}
 .ptile.hole>*{opacity:0}
 .dropzone{position:absolute;left:0;right:0;bottom:0;height:64px;border:1px dashed var(--red);border-radius:8px;display:flex;align-items:center;justify-content:center;color:var(--red);
@@ -359,7 +359,8 @@ svg{display:block}
 .setup .wheel .line{top:-190px}
 .setup .wheel .v{top:190px;height:105px;line-height:105px;font-size:96px}
 .setup .wheel .hint{top:108px}
-.setup .x{font-family:var(--sans);font-size:32px;color:var(--paper);height:40px;line-height:40px;margin:2px 0}
+.setup .x{height:40px;display:flex;align-items:center;justify-content:center;margin:2px 0;color:var(--paper)}
+.setup .x svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.5;stroke-linecap:round}
 /* số nhỏ ở đáy khi đang tập / khi nghỉ */
 .nums{display:flex;justify-content:space-between;align-items:flex-end;height:57px}
 .fld{position:relative;height:57px;touch-action:none;cursor:grab}
@@ -374,7 +375,9 @@ svg{display:block}
 .fld.reps .v{text-align:left}
 .fld.kg .v{text-align:right;padding-right:0}
 .fld .unit{position:absolute;right:0;bottom:22px;font-family:var(--mono);font-size:12px;letter-spacing:.04em;color:var(--slate);transition:opacity .16s linear}
-.fld.kg .v{right:24px}
+.fld.kg .v{right:0}
+.fld.kg .unit{display:none}
+.fld.reps .hint .ud{order:-1}
 .fld .hint{position:absolute;bottom:0;display:flex;align-items:center;gap:6px;font-family:var(--mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--slate);transition:opacity .16s linear}
 .fld.reps .hint{left:0}
 .fld.kg .hint{right:0}
