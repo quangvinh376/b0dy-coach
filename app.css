@@ -295,10 +295,20 @@ svg{display:block}
 .card .fill{position:absolute;left:0;top:0;bottom:0;background:var(--paper);transform-origin:left;transform:scaleX(0);transition:transform .9s cubic-bezier(.3,.7,.2,1)}
 .card .fill.a{background:var(--acid);transition-delay:.4s}
 .card.in .fill{transform:scaleX(1)}
-.card .n{color:var(--ink)} .card .of{color:var(--graphite)}
-.card .n.lt{color:var(--paper)} .card .of.lt{color:var(--gray)}
 .card.done .fill{background:var(--acid)}
-.card.done .n{color:var(--ink)} .card.done .of{color:var(--ink55)}
+/* chữ thích ứng theo vệt: lớp dưới = ngoài vệt (Paper / Gray); lớp .top chồng khít (cùng padding, cùng flex) = trên vệt (Ink / Ink 55%),
+   cắt bằng clip-path đúng bằng vệt (--x vệt Paper, --y vệt Acid) và chạy cùng nhịp + cùng độ trễ với vệt → mép chữ luôn trùng mép vệt */
+.card .n{color:var(--paper)} .card .of{color:var(--gray)}
+.card .top{position:absolute;inset:0;padding:inherit;display:flex;flex-direction:column;justify-content:space-between;z-index:2;pointer-events:none;
+           transition:clip-path .9s cubic-bezier(.3,.7,.2,1)}
+.card .top .n{color:var(--ink)} .card .top .of{color:var(--ink55)}
+.card .top.b{clip-path:inset(0 100% 0 0)}
+.card.in .top.b{clip-path:inset(0 calc(100% - var(--x)) 0 0)}
+.card .top.a{clip-path:inset(0 calc(100% - var(--x)) 0 var(--x));transition-delay:.4s}
+.card.in .top.a{clip-path:inset(0 calc(100% - var(--x) - var(--y)) 0 var(--x))}
+/* dựng lại lúc màn đang hiển thị: hiện thẳng trạng thái cuối, không chạy lại */
+.card.still .fill,.card.still .top{transition:none}
+.st>.still{opacity:1;animation:none}   /* tầng nội dung dựng lại nền: không chạy lại hiệu ứng hiện lần lượt */
 .card.sm{height:96px;padding:12px 12px 7px;display:flex;flex-direction:column;justify-content:space-between}
 .card.sm .n{font-family:var(--mono);font-size:56px;line-height:53px;letter-spacing:-1.68px;position:relative;z-index:1}
 .card.sm .of{font-family:var(--mono);font-size:14px;line-height:17px;letter-spacing:0;position:relative;z-index:1}
