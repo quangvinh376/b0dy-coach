@@ -844,7 +844,7 @@ function renderPick(animate){
   var d=document.createElement('div'); d.className='lab sec'; d.textContent=(q?'KẾT QUẢ':'KHÁCH')+' · '+list.length; el.appendChild(d);
   list.forEach(function(m){
     var at=doneToday(m), sel=state.sel.indexOf(m.name)>=0;
-    var b=clientRow(m, animate, i++, at!=null ? 'ĐÃ TẬP HÔM NAY · '+(at||'—') : clientMeta(m), function(){ togglePick(m.name); }, sel?'i-check':'i-plus', 'acid');
+    var b=clientRow(m, animate, i++, at!=null ? 'ĐÃ TẬP HÔM NAY · '+(at||'—') : clientMeta(m), function(){ togglePick(m.name); }, sel?'i-check':'i-plus', sel?'acid':'paper');
     if(sel) b.classList.add('sel'); if(at!=null) b.classList.add('off');
     el.appendChild(b);
   });
