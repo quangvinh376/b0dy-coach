@@ -41,5 +41,26 @@ App v2 vẫn gửi `SET`, `BÀI`, `CHECKOUT`, `ĐO`, `MỤC TIÊU` với `id` ch
 
 Màn Hồ sơ hiện "Hết hạn" từ `member.exp` (hoặc `member.end` nếu thiếu). Nếu muốn đúng cột **Ngày hết hạn** của tab MEMBERS, thêm trường `exp` (chuỗi `yyyy-MM-dd`) vào từng phần tử `members` trong phản hồi của action `coach`.
 
-## Loại gói 1:1 / 1:2 (`kind`) — cần cho màn Chọn khách (v2.2)
-Màn Chọn khách chia nhóm "KHÁCH 1:1 SẴN SÀNG TẬP" / "KHÁCH 1:2 SẴN SÀNG TẬP" và chỉ cho ghép cặp với khách 1:2. App đọc trường `kind` (hoặc `type`) của từng phần tử `members` trong action `coach`; nhận dạng 1:2 khi chuỗi khớp `1:2`, `1-2`, `đôi`, `duo`, `cặp` (không phân biệt hoa thường). Thiếu trường này → mọi khách được coi là 1:1. Đề nghị Apps Script trả `kind` = giá trị cột **Loại gói** của tab MEMBERS (ví dụ `PT 1:2 · 24 buổi`).
+## 5. Loại gói 1:1 / 1:2 và khách đã hết gói — `backend/Logbook.gs` (v2.2, bắt buộc cho màn Chọn khách)
+
+Màn Chọn khách chia nhóm "KHÁCH 1:1 SẴN SÀNG TẬP" / "KHÁCH 1:2 SẴN SÀNG TẬP" và chỉ cho ghép cặp khách 1:2; tab Khách hàng có nhóm "KHÁCH ĐÃ HẾT GÓI" (vẫn xem được hồ sơ). Backend cũ không trả loại gói và **lọc bỏ** khách hết buổi, nên hai chỗ này rỗng/toàn 1:1 trên live cho tới khi cập nhật.
+
+`backend/Logbook.gs` là **bản đầy đủ** của file `Logbook` trong project Apps Script (lấy từ bản đang chạy 25/09/2026, sửa 2 hàm). Cách cập nhật:
+
+1. Apps Script **B0DY Discord KPI** ▸ mở file `Logbook.gs` ▸ chọn tất cả ▸ dán toàn bộ nội dung `backend/Logbook.gs` (thay cả file) ▸ Save.
+2. **Deploy ▸ Manage deployments ▸ ✏️ ▸ Version: New version ▸ Deploy.** Không có bước này thì `/exec` vẫn chạy code cũ.
+3. Kiểm tra: mở app, kéo làm mới, vào Chọn khách → khách có cột **Loại** = `1:2` trong tab MEMBERS phải nằm ở nhóm 1:2 với dấu +; tab Khách hàng phải có nhóm "KHÁCH ĐÃ HẾT GÓI".
+
+Những gì đổi (chỉ trong `lbMembers_` và một dòng gọi ở `lbCoach_`):
+
+| Trường mới trong `members[]` | Nguồn (tab MEMBERS của [B0DY Studio] BA) | App dùng ở |
+|---|---|---|
+| `kind` | cột **E "Loại"** (`1:1` / `1:2`; nhận cả "Loại gói" nếu đổi tên cột) | Chọn khách: nhóm 1:1 / 1:2, dấu + chỉ cho 1:2 |
+| `pkg` | cột C "Gói" | dự phòng (hồ sơ) |
+| `status` | cột W "Trạng thái" | dự phòng |
+| `exp` | = `end` (cột Z "Ngày hết hạn", thiếu thì Y "Ngày kết thúc") | Hồ sơ · Hết hạn |
+| khách `left ≤ 0` | trước đây bị bỏ, nay trả về với `left: 0` | Khách hàng · "KHÁCH ĐÃ HẾT GÓI" |
+
+`lbMembers_(withDone)`: `lbCoach_` gọi với `true` (trả cả khách hết gói); `lbCheckin_` vẫn gọi mặc định (chỉ khách còn buổi) nên check-in khách hết gói vẫn bị chặn như cũ. App nhận dạng 1:2 khi `kind` khớp `1:2`, `1-2`, `đôi`, `duo`, `cặp` (không phân biệt hoa thường); thiếu trường → coi là 1:1.
+
+Lưu ý: `coach` đi qua Cloudflare Worker `b0dy-kiosk-api`. Worker chỉ chuyển tiếp JSON nên trường mới tự đi qua; nếu Worker có cache phản hồi `coach`, xoá cache hoặc chờ hết hạn. Nếu danh sách khách hết gói quá dài theo thời gian, thêm điều kiện lọc theo `end` (ví dụ chỉ 12 tháng gần nhất) ngay chỗ `if (left <= 0 && !withDone) continue;`.
