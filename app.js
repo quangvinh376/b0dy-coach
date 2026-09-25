@@ -113,13 +113,14 @@ var EX_LIB=[
 ].map(function(r){ return {name:r[0], group:r[1], part:r[2], id:r[3]}; });
 var EX_BY_NAME={}; EX_LIB.forEach(function(e){ EX_BY_NAME[e.name]=e; });
 /* thư viện đang dùng: máy chủ trả {Nhóm:[Tên]} (sheet "Bài tập") → hợp với vùng cơ của bản nhúng */
+/* Bản nhúng là gốc; sheet "Bài tập" trên máy chủ chỉ BỔ SUNG bài chưa có (nhóm theo cột Nhóm của sheet).
+   Nhờ vậy sheet cũ (Upper/Lower/…) không ghi đè thư viện mới; chạy installLibrary() rồi thì hai bên trùng nhau. */
 function libEntries(){
-  var srv=state.lib, out=[], seen={};
+  var srv=state.lib, out=EX_LIB.slice(), seen={}; EX_LIB.forEach(function(e){ seen[e.name]=1; });
   if(srv && typeof srv==='object' && !Array.isArray(srv)){
-    Object.keys(srv).forEach(function(g){ (srv[g]||[]).forEach(function(n){ if(seen[n]) return; seen[n]=1; var k=EX_BY_NAME[n]; out.push({name:n, group:g, part:k?k.part:'', id:k?k.id:norm(n).replace(/[^a-z0-9]+/g,'-')}); }); });
-    if(out.length) return out;
+    Object.keys(srv).forEach(function(g){ (srv[g]||[]).forEach(function(n){ n=String(n||'').trim(); if(!n||seen[n]) return; seen[n]=1; out.push({name:n, group:g, part:'', id:norm(n).replace(/[^a-z0-9]+/g,'-')}); }); });
   }
-  return EX_LIB;
+  return out;
 }
 function libGroups(){
   var by={}, order=[];
