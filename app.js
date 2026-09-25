@@ -962,42 +962,121 @@ function renderPlan(animate){
   add.innerHTML='<div class="no">'+pad2(s.plan.length+1)+'</div><div class="nm">Thêm bài'+ico('i-plus')+'</div>'; add.onclick=openLib; g.appendChild(add);
   var go=$('pl-go'); go.textContent=s.plan.length?'Bắt đầu · '+s.plan.length+' bài':'Bắt đầu'; go.classList.toggle('off', !s.plan.length);
 }
-/* kéo thả: giữ 250ms để nhấc, kéo tới ô khác để đổi chỗ, thả vào vùng đỏ để xoá */
+/* kéo thả (chuẩn iOS reorder): giữ ~220ms để nhấc (ngón đã di >6px thì thôi — để cuộn lưới bình thường).
+   Thẻ nhấc = bản sao bay theo ngón bằng transform (lerp mềm, hơi nghiêng theo hướng đi); thẻ gốc thành chỗ trống trong suốt
+   và DI CHUYỂN TRONG DOM khi tâm thẻ bay vượt nửa thẻ khác → các thẻ còn lại TRƯỢT (FLIP) sang chỗ mới.
+   Thả → bay về đúng ô rồi mới hiện lại thẻ gốc; KHÔNG dựng lại lưới (chỉ cập nhật state + đánh lại số).
+   Kéo vào vùng đỏ để xoá (bài đã ghi set thì khoá, thả sẽ bay về). Huỷ (pointercancel) = trả về chỗ cũ. */
 var DRAG=null;
+/* các thẻ bài theo thứ tự lưới (bỏ ô Thêm bài; bản sao đang bay nằm trong khung .gdrag nên không lọt vào đây) */
+function planTiles(){ return Array.prototype.filter.call($('pl-grid').children, function(c){ return c.classList.contains('ptile') && !c.classList.contains('add'); }); }
+/* đánh lại số thứ tự + data-i tại chỗ (không dựng lại DOM) */
+function planRenumber(){ var ts=planTiles(); ts.forEach(function(c,k){ c.dataset.i=k; var no=c.querySelector('.no'); if(no) no.textContent=pad2(k+1); }); var a=$('pl-grid').querySelector('.ptile.add .no'); if(a) a.textContent=pad2(ts.length+1); }
+/* FLIP: đo vị trí đang thấy → đổi DOM → đo vị trí mới → áp transform ngược (không transition) → trượt về 0 (.26s, ngắt được) */
+function flip(els, mutate){
+  var first=els.map(function(el){ return el.getBoundingClientRect(); });
+  mutate();
+  els.forEach(function(el){ el.style.transition='none'; el.style.transform=''; });
+  var last=els.map(function(el){ return el.getBoundingClientRect(); }), any=false;
+  els.forEach(function(el,i){ var dx=first[i].left-last[i].left, dy=first[i].top-last[i].top; if(Math.abs(dx)<.5 && Math.abs(dy)<.5){ el.style.transition=''; return; } any=true; el.style.transform='translate3d('+dx+'px,'+dy+'px,0)'; });
+  if(any){ var reflow=$('pl-grid').offsetWidth; els.forEach(function(el){ el.style.transition=''; el.style.transform=''; }); }
+}
+function buzz(ms){ if(navigator.vibrate){ try{ navigator.vibrate(ms); }catch(_){} } }
 function dragify(t){
+  /* chặn cuộn CHỈ khi đã nhấc (touchmove không passive ngay trên thẻ — trình duyệt mới chịu preventDefault) */
+  t.addEventListener('touchmove', function(ev){ if(DRAG && DRAG.t===t && !DRAG.done && ev.cancelable) ev.preventDefault(); }, {passive:false});
   t.addEventListener('pointerdown', function(e){
-    if(DRAG) return; var x0=e.clientX, y0=e.clientY, moved=false, timer=setTimeout(function(){ if(!moved) lift(e); }, 250);
-    function mv(ev){ if(!DRAG){ if(Math.abs(ev.clientX-x0)>8||Math.abs(ev.clientY-y0)>8){ moved=true; clearTimeout(timer); } return; } ev.preventDefault(); move(ev); }
-    function up(){ clearTimeout(timer); document.removeEventListener('pointermove',mv); document.removeEventListener('pointerup',up); document.removeEventListener('pointercancel',up); if(DRAG) drop(); }
+    if(e.button>0 || t.classList.contains('ph')) return;
+    if(DRAG){ if(DRAG.done && DRAG.finish) DRAG.finish(); else return; }   /* đang bay về → chốt ngay, cho nhấc tiếp (ngắt được) */
+    var x0=e.clientX, y0=e.clientY, pid=e.pointerId, moved=false, timer=setTimeout(function(){ if(!moved) lift(e); }, 220);
+    function mv(ev){
+      if(ev.pointerId!==pid) return;
+      if(!DRAG || DRAG.t!==t){ if(Math.abs(ev.clientX-x0)>6 || Math.abs(ev.clientY-y0)>6){ moved=true; clearTimeout(timer); } return; }
+      if(ev.cancelable) ev.preventDefault(); move(ev);
+    }
+    function up(ev){ if(ev && ev.pointerId!==pid) return; clearTimeout(timer); unbind(); if(DRAG && DRAG.t===t && !DRAG.done) drop(ev && ev.type==='pointercancel'); }
+    function unbind(){ document.removeEventListener('pointermove',mv); document.removeEventListener('pointerup',up); document.removeEventListener('pointercancel',up); }
     document.addEventListener('pointermove',mv,{passive:false}); document.addEventListener('pointerup',up); document.addEventListener('pointercancel',up);
+
     function lift(ev){
-      var r=t.getBoundingClientRect(), hole=document.createElement('div'); hole.className='ptile hole'; hole.innerHTML=t.innerHTML;
-      t.parentNode.insertBefore(hole, t);
-      DRAG={t:t, hole:hole, dx:ev.clientX-r.left, dy:ev.clientY-r.top, w:r.width, h:r.height, name:state.session.plan[+t.dataset.i], del:false};
-      t.classList.add('lift');
-      t.style.position='fixed'; t.style.left=r.left+'px'; t.style.top=r.top+'px'; t.style.width=r.width+'px'; t.style.height=r.height+'px'; t.style.margin='0'; t.style.zIndex='60';
-      var dz=$('pl-drop'); dz.textContent='Thả vào đây để xoá'; dz.classList.add('show'); if(navigator.vibrate) navigator.vibrate(8);
+      var g=t.parentNode, name=state.session.plan[+t.dataset.i]; if(!g) return;
+      Array.prototype.forEach.call(g.children, function(c){ c.classList.remove('rowin'); c.style.animationDelay=''; });
+      var r=t.getBoundingClientRect(), slots=planTiles().map(function(c){ return c.getBoundingClientRect(); });
+      /* bản sao bay: khung .gdrag (fixed trên body, translate mỗi frame) bọc thẻ .lift (scale/bóng có transition riêng) */
+      var w=document.createElement('div'); w.className='gdrag'; w.style.left=r.left+'px'; w.style.top=r.top+'px'; w.style.width=r.width+'px'; w.style.height=r.height+'px';
+      var c=t.cloneNode(true); c.className='ptile lift'; c.removeAttribute('data-i'); c.removeAttribute('style'); w.appendChild(c); document.body.appendChild(w);   /* gắn vào body: #pl-scroll có mask (fog) nên thẻ bay trong lưới sẽ bị mờ mép + nằm dưới vùng xoá */
+      t.classList.add('ph'); g.classList.add('dragging'); t.style.touchAction='none';
+      DRAG={t:t, w:w, c:c, g:g, name:name, from:+t.dataset.i, rm:rm(), pid:pid, ox:ev.clientX-r.left, oy:ev.clientY-r.top,
+            x0:r.left, y0:r.top, x:r.left, y:r.top, tx:r.left, ty:r.top, rot:0, wd:r.width, ht:r.height,
+            slots:slots, sc:$('pl-scroll').scrollTop, del:false, lock:planCounts(name)>0, done:false, raf:0, finish:null};
+      try{ t.setPointerCapture(pid); }catch(_){}
+      var dz=$('pl-drop'); dz.textContent='Thả vào đây để xoá'; dz.classList.remove('hot','lock'); dz.classList.add('show');
+      buzz(8);
+      requestAnimationFrame(function(){ if(DRAG && DRAG.c===c) c.classList.add('up'); tick(); });
+    }
+    /* mỗi frame: lerp .35 về vị trí ngón (nặng tự nhiên), nghiêng ≤2° theo vận tốc ngang, rồi xét đổi chỗ */
+    function tick(){
+      var d=DRAG; if(!d || d.done) return;
+      var k=d.rm?1:.35, nx=d.x+(d.tx-d.x)*k, ny=d.y+(d.ty-d.y)*k, vx=nx-d.x; d.x=nx; d.y=ny;
+      var want=d.rm?0:Math.max(-2, Math.min(2, vx*.16)); d.rot+=(want-d.rot)*.3;
+      d.w.style.transform='translate3d('+(nx-d.x0).toFixed(2)+'px,'+(ny-d.y0).toFixed(2)+'px,0) rotate('+d.rot.toFixed(2)+'deg)';
+      if(!d.del) reorder(nx+d.wd/2, ny+d.ht/2);
+      d.raf=requestAnimationFrame(tick);
     }
     function move(ev){
-      var d=DRAG; d.t.style.left=(ev.clientX-d.dx)+'px'; d.t.style.top=(ev.clientY-d.dy)+'px';
-      var dz=$('pl-drop'), zr=dz.getBoundingClientRect(), del=ev.clientY>=zr.top && ev.clientY<=zr.bottom+20; if(del!==d.del){ d.del=del; dz.textContent= del ? 'Thả để xoá '+exShort(d.name) : 'Thả vào đây để xoá'; } dz.classList.toggle('hot', d.del); d.t.classList.toggle('del', d.del);
-      if(d.del) return;
-      d.t.style.pointerEvents='none'; var under=document.elementFromPoint(ev.clientX, ev.clientY); d.t.style.pointerEvents='';
-      var tile=under && under.closest && under.closest('.ptile:not(.lift):not(.add):not(.hole)'); if(!tile) return;
-      var tr=tile.getBoundingClientRect(), before=(ev.clientY<tr.top+tr.height/2) || (ev.clientX<tr.left+tr.width/2 && ev.clientY<tr.bottom);
-      var g=tile.parentNode; if(before) g.insertBefore(d.hole, tile); else g.insertBefore(d.hole, tile.nextSibling);
-    }
-    function drop(){
-      var d=DRAG, s=state.session; DRAG=null; $('pl-drop').classList.remove('show','hot');
-      if(d.del){
-        if(planCounts(d.name)){ notify('Bài đã ghi set · không xoá được', {err:true}); }
-        else { s.plan=s.plan.filter(function(n){ return n!==d.name; }); s.people.forEach(function(p){ if(p.cur>=s.plan.length) p.cur=Math.max(0,s.plan.length-1); }); }
-      } else {
-        var order=[]; Array.prototype.forEach.call(d.hole.parentNode.children, function(c){ if(c===d.hole) order.push(d.name); else if(c.classList.contains('ptile') && !c.classList.contains('add') && !c.classList.contains('lift')) order.push(s.plan[+c.dataset.i]); });
-        var curName=s.people.map(function(p){ return s.plan[p.cur]; });
-        s.plan=order; s.people.forEach(function(p,i){ var k=s.plan.indexOf(curName[i]); if(k>=0) p.cur=k; });
+      var d=DRAG; d.tx=ev.clientX-d.ox; d.ty=ev.clientY-d.oy;
+      var dz=$('pl-drop'), zr=dz.getBoundingClientRect(), inz=ev.clientY>=zr.top-8 && ev.clientY<=zr.bottom+16;
+      if(inz!==d.del){
+        d.del=inz;
+        if(inz && d.lock){ dz.textContent='Bài đã có set'; dz.classList.add('lock'); }
+        else if(inz){ dz.textContent='Thả để xoá '+exShort(d.name); dz.classList.add('hot'); d.c.classList.add('del'); buzz(12); }
+        else { dz.textContent='Thả vào đây để xoá'; dz.classList.remove('hot','lock'); d.c.classList.remove('del'); }
       }
-      saveSession(); renderPlan(false);
+    }
+    /* tâm thẻ bay (cx,cy) vượt qua nửa ô của thẻ khác (tính từ mép gần ô hiện tại; ngưỡng 40% để thả đúng tâm vẫn ăn)
+       → thẻ gốc đổi chỗ trong DOM, các thẻ khác trượt (FLIP). Ô đã đổi chỗ thì phải đi ngược 40% mới đổi lại (không rung) */
+    function reorder(cx, cy){
+      var d=DRAG, tiles=planTiles(), cur=tiles.indexOf(d.t), n=tiles.length, sy=d.sc-$('pl-scroll').scrollTop, best=-1;
+      if(cur<0) return;
+      for(var j=0;j<n;j++){
+        if(j===cur) continue; var r=d.slots[j], top=r.top+sy, bot=r.bottom+sy;
+        if(cx<r.left || cx>r.right || cy<top || cy>bot) continue;
+        var sameRow=Math.abs(r.top-d.slots[cur].top)<1, f=sameRow ? (j>cur ? (cx-r.left)/r.width : (r.right-cx)/r.width) : (j>cur ? (cy-top)/r.height : (bot-cy)/r.height);
+        if(f>=.4){ best=j; break; }
+      }
+      if(best<0) return;
+      var others=tiles.filter(function(c){ return c!==d.t; }), ref=best>cur ? tiles[best].nextSibling : tiles[best];
+      flip(others, function(){ d.g.insertBefore(d.t, ref); });
+    }
+    function drop(cancel){
+      var d=DRAG, s=state.session; if(!d || d.done) return; d.done=true; cancelAnimationFrame(d.raf);
+      try{ t.releasePointerCapture(d.pid); }catch(_){}
+      t.style.touchAction=''; d.g.classList.remove('dragging'); $('pl-drop').classList.remove('show','hot','lock');
+      if(d.del && !d.lock && !cancel){ deleteDrop(d); return; }
+      /* huỷ = trả thẻ về chỗ cũ (các thẻ khác trượt theo) */
+      if(cancel){ var ts=planTiles(); if(ts.indexOf(d.t)!==d.from){ var others=ts.filter(function(c){ return c!==d.t; }); flip(others, function(){ d.g.insertBefore(d.t, others[d.from]||$('pl-grid').querySelector('.ptile.add')); }); } }
+      /* chốt thứ tự mới từ DOM, giữ bài đang tập của từng người */
+      var order=planTiles().map(function(c){ return s.plan[+c.dataset.i]; }), curName=s.people.map(function(p){ return s.plan[p.cur]; });
+      s.plan=order; s.people.forEach(function(p,i){ var k=s.plan.indexOf(curName[i]); if(k>=0) p.cur=k; }); saveSession(); planRenumber();
+      /* bay về đúng ô (spring), scale/bóng tắt; xong mới hiện thẻ gốc */
+      var tr=d.t.getBoundingClientRect();
+      d.w.style.transition=d.rm ? 'transform .12s linear' : 'transform .32s cubic-bezier(.2,.9,.25,1.05)';
+      d.w.style.transform='translate3d('+(tr.left-d.x0).toFixed(2)+'px,'+(tr.top-d.y0).toFixed(2)+'px,0) rotate(0deg)';
+      d.c.classList.add('land'); d.c.classList.remove('up','del');
+      var tm=setTimeout(finish, d.rm?140:340);
+      function finish(){ clearTimeout(tm); if(DRAG!==d) return; if(d.w.parentNode) d.w.parentNode.removeChild(d.w); d.t.classList.remove('ph'); DRAG=null; }
+      d.finish=finish;
+    }
+    /* xoá: thẻ bay co về 0 + mờ, các thẻ sau trượt lên, rồi dựng lại lưới (số set, CTA) */
+    function deleteDrop(d){
+      var s=state.session, curName=s.people.map(function(p){ return s.plan[p.cur]; });
+      s.plan=planTiles().filter(function(c){ return c!==d.t; }).map(function(c){ return s.plan[+c.dataset.i]; });
+      s.people.forEach(function(p,i){ var k=s.plan.indexOf(curName[i]); p.cur=k>=0?k:Math.min(p.cur, Math.max(0,s.plan.length-1)); }); saveSession();
+      buzz(16); d.c.classList.add('gone');
+      var t1=setTimeout(function(){ var others=planTiles().filter(function(c){ return c!==d.t; }); flip(others, function(){ if(d.t.parentNode) d.t.parentNode.removeChild(d.t); }); planRenumber(); }, d.rm?0:60);
+      var t2=setTimeout(finish, d.rm?160:340);
+      function finish(){ clearTimeout(t1); clearTimeout(t2); if(DRAG!==d) return; if(d.t.parentNode) d.t.parentNode.removeChild(d.t); if(d.w.parentNode) d.w.parentNode.removeChild(d.w); DRAG=null; renderPlan(false); }
+      d.finish=finish;
     }
   });
 }
