@@ -517,7 +517,13 @@ svg{display:block}
 .two .loop:first-child .lp{padding-top:var(--top)}
 .two .lp .head .t1{font-size:22px;line-height:26px;letter-spacing:-.33px}
 .two .lp .head .sub{font-size:22px;line-height:26px;letter-spacing:-.33px}
-.two .setup{gap:8px;top:calc(50% + 14px)}
+.two .setup{gap:8px;top:50%}
+/* nửa thấp (vùng trống < 230px, ví dụ iPhone SE 375×667): cột dọc không đủ chỗ → xếp ngang reps × kg (Figma 452:249), × vẫn ở tâm vành */
+.two .loop.tight .setup{flex-direction:row;gap:12px;align-items:flex-start;justify-content:center}
+.two .loop.tight .setup .wheel.w-reps{width:120px}
+.two .loop.tight .setup .wheel.w-kg{width:160px}
+.two .loop.tight .setup{height:77px}
+.two .loop.tight .setup .x{height:77px;display:flex;align-items:center;justify-content:center;padding:0;width:40px}
 .two .setup .wheel{height:77px}
 .two .setup .wheel .v{font-size:60px;letter-spacing:-1.8px;height:56px;line-height:56px}
 .two .setup .wheel .hint{top:64px}

@@ -201,7 +201,7 @@ var CLIP={hard:[], ell:[]};
     check((await h.ev(function(){ return [].every.call(document.querySelectorAll('#cl-list .row .lab'), function(l){ return /TẬP CHẬM/.test(l.textContent); }); })), 'meta có · TẬP CHẬM');
     await page.click('#p-clients .nav .ghost:nth-child(1)'); await h.waitScreen('p-home'); await h.wait(900);
     await page.click('#h-tiles .tile:nth-child(3)'); await h.waitScreen('p-clients'); await h.wait(700);
-    check((await h.count('#cl-list .row'))===0 && (await h.txt('#cl-list .empty'))==='CHƯA CÓ KHÁCH', 'khách hôm nay (chưa ai): '+(await h.txt('#cl-list')));
+    check((await h.count('#cl-list .row'))===0 && (await h.txt('#cl-list .empty'))==='CHƯA CÓ KHÁCH HÔM NAY', 'khách hôm nay (chưa ai): '+(await h.txt('#cl-list')));
     note('Ô "Khách hôm nay"=0 mở danh sách trống với chữ "CHƯA CÓ KHÁCH" (không có tiêu đề nhóm) — cân nhắc "CHƯA CÓ KHÁCH HÔM NAY"');
     await page.click('#p-clients .nav .ghost:nth-child(1)'); await h.waitScreen('p-home'); await h.wait(900);
   });
@@ -492,7 +492,7 @@ var CLIP={hard:[], ell:[]};
       check(a.b<=x.y+1 && x.b<=k.y+1, 'nửa '+i+' reps trên, × giữa, kg dưới: '+[a.b,x.y,x.b,k.y].join(','));
       var rr=await h.rect(L.trim()), cy=await h.ev(function(i){ return LOOPS[i].ring.cy; }, i-1);
       check(near(x.cy-rr.y, cy, 3), 'nửa '+i+' tâm × ≈ ring.cy: '+(x.cy-rr.y).toFixed(1)+' vs '+cy);
-      check(near(cy, rr.h/2+14, 1), 'nửa '+i+' ring.cy = h/2+14: '+cy+' vs '+(rr.h/2+14));
+      var hd0=await h.rect(L+'.lp .head'); var exp0=(hd0.b-rr.y)+((rr.h-28)-(hd0.b-rr.y))/2; check(near(cy, exp0, 2), 'nửa '+i+' ring.cy = giữa vùng trống (head.b→đáy−28): '+cy+' vs '+exp0.toFixed(1));
       check((await h.txt(L+'.who'))===(i===1?'Doãn Quang':'Quang Vinh'), 'tên nửa '+i+': '+(await h.txt(L+'.who')));
     }
     var sep=await h.ev(function(){ var cs=getComputedStyle(document.querySelector('#loop-host .loop:nth-child(2)'),'::before'); return {c:cs.content, bg:cs.backgroundColor, h:cs.height, top:cs.top}; });
@@ -609,8 +609,8 @@ var CLIP={hard:[], ell:[]};
       await hl.startSession(['Doãn Quang','Quang Vinh'], [1,2]);
       for(var i=1;i<=2;i++){ var L='#loop-host .loop:nth-child('+i+') '; var r=await hl.rect(L.trim()), c=await hl.ev(function(i){ return LOOPS[i].ring.cy; }, i-1), xx=await hl.rect(L+'.setup .x');
         check(near(xx.cy-r.y, c, 3), 'nửa '+i+' tâm × ≈ ring.cy: '+(xx.cy-r.y).toFixed(1)+' vs '+c);
-        check(near(c, r.h/2+14, 1), 'nửa '+i+' ring.cy = h/2+14: '+c+' vs '+(r.h/2+14));
-        var hd=await hl.rect(L+'.lp .head'), a=await hl.rect(L+'.setup .w-reps'), k=await hl.rect(L+'.setup .w-kg'), nv2=await hl.rect(L+'.lp .nav');
+        var hd=await hl.rect(L+'.lp .head'); var expc=(hd.b-r.y)+((r.h-28)-(hd.b-r.y))/2; check(near(c, expc, 2), 'nửa '+i+' ring.cy = giữa vùng trống: '+c+' vs '+expc.toFixed(1));
+        var a=await hl.rect(L+'.setup .w-reps'), k=await hl.rect(L+'.setup .w-kg'), nv2=await hl.rect(L+'.lp .nav');
         check(a.y>=hd.b-1 && k.b<=nv2.y+1, 'nửa '+i+' thiết lập không đè head/nav: reps.y '+a.y.toFixed(0)+' head.b '+hd.b.toFixed(0)+' kg.b '+k.b.toFixed(0)+' nav.y '+nv2.y.toFixed(0)); }
       await hl.clip('L'+vp.width+'-two');
     });

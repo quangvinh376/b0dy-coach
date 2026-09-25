@@ -7,7 +7,7 @@
    ===================================================================== */
 'use strict';
 var $=function(id){ return document.getElementById(id); };
-var APP_VER='v2.1.3';
+var APP_VER='v2.2.0';
 
 /* ---------------- tiện ích ---------------- */
 function isoToday(d){ d=d||new Date(); return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2); }
@@ -748,7 +748,7 @@ function renderClients(animate){
   }
   sec(f==='slow'?'KHÁCH TẬP CHẬM':f==='today'?'KHÁCH HÔM NAY':'KHÁCH ĐANG HOẠT ĐỘNG', act, true);
   sec('KHÁCH ĐÃ HẾT GÓI', done, !act.length);
-  if(!all.length){ var e=document.createElement('div'); e.className='lab empty'; e.textContent=q?'KHÔNG TÌM THẤY TÊN NÀY':state.loading?'ĐANG TẢI DANH SÁCH…':'CHƯA CÓ KHÁCH'; el.appendChild(e); }
+  if(!all.length){ var e=document.createElement('div'); e.className='lab empty'; e.textContent=q?'KHÔNG TÌM THẤY TÊN NÀY':state.loading?'ĐANG TẢI DANH SÁCH…':f==='today'?'CHƯA CÓ KHÁCH HÔM NAY':f==='slow'?'KHÔNG CÓ KHÁCH TẬP CHẬM':'CHƯA CÓ KHÁCH'; el.appendChild(e); }
   state.clFilter=''; fogUpdate(el); if(!animate) mqInit(el);
 }
 
@@ -1054,7 +1054,9 @@ function ciOk(m, ci, no, at){
   if(state.screen==='p-done') HOOK['p-done']();
 }
 function ciFail(m, ci, text){
-  ci.status='fail'; ciSave();
+  ci.status='fail'; ci.tries=(ci.tries||0)+1; ciSave();
+  /* pill tự tắt sau 6s → tự thử lại ngầm sau 30s (tối đa 3 lần); lần cuối: thử lại khi check-out */
+  if(ci.tries<=3) setTimeout(function(){ var c=ciFor(m.name); if(c && c.status==='fail' && navigator.onLine!==false && state.pin) sendCheckin(findClient(m.name)||m); }, 30000);
   notify(text+' · '+firstName(m.name), {err:true, action:{label:'Thử lại', fn:function(){ sendCheckin(findClient(m.name)||m); }}});
 }
 /* chưa check-in được → thử lại tự động khi check-out */
@@ -1226,7 +1228,12 @@ function Loop(host, p, o){
   L.layout=function(){
     ring.size(); var rr=root.getBoundingClientRect();
     ring.cx=rr.width/2;
-    if(o.half){ ring.cy=rr.height/2+14; ring.h=162; var mid=q('.lp .mid'), top=Math.round((mid.offsetTop+root.clientHeight-28)/2-44.5); root.querySelectorAll('.clock').forEach(function(c){ c.style.top=top+'px'; }); }
+    if(o.half){
+      /* nửa màn: mọi thứ (vành, reps×kg, đồng hồ) căn giữa vùng trống giữa khối đỉnh và đáy → đúng tâm ở mọi cỡ máy */
+      var mid=q('.lp .mid'), free=root.clientHeight-28-mid.offsetTop, cy=mid.offsetTop+free/2;
+      ring.cy=cy; ring.h=Math.min(162, Math.round(free*.86)); setup.style.top=Math.round(cy)+'px'; root.classList.toggle('tight', free<230);
+      var top=Math.round(cy-44.5); root.querySelectorAll('.clock').forEach(function(c){ c.style.top=top+'px'; });
+    }
     else { ring.cy=rr.height/2+16; ring.h=324; }
     ring.cy=Math.round(ring.cy);
   };
@@ -1398,14 +1405,21 @@ HOOK['p-summary']=function(){
   $('sm-go').textContent= state.sumIdx<s.people.length-1 ? 'Tiếp theo' : 'Xác nhận';
   $('sm-scroll').scrollTop=0;
 };
-function summaryBack(){ if(state.sumIdx>0){ state.sumIdx--; go('p-summary','back'); } else go('p-loop','back'); }
+/* Quay lại người trước: rút BÀI/CHECKOUT của người đó khỏi hàng đợi (đang giữ, chưa gửi) để không gửi hai lần */
+function summaryBack(){
+  if(state.sumIdx>0){ state.sumIdx--; var s=state.session, prev=s.people[state.sumIdx]; (prev.evIds||[]).forEach(unqueue); prev.evIds=[]; s.plan.forEach(function(n){ var e=prev.ex[n]; if(e) delete e.sent; }); saveSession(); go('p-summary','back'); }
+  else go('p-loop','back');
+}
 function summaryNext(){
   var s=state.session, p=s.people[state.sumIdx]; p.note=($('sm-note').value||'').trim();
-  release();
-  s.plan.forEach(function(n){ var e=p.ex[n]; if(!e||!e.sets.length||e.sent) return; e.sent=1; enqueue({type:'BÀI', name:p.name, session:p.no, plan:exPart(n), ex:n, set:e.sets.length, ok:e.sets.filter(function(x){return x[2]}).length, main:0}); });
-  enqueue({type:'CHECKOUT', name:p.name, session:p.no, plan:'', ex:'', form:p.form||null, note:p.note});
+  /* SET của người này nhả ngay; BÀI/CHECKOUT giữ (hold) tới khi xác nhận người cuối — quay lại được */
+  s.plan.forEach(function(n){ var e=p.ex[n]; if(e) e.sets.forEach(function(st){ if(st[3]) release(st[3]); }); });
+  p.evIds=[];
+  s.plan.forEach(function(n){ var e=p.ex[n]; if(!e||!e.sets.length||e.sent) return; e.sent=1; p.evIds.push(enqueue({type:'BÀI', name:p.name, session:p.no, plan:exPart(n), ex:n, set:e.sets.length, ok:e.sets.filter(function(x){return x[2]}).length, main:0}, true).id); });
+  p.evIds.push(enqueue({type:'CHECKOUT', name:p.name, session:p.no, plan:'', ex:'', form:p.form||null, note:p.note}, true).id);
   p.okDone=true; p.signedAt=nowHM(); saveSession();
   if(state.sumIdx<s.people.length-1){ state.sumIdx++; go('p-summary','fwd'); return; }
+  release();
   retryFailedCheckins();
   state.lastDone=s; state.session=null; saveSession();
   go('p-done','fwd');
