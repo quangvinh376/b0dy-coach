@@ -7,7 +7,7 @@
    ===================================================================== */
 'use strict';
 var $=function(id){ return document.getElementById(id); };
-var APP_VER='v2.2.0';
+var APP_VER='v2.3.0';
 
 /* ---------------- tiện ích ---------------- */
 function isoToday(d){ d=d||new Date(); return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2); }
@@ -327,7 +327,8 @@ function demoDb(){
   for(var i=1;i<=31;i++){ var iso=d0+'-'+pad2(i); if(iso>TODAY_ISO) break; if(i%7!==0) days[iso]=2+((i*7)%6); }
   var hist={}; hist[D[0].name]={'Lat Pulldown (Wide Pronated Grip)':[{d:'2026-08-25',kg:40,rep:12,ok:1},{d:'2026-09-08',kg:40,rep:12,ok:1},{d:'2026-09-22',kg:40,rep:12,ok:1}],'Seated Cable Row (Close Neutral Grip)':[{d:'2026-09-08',kg:55,rep:10,ok:1},{d:'2026-09-22',kg:55,rep:10,ok:0}]};
   var per={}; D.forEach(function(c,i){ per[c.name]={m:[12,11,9,7,0,3,0][i], last:['2026-09-16','2026-09-22','2026-09-20','2026-09-19','','2026-09-21',''][i]}; });
-  DEMO_DB={clients:D, checked:{}, at:{}, log:[], stats:{ok:true, month:d0, days:days, perClient:per, com:{month:d0,total:9769250}, hist:hist}};
+  var ci={checked:{}, at:{}}; try{ ci=JSON.parse(SES('demo_ci')||'null')||ci; }catch(e){}   /* demo: check-in hôm nay giữ qua reload (như máy chủ thật) */
+  DEMO_DB={clients:D, checked:ci.checked||{}, at:ci.at||{}, log:[], stats:{ok:true, month:d0, days:days, perClient:per, com:{month:d0,total:9769250}, hist:hist}};
   return DEMO_DB;
 }
 function demoApi(body){
@@ -342,7 +343,7 @@ function demoApi(body){
     if(body.action==='stats'){ var st=JSON.parse(JSON.stringify(db.stats)); var t=0; Object.keys(st.days).forEach(function(k){ t+=st.days[k]; }); st.monthTotal=t; return res(st); }
     if(body.action==='checkin_coach'){ var c=db.clients.filter(function(x){return x.name===body.name})[0]; if(!c) return res({ok:false,error:'khong_phai_khach_cua_ban'});
       if(db.checked[c.name]===isoToday()) return res({ok:false,error:'da_checkin',at:db.at[c.name]});
-      db.checked[c.name]=isoToday(); db.at[c.name]=nowHM(); c.done++; c.left--; return res({ok:true,row:0,member:{name:c.name,done:c.done,total:c.total,left:c.left,coach:c.coach},coach:'Quyết Hán',at:db.at[c.name]}); }
+      db.checked[c.name]=isoToday(); db.at[c.name]=nowHM(); c.done++; c.left--; SES('demo_ci', JSON.stringify({checked:db.checked, at:db.at})); return res({ok:true,row:0,member:{name:c.name,done:c.done,total:c.total,left:c.left,coach:c.coach},coach:'Quyết Hán',at:db.at[c.name]}); }
     if(body.action==='log'){ var n=0; (body.events||[]).forEach(function(e){ if(db.log.some(function(x){return x.id===e.id})) return; db.log.push(e); n++;
         var c=db.clients.filter(function(x){return x.name===e.name})[0]; if(!c) return; var sn=c.snap;
         if(e.type==='ĐO'){ var m=sn.measures.filter(function(x){return x.d===e.date})[0]; if(!m){ m={d:e.date}; sn.measures.push(m); } m[e.metric]=e.val; }
@@ -1067,7 +1068,7 @@ function doCheckin(){
   state.ciBusy=true; var btn=$('cf-go'); btn.classList.add('off'); notify('Đang check-in', {spin:true, ms:40000});
   Promise.all(todo.map(function(n){ return sendCheckin(findClient(n), todo.length>1); })).then(function(rs){
     state.ciBusy=false; btn.classList.remove('off');
-    if(rs.every(Boolean) && state.screen==='p-confirm'){ hidePill(); startSession(names); }
+    if(rs.every(Boolean) && state.screen==='p-confirm') startSession(names);
   });
 }
 function startSession(names){

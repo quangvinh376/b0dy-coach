@@ -16,8 +16,9 @@ function note(msg){ CUR.notes.push(msg); }
 function near(a, b, tol){ return Math.abs(a-b)<=tol; }
 async function shot(page, name){ try{ await page.screenshot({path:path.join(OUT, name+'.png')}); }catch(e){} }
 async function run(id, name, fn){
+  if(process.env.ONLY && process.env.ONLY.split(',').indexOf(id)<0) return;
   CUR={id:id, name:name, fails:[], notes:[]}; RES.push(CUR);
-  try{ await fn(); }catch(e){ CUR.fails.push('EXC '+String(e&&e.message||e).split('\n').slice(0,3).join(' | ')); }
+  try{ await fn(); }catch(e){ CUR.fails.push('EXC '+String(e&&e.message||e).split('\n').slice(0,9).join(' | ')); }
   if(CUR.fails.length && P) await shot(P, id+'-fail');
   console.log((CUR.fails.length?'FAIL ':'PASS ')+id+' '+name+(CUR.fails.length?'\n   - '+CUR.fails.join('\n   - '):'')+(CUR.notes.length?'\n   · '+CUR.notes.join('\n   · '):''));
 }
@@ -193,17 +194,24 @@ var CLIP={hard:[], ell:[]};
     await page.fill('#cl-q','zzz'); await h.wait(200); check((await h.txt('#cl-list .empty'))==='KHÔNG TÌM THẤY TÊN NÀY', 'không tìm thấy');
     await page.fill('#cl-q',''); await h.wait(200); check((await h.count('#cl-list .row'))===act+dn, 'xoá tìm → đủ');
     await page.click('#p-clients .nav .ghost:nth-child(1)'); await h.waitScreen('p-home'); await h.wait(900);
-    await page.click('#h-tiles .tile:nth-child(2)'); await h.waitScreen('p-clients'); await h.wait(700);
+    /* ô "Khách tập chậm" → window trượt từ dưới (#csheet), không rời trang chủ */
+    await page.click('#h-tiles .tile:nth-child(2)'); await page.waitForSelector('#csheet.on'); await h.wait(700);
+    check((await h.screen())==='p-home' && await h.has('#cs-dim','on'), 'vẫn ở trang chủ, dimmer bật');
     var slow=await h.ev(function(){ return slowClients().map(function(c){return c.name}); });
-    secs=await h.ev(function(){ return [].map.call(document.querySelectorAll('#cl-list .sec'), function(d){ return d.textContent; }); });
-    names=await h.ev(function(){ return [].map.call(document.querySelectorAll('#cl-list .row .nm'), function(e){ return e.textContent; }); });
-    check(secs[0]==='KHÁCH TẬP CHẬM · '+slow.length && names.join()===slow.join(), 'lọc tập chậm: '+secs.join('|')+' / '+names.join(','));
-    check((await h.ev(function(){ return [].every.call(document.querySelectorAll('#cl-list .row .lab'), function(l){ return !!l.querySelector('.ic.slow') && !/TẬP CHẬM/.test(l.textContent); }); })), 'meta có icon chậm tiến độ (không chữ)');
-    await page.click('#p-clients .nav .ghost:nth-child(1)'); await h.waitScreen('p-home'); await h.wait(900);
-    await page.click('#h-tiles .tile:nth-child(3)'); await h.waitScreen('p-clients'); await h.wait(700);
-    check((await h.count('#cl-list .row'))===0 && (await h.txt('#cl-list .empty'))==='CHƯA CÓ KHÁCH HÔM NAY', 'khách hôm nay (chưa ai): '+(await h.txt('#cl-list')));
-    note('Ô "Khách hôm nay"=0 mở danh sách trống với chữ "CHƯA CÓ KHÁCH" (không có tiêu đề nhóm) — cân nhắc "CHƯA CÓ KHÁCH HÔM NAY"');
-    await page.click('#p-clients .nav .ghost:nth-child(1)'); await h.waitScreen('p-home'); await h.wait(900);
+    secs=await h.ev(function(){ return [].map.call(document.querySelectorAll('#cs-list .sec'), function(d){ return d.textContent; }); });
+    names=await h.ev(function(){ return [].map.call(document.querySelectorAll('#cs-list .row .nm'), function(e){ return e.textContent; }); });
+    check(secs[0]==='KHÁCH TẬP CHẬM · '+slow.length && names.join()===slow.join(), 'window tập chậm: '+secs.join('|')+' / '+names.join(','));
+    check((await h.ev(function(){ return [].every.call(document.querySelectorAll('#cs-list .row .lab'), function(l){ return !/TẬP CHẬM/.test(l.textContent) && !!l.querySelector('.ic.slow'); }); })), 'meta có icon xu hướng, không chữ TẬP CHẬM');
+    await page.fill('#cs-q', 'zzz'); await h.wait(200); check((await h.count('#cs-list .row'))===0 && (await h.txt('#cs-list .empty'))==='KHÔNG TÌM THẤY TÊN NÀY', 'tìm trong window: không thấy');
+    await page.fill('#cs-q', ''); await h.wait(200); check((await h.count('#cs-list .row'))===slow.length, 'xoá tìm → đủ');
+    await page.click('#cs-list .row'); await h.waitScreen('p-profile'); await h.wait(800);
+    check(!(await h.has('#csheet','on')) && !(await h.has('#cs-dim','on')), 'chạm dòng → window đóng');
+    check((await h.txt('#pf-name'))===(await h.ev(function(){ return firstName(slowClients()[0].name); })), 'mở hồ sơ khách tập chậm: '+(await h.txt('#pf-name')));
+    await page.click('#p-profile .nav .ghost'); await h.waitScreen('p-home'); await h.wait(900);
+    /* ô "Khách hôm nay" = 0 → window rỗng */
+    await page.click('#h-tiles .tile:nth-child(3)'); await page.waitForSelector('#csheet.on'); await h.wait(700);
+    check((await h.count('#cs-list .row'))===0 && (await h.txt('#cs-list .empty'))==='CHƯA CÓ KHÁCH HÔM NAY', 'khách hôm nay (chưa ai): '+(await h.txt('#cs-list')));
+    await page.click('#cs-go'); await h.wait(500); check(!(await h.has('#csheet','on')) && (await h.screen())==='p-home', 'Đóng → window tắt, vẫn trang chủ');
   });
 
   await run('E', 'Hồ sơ → Đo lường (mở/đóng, nhập số đo dấu phẩy, lưu), Đặt mục tiêu (bánh xe), Hiệu suất tập', async function(){
@@ -467,10 +475,10 @@ var CLIP={hard:[], ell:[]};
     await h.clip('done');
     await page.click('#p-done .cta'); await h.waitScreen('p-home'); await h.wait(1500);
     check((await h.txt('#h-tiles .tile:nth-child(3) .tv'))==='1', 'ô Khách hôm nay = 1: '+(await h.txt('#h-tiles .tile:nth-child(3) .tv')));
-    await page.click('#h-tiles .tile:nth-child(3)'); await h.waitScreen('p-clients'); await h.wait(700);
-    check((await h.txt('#cl-list .sec'))==='KHÁCH HÔM NAY · 1' && (await h.count('#cl-list .sec'))===1 && (await h.txt('#cl-list .row .nm'))==='Đỗ Thành Công', 'lọc hôm nay (khách vừa hết gói vẫn ở nhóm hôm nay): '+(await h.txt('#cl-list .sec')));
-    check(/ĐÃ HẾT/.test(await h.txt('#cl-list .row .lab')), 'meta dòng vẫn báo hết gói: '+(await h.txt('#cl-list .row .lab')));
-    await page.click('#p-clients .nav .ghost:nth-child(1)'); await h.waitScreen('p-home'); await h.wait(900);
+    await page.click('#h-tiles .tile:nth-child(3)'); await page.waitForSelector('#csheet.on'); await h.wait(700);
+    check((await h.txt('#cs-list .sec'))==='KHÁCH HÔM NAY · 1' && (await h.count('#cs-list .sec'))===1 && (await h.txt('#cs-list .row .nm'))==='Đỗ Thành Công', 'window hôm nay (khách vừa hết gói vẫn ở nhóm hôm nay): '+(await h.txt('#cs-list .sec')));
+    check(/^ĐÃ TẬP HÔM NAY · \d\d:\d\d$/.test(await h.txt('#cs-list .row .lab')), 'meta dòng: giờ đã tập: '+(await h.txt('#cs-list .row .lab')));
+    await page.click('#cs-go'); await h.wait(500); check(!(await h.has('#csheet','on')) && (await h.screen())==='p-home', 'Đóng window');
     /* khách hết gói không còn trong danh sách chọn khách */
     await page.click('#h-go'); await h.waitScreen('p-pick'); await h.wait(600);
     check(!(await h.count('#pk-list .row[data-name="Đỗ Thành Công"]')) && (await h.count('#pk-list .sec'))===2, 'khách dùng hết gói không còn trong chọn khách');
@@ -518,22 +526,22 @@ var CLIP={hard:[], ell:[]};
     /* luồng độc lập */
     await h.ev(function(){ setFocus(0); }); await page.click('#loop-host .loop:nth-child(1) .c1'); await h.wait(600);
     check((await h.ev(function(){ return state.session.people.map(function(p){return p.phase}).join(); }))==='active,setup', 'nửa 1 tập, nửa 2 thiết lập');
-    await h.ev(function(){ setFocus(1); }); await h.wait(300); await page.click('#loop-host .loop:nth-child(2) .c1'); await h.wait(500); await page.click('#loop-host .loop:nth-child(2) .j1'); await h.wait(900);
+    await h.ev(function(){ setFocus(1); }); await h.wait(300); await page.click('#loop-host .loop:nth-child(2) .c1'); await h.wait(500); await h.ev(function(){ setFocus(1); }); await h.wait(300); await page.click('#loop-host .loop:nth-child(2) .j1'); await h.wait(900);
     check((await h.ev(function(){ return state.session.people.map(function(p){return p.phase}).join(); }))==='active,rest-setup' && (await h.has('#loop-host .loop:nth-child(2)','acid')), 'nửa 2 acid, nửa 1 vẫn tập');
     sep=await h.ev(function(){ return getComputedStyle(document.querySelector('#loop-host .loop:nth-child(2)'),'::before').backgroundColor; }); check(sep==='rgba(10, 10, 10, 0.2)', 'vạch ngăn đổi màu khi nửa dưới Acid: '+sep);
     check((await h.ev(function(){ return document.querySelector('meta[name=theme-color]').getAttribute('content'); }))==='#0A0A0A', 'theme-color theo nửa trên (Ink)');
-    await page.click('#loop-host .loop:nth-child(2) .c1'); await h.wait(700);
+    await h.ev(function(){ setFocus(1); }); await h.wait(300); await page.click('#loop-host .loop:nth-child(2) .c1'); await h.wait(700);
     check((await h.ev(function(){ return state.session.people[1].phase; }))==='rest', 'nửa 2 nghỉ');
     var ck=await h.rect('#loop-host .loop:nth-child(2) > .clock'), hd=await h.rect('#loop-host .loop:nth-child(2) .lp .head'), nv=await h.rect('#loop-host .loop:nth-child(2) .lp .nav');
-    check(ck.y>=hd.b && ck.b<=nv.y, 'đồng hồ nửa 2 giữa vùng trống: clock '+ck.y.toFixed(0)+'–'+ck.b.toFixed(0)+' head.b '+hd.b.toFixed(0)+' nav.y '+nv.y.toFixed(0));
+    check(ck.y>=hd.b && ck.b<=r2.b-27, 'đồng hồ nửa 2 giữa vùng trống: clock '+ck.y.toFixed(0)+'–'+ck.b.toFixed(0)+' head.b '+hd.b.toFixed(0)+' đáy '+(r2.b-28).toFixed(0));
     var mid=(hd.b+(r2.b-28))/2; check(near(ck.cy, mid, 3), 'đồng hồ giữa đáy head và mép đệm đáy: '+ck.cy.toFixed(1)+' vs '+mid.toFixed(1));
     var ik=await h.rect('#loop-host .loop:nth-child(2) .ink .clock'); check(near(ik.y, ck.y, 1), 'đồng hồ lớp Ink trùng: '+ik.y+' vs '+ck.y);
     check((await h.ev(function(){ return LOOPS[0].p.phase+'|'+document.querySelector('#loop-host .loop:nth-child(1) .lp .head .sub').textContent; }))==='active|Đang tập set 1', 'nửa 1 không bị ảnh hưởng');
     await h.clip('loop-two-rest');
-    await h.ev(function(){ setFocus(0); }); await page.click('#loop-host .loop:nth-child(1) .j1'); await h.wait(900); await page.click('#loop-host .loop:nth-child(1) .c1'); await h.wait(700);
+    await h.ev(function(){ setFocus(0); }); await h.wait(300); await page.click('#loop-host .loop:nth-child(1) .j1'); await h.wait(900); await h.ev(function(){ setFocus(0); }); await h.wait(300); await page.click('#loop-host .loop:nth-child(1) .c1'); await h.wait(700);
     check((await h.ev(function(){ return state.session.people.map(function(p){return p.phase}).join(); }))==='rest,rest', 'cả hai nghỉ');
     check((await h.ev(function(){ return document.querySelector('meta[name=theme-color]').getAttribute('content'); }))==='#D4FF00', 'theme-color Acid khi nửa trên nghỉ');
-    await page.click('#loop-host .loop:nth-child(1) .g1'); await h.wait(450); check(await h.has('#loop-host .loop:nth-child(1) .film','on'), 'menu nửa 1');
+    await h.ev(function(){ setFocus(0); }); await h.wait(300); await page.click('#loop-host .loop:nth-child(1) .g1'); await h.wait(450); check(await h.has('#loop-host .loop:nth-child(1) .film','on'), 'menu nửa 1');
     await page.click('#loop-host .loop:nth-child(1) .fend'); await h.waitScreen('p-summary'); await h.wait(900);
     check((await h.txt('#sm-who'))==='Doãn Quang' && (await h.txt('#sm-go'))==='Tiếp theo' && (await h.txt('#sm-title'))==='Tổng kết buổi 15', 'tổng kết người 1: '+(await h.txt('#sm-who'))+' / '+(await h.txt('#sm-go')));
     await page.click('#sm-form button:nth-child(5)'); await page.fill('#sm-note','Người 1'); await page.click('#sm-go'); await h.waitScreen('p-summary'); await h.wait(900);
@@ -580,7 +588,7 @@ var CLIP={hard:[], ell:[]};
     await page.click('#h-go'); await h.waitScreen('p-loop'); await h.wait(1200);
     check((await h.txt('#loop-host .lp .head .sub'))==='Thiết lập set 2', 'tiếp tục → loop set 2');
     await h.finishSession();
-    check((await h.txt('#h-go'))==='Vào buổi tập' && (await h.txt('#h-tiles .tile:nth-child(3) .tv'))==='4', 'kết thúc: CTA Vào buổi tập, khách hôm nay 4');
+    check((await h.txt('#h-go'))==='Vào buổi tập' && (await h.txt('#h-tiles .tile:nth-child(3) .tv'))==='4', 'kết thúc: CTA Vào buổi tập, khách hôm nay 4: '+(await h.txt('#h-go'))+' / '+(await h.txt('#h-tiles .tile:nth-child(3) .tv'))+' / checked='+(await h.ev(function(){ return state.clients.filter(function(c){return c.checked}).map(function(c){return c.name}).join('|')+' ci='+Object.keys(CI).filter(function(k){return CI[k].status==='ok'&&CI[k].day===TODAY_ISO}).join('|'); })));
   });
 
   await ctx.close();
