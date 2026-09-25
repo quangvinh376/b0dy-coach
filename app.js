@@ -428,7 +428,7 @@ function hidePill(){ clearTimeout(PILL.t); var el=$('pill'); el.classList.remove
 var hideIsl=hidePill;
 /* vuốt lên để tắt pill (kéo theo ngón tay, nhả >18px hoặc nhanh → bay lên) */
 (function(){ var el=$('pill'), y=0, t0=0;
-  el.addEventListener('pointerdown', function(e){ PILL.y0=e.clientY; y=0; t0=performance.now(); PILL.drag=false; el.setPointerCapture(e.pointerId); }, {passive:true});
+  el.addEventListener('pointerdown', function(e){ PILL.y0=e.clientY; y=0; t0=performance.now(); PILL.drag=false; if(e.target.closest && e.target.closest('.act')) return; /* nút hành động: không bắt pointer — bắt thì click bị chuyển sang pill, fn không chạy */ el.setPointerCapture(e.pointerId); }, {passive:true});
   el.addEventListener('pointermove', function(e){ if(!el.hasPointerCapture || !el.hasPointerCapture(e.pointerId)) return; y=Math.min(0, e.clientY-PILL.y0); if(y<-3) PILL.drag=true; if(PILL.drag){ el.classList.add('drag'); el.style.transform='translate(-50%,'+y+'px)'; } }, {passive:true});
   function end(e){ if(!PILL.drag){ el.classList.remove('drag'); el.style.transform=''; return; } var v=-y/Math.max(1,performance.now()-t0); el.classList.remove('drag');
     if(y<-18 || v>.5){ hidePill(); } else { el.style.transform=''; } setTimeout(function(){ PILL.drag=false; }, 0); }
@@ -740,6 +740,7 @@ function renderClients(animate){
   if(f==='slow') all=all.filter(function(m){ return slowN[m.name]; });
   if(f==='today') all=all.filter(function(m){ return m.checked || (ciFor(m.name)&&ciFor(m.name).status==='ok'); });
   var act=all.filter(function(m){ return m.left>0; }), done=all.filter(function(m){ return m.left<=0; });
+  if(f==='today'){ act=all; done=[]; }   /* lọc "Khách hôm nay": khách vừa dùng hết gói vẫn thuộc nhóm hôm nay, không rơi sang "ĐÃ HẾT GÓI" */
   function sec(t, list, first){
     if(!list.length) return;
     var d=document.createElement('div'); d.className='lab sec'+(first?' first':''); d.textContent=t+' · '+list.length; el.appendChild(d);
@@ -1144,8 +1145,9 @@ function renderLib(animate){
 })();
 function startLoop(){
   var s=state.session; if(!s||!s.plan.length) return;
-  closeLib(true); s.started=1; if(!s.startedAt) s.startedAt=Date.now();
-  s.people.forEach(function(p){ if(p.cur>=s.plan.length) p.cur=0; primePerson(p); });
+  closeLib(true); var first=!s.started; s.started=1; if(!s.startedAt) s.startedAt=Date.now();
+  /* lần bắt đầu đầu tiên luôn vào bài 01 (kéo thả đổi chỗ trước khi bắt đầu đã dời p.cur theo bài cũ) */
+  s.people.forEach(function(p){ if(first || p.cur>=s.plan.length) p.cur=0; primePerson(p); });
   saveSession(); go('p-loop','fwd');
 }
 /* reps/kg mặc định cho bài đang chọn: set gần nhất trong buổi → lần trước của khách → 10 × 20 */
