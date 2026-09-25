@@ -84,13 +84,12 @@
   <div class="body st">
     <div class="lab" style="margin-top:32px">IP CỦA THIẾT BỊ NÀY</div>
     <div class="ipval" id="am-ip">—</div>
-    <div class="lab" id="am-note" style="margin-top:14px">CẬP NHẬT ĐỂ LẤY IP NÀY LÀM IP CỦA PHÒNG</div>
-    <div class="lab" id="am-test" style="margin-top:32px">IP TEST ĐÃ THÊM · —</div>
+    <div class="lab" id="am-note" style="margin-top:32px">IP ĐƯỢC CHECK-IN · 0/2</div>
+    <div class="rows" id="am-list"></div>
   </div>
   <div class="nav">
     <button class="ghost" onclick="adminDone()" aria-label="Xong"><svg class="ic s24"><use href="#i-back"/></svg></button>
-    <button class="cta paper" onclick="addTestIp()">Thêm IP test</button>
-    <button class="cta" onclick="registerIp()">Đặt IP phòng</button>
+    <button class="cta" id="am-add" onclick="addIp()">Thêm IP</button>
   </div>
 </section>
 

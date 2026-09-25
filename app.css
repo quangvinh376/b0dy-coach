@@ -607,6 +607,11 @@ svg{display:block}
 
 /* ============ ADMIN ============ */
 .ipval{font-family:var(--mono);font-size:34px;letter-spacing:-.01em;margin-top:14px;font-variant-numeric:tabular-nums}
+#am-list{margin-top:8px}
+#am-list .row .nm.mono{font-family:var(--mono);font-size:22px;letter-spacing:-.44px;font-variant-numeric:tabular-nums}
+#am-list .row.off{opacity:.4}
+#am-list .row .ghost.x{width:40px;height:40px;border-radius:20px}
+#am-list .row .ghost.x .ic{width:16px;height:16px;color:var(--paper)}
 
 /* ============ giảm chuyển động = nhẹ hơn, không bằng không ============ */
 @media (prefers-reduced-motion:reduce){
