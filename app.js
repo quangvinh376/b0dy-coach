@@ -7,7 +7,7 @@
    ===================================================================== */
 'use strict';
 var $=function(id){ return document.getElementById(id); };
-var APP_VER='v2.4.1';
+var APP_VER='v2.4.2';
 
 /* ---------------- tiện ích ---------------- */
 function isoToday(d){ d=d||new Date(); return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2); }
@@ -490,18 +490,22 @@ function countUp(el, to, dur, delay){
 
 /* ---- PILL THÔNG BÁO: pill nhỏ đẩy từ đỉnh xuống, lớp phủ, không đụng layout.
    icon + chữ (số tô Acid) · lỗi = icon/số đỏ + nút hành động · o: {err, sticky, ms, icon, spin, action:{label,fn}} ---- */
-var PILL={t:0, y0:0, drag:false};
+var PILL={t:0, h:0, s:0, y0:0, drag:false};
 function notify(text, o){
-  o=o||{}; var el=$('pill'); clearTimeout(PILL.t);
+  o=o||{}; var el=$('pill'); clearTimeout(PILL.t); clearTimeout(PILL.h); clearTimeout(PILL.s); el.hidden=false;
   var was=el.classList.contains('on'), onAcid=(state.screen==='p-loop' && LOOPS[0] && LOOPS[0].root.classList.contains('acid'));
   el.className='pill'+(was?' on':'')+(o.err?' err':'')+(onAcid?' onacid':'');
   el.innerHTML=(o.spin?'<i class="spin"></i>':ico(o.icon||(o.err?'i-x':'i-check')))+'<span class="tx">'+esc(text).replace(/(\d[\d:,\.\/×]*)/g,'<span class="n">$1</span>')+'</span>'+(o.action?'<button class="act">'+esc(o.action.label)+'</button>':'');
   var act=el.querySelector('.act'), ep=AUTH_EP; if(act) act.onclick=function(e){ e.stopPropagation(); hidePill(); if(ep===AUTH_EP) o.action.fn(); };
   el.onclick=function(){ if(!PILL.drag) hidePill(); };
   if(!was){ void el.offsetWidth; el.classList.add('on'); }
+  PILL.s=setTimeout(syncTheme, 420);            /* pill vừa đi qua điểm lấy mẫu màu thanh (mép trên) → cho WebKit lấy mẫu lại */
   PILL.t=setTimeout(function(){ hidePill(); }, o.ms||(o.err||o.sticky?6000:2400));
 }
-function hidePill(){ clearTimeout(PILL.t); var el=$('pill'); el.classList.remove('on','drag'); el.style.transform=''; }
+/* Safari 26 lấy màu thanh bằng hit-test ở giữa mép trên (y = 4px): pill ẩn bằng opacity/transform (translateY −16px) vẫn "chạm" được
+   và che dải .wkedge → ẩn hẳn (display:none) sau khi mờ xong rồi tính lại màu mép. */
+function hidePill(){ clearTimeout(PILL.t); clearTimeout(PILL.h); var el=$('pill'); el.classList.remove('on','drag'); el.style.transform='';
+  PILL.h=setTimeout(function(){ if(!el.classList.contains('on')){ el.hidden=true; syncTheme(); } }, 240); }
 var hideIsl=hidePill;
 /* vuốt lên để tắt pill (kéo theo ngón tay, nhả >18px hoặc nhanh → bay lên) */
 (function(){ var el=$('pill'), y=0, t0=0;
@@ -920,8 +924,8 @@ function csMeta(m, kind){
   if(kind==='today'){ var ci=ciFor(m.name), at=(ci && ci.status==='ok' && ci.at) || m.signed || ''; return 'ĐÃ TẬP HÔM NAY'+(at?' · '+at:''); }
   return clientMeta(m)+' <svg class="ic s13 slow"><use href="#t-trend"/></svg>';
 }
-function openClientSheet(kind){ CS_KIND=kind; CS_OPEN=true; $('cs-q').value=''; renderClientSheet(true); $('cs-dim').classList.add('on'); $('csheet').classList.add('on'); }
-function closeClientSheet(silent){ if(!CS_OPEN) return; CS_OPEN=false; $('cs-dim').classList.remove('on'); $('csheet').classList.remove('on'); $('csheet').style.transform=''; }
+function openClientSheet(kind){ CS_KIND=kind; CS_OPEN=true; $('cs-q').value=''; renderClientSheet(true); $('cs-dim').classList.add('on'); $('csheet').classList.add('on'); syncTheme(); }
+function closeClientSheet(silent){ if(!CS_OPEN) return; CS_OPEN=false; $('cs-dim').classList.remove('on'); $('csheet').classList.remove('on'); $('csheet').style.transform=''; setTimeout(syncTheme, 380); }
 function renderClientSheet(animate){
   var kind=CS_KIND, q=norm($('cs-q').value), el=$('cs-list'), title=kind==='slow'?'KHÁCH TẬP CHẬM':'KHÁCH HÔM NAY'; el.innerHTML=''; var i=0;
   var all=csClients(kind), list=all.filter(function(m){ return !q || norm(m.name).indexOf(q)>=0; });
@@ -1432,8 +1436,8 @@ function dragify(t){
 }
 /* window thư viện bài */
 var LIB_OPEN=false;
-function openLib(){ LIB_OPEN=true; $('lib-q').value=''; renderLib(true); $('lib-dim').classList.add('on'); $('lib').classList.add('on'); }
-function closeLib(silent){ if(!LIB_OPEN) return; LIB_OPEN=false; $('lib-dim').classList.remove('on'); $('lib').classList.remove('on'); if(!silent && state.session && state.screen==='p-plan') renderPlan(false); }
+function openLib(){ LIB_OPEN=true; $('lib-q').value=''; renderLib(true); $('lib-dim').classList.add('on'); $('lib').classList.add('on'); syncTheme(); }
+function closeLib(silent){ if(!LIB_OPEN) return; LIB_OPEN=false; $('lib-dim').classList.remove('on'); $('lib').classList.remove('on'); if(!silent && state.session && state.screen==='p-plan') renderPlan(false); setTimeout(syncTheme, 380); }
 function lastFor(name){ var s=state.session, p=s&&s.people[0], m=p&&findClient(p.name); return m&&m.last&&m.last[name]; }
 function renderLib(animate){
   var s=state.session, q=norm($('lib-q').value), el=$('lib-list'); el.innerHTML=''; var i=0, any=false;
@@ -1476,14 +1480,39 @@ function primePerson(p){
    5–9 — VÒNG LẶP SET (một Loop cho mỗi khách; 1:2 = hai nửa)
    ===================================================================== */
 var LOOPS=[], LOOP_RAF=0, LOOP_ON=false, CURVE='cubic-bezier(.22,.85,.22,1)', FOCUS=-1;
-/* thanh trạng thái iOS (theme-color) đi theo màu nền phần đỉnh: Acid khi nửa trên đang nghỉ.
-   v2.4 · nền gốc html/body (--bg) đi theo màu phần ĐÁY: Acid khi nửa dưới đã phủ Acid (và mực Ink chưa phủ kín).
-   iOS tô vùng web view không vẽ tới (nếu có, ví dụ dải đáy của lỗi viewport iOS 26) bằng màu nền gốc → màn nghỉ Acid luôn kín. */
+/* ---- Màu vùng dưới thanh trạng thái / thanh công cụ Safari (iOS 26+, Liquid Glass) — v2.4.2 ----
+   Safari 26 BỎ theme-color. Vùng dưới hai thanh được tô bằng màu WebKit tự lấy (LocalFrameView::fixedContainerEdges): hit-test tại
+   tâm mỗi mép, 4px vào trong → đi lên tổ tiên tới element position:fixed/sticky đầu tiên → lấy background-color phẳng đầu tiên gặp.
+   Container phủ kín viewport (body{position:fixed}) bị xếp loại "viewport-sized" → WebKit GIỮ MÀU ĐÃ LẤY LẦN ĐẦU (preferExistingColor),
+   vì thế đổi --bg / theme-color không đổi được thanh. Hai dải #wk-t / #wk-b (.wkedge: fixed, cao 12px) là container "thường" nên màu
+   được đọc lại ngay khi đổi. Màu dải = màu app đang hiện ở mép đó: mép trên theo Loop đầu (Acid khi nền đã Acid và mực chưa dâng),
+   mép dưới theo Loop cuối (Acid tới khi mực phủ kín); màng .film pha 93 % lên trên; sheet mở → mép dưới = Tile.
+   --bg (nền html/body) vẫn theo mép dưới: màu dự phòng của Safari khi không tìm thấy container (underPageBackgroundColor) và cho
+   bản PWA cài cũ. theme-color giữ nguyên luật cũ cho iOS ≤ 18: Acid khi nửa trên đang nghỉ (.acid). */
+var EDGE_INK='#0A0A0A', EDGE_ACID='#D4FF00', EDGE_TILE='#222222';
+function edgeMix(over, a, under){ return [0,1,2].map(function(i){ return Math.round(over[i]*a+under[i]*(1-a)); }); }
+function edgeHex(c){ return '#'+c.map(function(v){ return (v<16?'0':'')+v.toString(16).toUpperCase(); }).join(''); }
+function edgeOfLoop(root, side){
+  var bga=root.classList.contains('bga');
+  var acid= side==='t' ? (bga && !root.classList.contains('inkon')) : (bga && !root.classList.contains('inkfull'));
+  var c= acid ? [212,255,0] : [10,10,10];
+  var f=root.querySelector('.film'); if(f && f.classList.contains('on')) c=edgeMix(f.classList.contains('dark')?[10,10,10]:[212,255,0], .93, c);
+  return edgeHex(c);
+}
 function syncTheme(){
   var loop=(state.screen==='p-loop'), top=loop && LOOPS[0] && LOOPS[0].root, bot=loop && LOOPS.length && LOOPS[LOOPS.length-1].root;
-  var acid=!!(top && top.classList.contains('acid')); var m=document.querySelector('meta[name=theme-color]'); var c=acid?'#D4FF00':'#0A0A0A'; if(m && m.getAttribute('content')!==c) m.setAttribute('content', c);
-  var bg=(bot && bot.classList.contains('bga') && !bot.classList.contains('inkfull')) ? '#D4FF00' : '#0A0A0A';
-  if(syncTheme._bg!==bg){ syncTheme._bg=bg; document.documentElement.style.setProperty('--bg', bg); }
+  var ct= top ? edgeOfLoop(top,'t') : EDGE_INK, cb= bot ? edgeOfLoop(bot,'b') : EDGE_INK;
+  if(document.querySelector('.sheet.on')) cb=EDGE_TILE;                           /* sheet (Tile) phủ mép dưới; sheet chỉ mở trên trang Ink */
+  var st=document.documentElement.style;
+  if(syncTheme._t!==ct){ syncTheme._t=ct; st.setProperty('--edge-t', ct); }
+  if(syncTheme._b!==cb){ syncTheme._b=cb; st.setProperty('--edge-b', cb); }
+  var bg=(bot && bot.classList.contains('bga') && !bot.classList.contains('inkfull')) ? EDGE_ACID : EDGE_INK;
+  if(syncTheme._bg!==bg){ syncTheme._bg=bg; st.setProperty('--bg', bg); }
+  var tc=(top && top.classList.contains('acid')) ? EDGE_ACID : EDGE_INK;
+  var m=document.querySelector('meta[name=theme-color]'); if(m && m.getAttribute('content')!==tc) m.setAttribute('content', tc);
+  /* thêm/bớt một element fixed → WebKit bật cờ tính lại màu mép ở lần commit kế (didAddOrRemoveViewportConstrainedObjects):
+     bảo đảm lấy mẫu lại cả khi màu dải không đổi (ví dụ pill vừa ẩn hẳn khỏi điểm lấy mẫu) */
+  var k=$('wk-k'); if(k) k.hidden=!k.hidden;
 }
 /* 1:2 — chỉ một nửa được chọn: nửa đó hiện nút chức năng, nửa kia ẩn. Chạm lại nửa đang chọn (ngoài bánh xe/nút) → ẩn. */
 function setFocus(i){ FOCUS=i; LOOPS.forEach(function(l){ l.root.classList.toggle('ovl', l.idx===i); }); }
@@ -1581,7 +1610,7 @@ function Loop(host, p, o){
     g1.setAttribute('aria-label', ph==='rest-setup'?'Hoàn tác set':ph==='rest'?'Bước khác':'Quay lại');
     repsW.set(p.reps); kgW.set(p.kg); fReps.set(p.reps); fKg.set(p.kg); restW.set(p.restTotal); restW.render();
     if(ph==='rest'){ q('.ik1').textContent=setLabel(); q('.iks').textContent=restSub(); q('.ikt').textContent=mmss(restLeft()); }
-    if(ph!=='rest') root.classList.remove('inkd','inkfull');
+    if(ph!=='rest') root.classList.remove('inkd','inkfull','inkon');
     syncTheme();
     /* vành nhịp: thiết lập = chase Paper, lực hút 0, không Acid (Figma 478:398) · đang tập = chase đầy đủ */
     ring.tint='ink'; ring.calm=(ph==='setup'); ring.dot=(ph==='active'); ring.slow=1;
@@ -1673,12 +1702,12 @@ function Loop(host, p, o){
   }
   function openFilm(from){ if(filmOn()) return; clearTimeout(filmT); filmOrigin=from||c1;
     film.classList.add('notr'); film.classList.toggle('dark', p.phase==='rest' && restLeft()<p.restTotal*.3); void film.offsetWidth; film.classList.remove('notr');
-    renderFilm(); film.classList.add('on'); root.classList.add('filmon'); ctaText('Vào set mới');
+    renderFilm(); film.classList.add('on'); root.classList.add('filmon'); ctaText('Vào set mới'); setTimeout(syncTheme, 140);   /* màng mờ vào .28s: đổi màu thanh ở giữa quãng */
     if(!rm()) flyItems(filmOrigin, true);
   }
   function closeFilm(silent){ if(!filmOn()) return; clearTimeout(filmT);
     var items=rm()?[]:flyItems(filmOrigin||c1, false); root.classList.remove('filmon');
-    filmT=setTimeout(function(){ film.classList.remove('on'); items.forEach(function(el){ el.style.transition=''; el.style.transform=''; el.style.opacity=''; }); }, items.length?200:0);
+    filmT=setTimeout(function(){ film.classList.remove('on'); items.forEach(function(el){ el.style.transition=''; el.style.transform=''; el.style.opacity=''; }); setTimeout(syncTheme, 140); }, items.length?200:0);
     if(!silent && p.phase==='rest') ctaText('Nghỉ xong · kế tiếp');
   }
   function switchEx(i){
@@ -1729,6 +1758,7 @@ function Loop(host, p, o){
       var left=restLeft(), sec=Math.ceil(left);
       if(sec!==lastSec){ lastSec=sec; restW.render(); q('.ikt').textContent=mmss(left); if(left<=0 && subEl.textContent!=='Hết giờ nghỉ'){ subEl.textContent='Hết giờ nghỉ'; q('.iks').textContent='Hết giờ nghỉ'; if(navigator.vibrate) navigator.vibrate([8,60,8]); } }
       var fl=Math.max(0,Math.min(1,left/p.restTotal)); inkTo(fl); root.classList.toggle('inkd', fl<.5);
+      if((fl<1)!==root.classList.contains('inkon')){ root.classList.toggle('inkon', fl<1); syncTheme(); }         /* mực bắt đầu dâng từ mép trên → mép trên về Ink */
       if((fl<=0)!==root.classList.contains('inkfull')){ root.classList.toggle('inkfull', fl<=0); syncTheme(); }   /* mực phủ kín tới đáy → nền gốc về Ink */
     }
     ring.draw(now);

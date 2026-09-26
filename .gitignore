@@ -6,6 +6,7 @@ node_modules/
 test/out_v24/
 test/out_admin/
 test/out_edge/
+test/out_wkedge/
 test/uc/
 gas_live/
 lab/
