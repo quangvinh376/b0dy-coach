@@ -7,7 +7,7 @@
    ===================================================================== */
 'use strict';
 var $=function(id){ return document.getElementById(id); };
-var APP_VER='v2.3.4';
+var APP_VER='v2.4.0';
 
 /* ---------------- tiện ích ---------------- */
 function isoToday(d){ d=d||new Date(); return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2); }
@@ -167,6 +167,9 @@ var API='https://script.google.com/macros/s/AKfycbyyCRs0JkV1k8npUpprP44RN-rgNnag
 var API_WK='https://b0dy-kiosk-api.little-bonus-1d87.workers.dev/';
 var WK_ON={coach:1,log:1,checkin_coach:1}, WK_OFF={wk_unconfigured:1,wrong_ip:1,unknown_action:1,wk_no_sheet_coach:1}, WK_SAFE={coach:1,log:1};
 var DEMO=!API || /[?&]demo\b/.test(location.search);
+/* ADMIN (v2.4): PIN admin → "Admin": mọi khách của phòng, check-in không khoá IP, tab Cài đặt (IP phòng).
+   Cùng các màn và luồng của coach; api() đổi tên lệnh sang bản admin (backend Admin.gs, chỉ có ở Apps Script → không đi Worker). */
+var ADM_ACT={coach:'adm_data', stats:'adm_stats', log:'adm_log', checkin_coach:'adm_checkin'};
 var ST=function(k){ try{ return localStorage.getItem(k); }catch(e){ return null; } };
 var SS=function(k,v){ try{ if(v==null) localStorage.removeItem(k); else localStorage.setItem(k,v); }catch(e){} };
 var SES=function(k,v){ try{ if(v===undefined) return sessionStorage.getItem(k); if(v==null) sessionStorage.removeItem(k); else sessionStorage.setItem(k,v); }catch(e){ return null; } };
@@ -182,6 +185,7 @@ function fetchJson(url, opts, timeoutMs){
 function api(body, tries, wait, t0, tmo){
   tries=(tries===undefined)?2:tries; wait=wait||600; t0=t0||Date.now(); tmo=tmo||30000;
   body.ip=state.ip; if(state.pin && !body.pin) body.pin=state.pin;
+  if(state.admin && state.apin){ if(!body.apin) body.apin=state.apin; if(ADM_ACT[body.action]) body.action=ADM_ACT[body.action]; }
   if(DEMO) return demoApi(body);
   var payload=JSON.stringify(body);
   if(WK_ON[body.action] && !body._gas){
@@ -228,7 +232,18 @@ function applyPending(){
     else if(e.type==='SET'){ if(e.ok) c.last[e.ex]={kg:e.kg,rep:e.rep,d:e.date}; }
   });
 }
-function saveCache(res){ SS('lb_data_'+res.coach, JSON.stringify({ts:Date.now(), res:res})); SS('lb_last', JSON.stringify({coach:res.coach, h:hashPin(state.pin)})); }
+function saveCache(res){ SS('lb_data_'+res.coach, JSON.stringify({ts:Date.now(), res:res})); SS('lb_last', JSON.stringify({coach:res.coach, h:hashPin(state.admin?state.apin:state.pin), adm:state.admin?1:0})); }
+/* đã đăng nhập: PIN coach, hoặc PIN admin */
+function authed(){ return !!(state.pin || (state.admin && state.apin)); }
+/* mỗi lần đổi người dùng (đăng nhập / đăng xuất / coach ⇄ Admin) tăng AUTH_EP: nút hành động của pill tạo ở phiên trước
+   (ví dụ "Thử lại" check-in của coach) không được chạy dưới phiên của người khác */
+var AUTH_EP=0;
+function setAdmin(on, pin){
+  AUTH_EP++;
+  state.admin=!!on; state.apin=on?String(pin||''):'';
+  if(on){ state.pin=''; state.coach='Admin'; }
+  document.body.classList.toggle('adm', !!on);
+}
 function loadCache(coach){ try{ var c=JSON.parse(ST('lb_data_'+coach)||'null'); return c&&c.res?c:null; }catch(e){ return null; } }
 function hashPin(p){ var h=2166136261; p=String(p||''); for(var i=0;i<p.length;i++){ h^=p.charCodeAt(i); h=Math.imul(h,16777619)>>>0; } return h.toString(16); }
 function findClient(name){ return (state.clients||[]).filter(function(c){return c.name===name})[0]; }
@@ -262,7 +277,7 @@ function refreshStats(quiet){
   return state._stats;
 }
 function loadStats(coach){ try{ var c=JSON.parse(ST('lb_stats_'+coach)||'null'); return c&&c.res?c.res:null; }catch(e){ return null; } }
-function logout(msg){ state.pin=''; SES('lb_pin',null); state.clients=[]; state.stats=null; go('p-pin','back'); if(msg) setTimeout(function(){ pinError(msg); },300); }
+function logout(msg){ state.pin=''; setAdmin(false); hidePill(); SES('lb_pin',null); state.clients=[]; state.stats=null; go('p-pin','back'); if(msg) setTimeout(function(){ pinError(msg); },300); }
 
 /* ---- hàng đợi ghi (outbox): UI cập nhật ngay, nền gửi theo lô, id chống trùng ----
    ev.hold=1: sự kiện "đang giữ" (set vừa ghi, còn hoàn tác được) → chưa gửi cho tới khi release(). */
@@ -279,19 +294,22 @@ function enqueue(ev, hold){
 }
 function release(id){ var ch=false; OUT.q.forEach(function(e){ if((!id||e.id===id) && e.hold){ delete e.hold; ch=true; } }); if(ch){ outSave(); clearTimeout(OUT.timer); OUT.timer=setTimeout(function(){ flush(); }, 1500); } }
 function unqueue(id){ var n=OUT.q.length; OUT.q=OUT.q.filter(function(e){ return e.id!==id; }); if(OUT.q.length!==n){ outSave(); return true; } return false; }
+/* sự kiện gửi được bằng phiên hiện tại: phiên Admin chỉ gửi sự kiện ghi trong chế độ Admin, phiên coach không gửi sự kiện của Admin
+   (máy dùng chung: không để dữ liệu của người này đi dưới PIN của người kia — chờ đúng người đăng nhập lại) */
+function mine(e){ return state.admin ? e.coach==='Admin' : e.coach!=='Admin'; }
 function flush(){
-  if(OUT.busy || !state.pin) return Promise.resolve();
-  var batch=OUT.q.filter(function(e){ return !e.hold; }).slice(0,150), ids={}; batch.forEach(function(e){ ids[e.id]=1; });
+  if(OUT.busy || !authed()) return Promise.resolve();
+  var batch=OUT.q.filter(function(e){ return !e.hold && mine(e); }).slice(0,150), ids={}; batch.forEach(function(e){ ids[e.id]=1; });
   if(!batch.length) return Promise.resolve();
   OUT.busy=true;
   return api({action:'log', events:batch}, 1, 800, 0, 30000).then(function(res){
     OUT.busy=false;
-    if(res&&res.ok){ OUT.q=OUT.q.filter(function(e){ return !ids[e.id]; }); outSave(); OUT.fail=0; if(OUT.q.some(function(e){return !e.hold})) flush(); }
+    if(res&&res.ok){ OUT.q=OUT.q.filter(function(e){ return !ids[e.id]; }); outSave(); OUT.fail=0; if(OUT.q.some(function(e){return !e.hold && mine(e)})) flush(); }
     else if(res&&res.error==='sai_pin'){ logout('MÃ PIN KHÔNG CÒN HIỆU LỰC'); }
     else { OUT.fail=(OUT.fail||0)+1; }
   }).catch(function(){ OUT.busy=false; OUT.fail=(OUT.fail||0)+1; });
 }
-function pendingCount(){ return OUT.q.filter(function(e){return !e.hold}).length; }
+function pendingCount(){ return OUT.q.filter(function(e){return !e.hold && mine(e)}).length; }
 setInterval(function(){ if(pendingCount() && !OUT.busy) flush(); }, 30000);
 ['online','pageshow'].forEach(function(ev){ window.addEventListener(ev, function(){ flush(); refreshIp(); }); });
 document.addEventListener('visibilitychange', function(){ if(!document.hidden){ flush(); refreshIp(); } });
@@ -322,13 +340,19 @@ function demoDb(){
     mk('Nguyễn Thành Long',3,12,[{d:'2026-09-02',weight:71.4,arm:34.5,chest:97}],{weight:75}),
     mk('Phan Việt Hoàng',12,12,[{d:'2026-05-05',weight:62}],{})
   ];
+  /* khách của coach khác — chỉ chế độ Admin thấy (PIN demo admin 0000) */
+  var E=[mk('Vũ Sao Mai',3,24,[{d:'2026-09-10',weight:54.5}],{weight:52},'2027-01-01','PT 1:2'), mk('Trần Minh Anh',5,12,[],{})];
+  E.forEach(function(c){ c.coach='Hiền Mai'; });
   D[0].snap.last={'Lat Pulldown (Wide Pronated Grip)':{kg:40,rep:12,d:'2026-09-22'},'Seated Cable Row (Close Neutral Grip)':{kg:55,rep:10,d:'2026-09-22'},'Zercher Squat':{kg:60,rep:8,d:'2026-09-18'},'Lying Leg Curl':{kg:35,rep:12,d:'2026-09-18'}};
   var days={}, d0=TODAY_ISO.slice(0,7);
   for(var i=1;i<=31;i++){ var iso=d0+'-'+pad2(i); if(iso>TODAY_ISO) break; if(i%7!==0) days[iso]=2+((i*7)%6); }
   var hist={}; hist[D[0].name]={'Lat Pulldown (Wide Pronated Grip)':[{d:'2026-08-25',kg:40,rep:12,ok:1},{d:'2026-09-08',kg:40,rep:12,ok:1},{d:'2026-09-22',kg:40,rep:12,ok:1}],'Seated Cable Row (Close Neutral Grip)':[{d:'2026-09-08',kg:55,rep:10,ok:1},{d:'2026-09-22',kg:55,rep:10,ok:0}]};
   var per={}; D.forEach(function(c,i){ per[c.name]={m:[12,11,9,7,0,3,0][i], last:['2026-09-16','2026-09-22','2026-09-20','2026-09-19','','2026-09-21',''][i]}; });
+  var perAll=JSON.parse(JSON.stringify(per)); perAll['Vũ Sao Mai']={m:3,last:'2026-09-23'}; perAll['Trần Minh Anh']={m:11,last:'2026-09-24'};
+  var daysAll={}; Object.keys(days).forEach(function(k){ daysAll[k]=days[k]*3; });
   var ci={checked:{}, at:{}}; try{ ci=JSON.parse(SES('demo_ci')||'null')||ci; }catch(e){}   /* demo: check-in hôm nay giữ qua reload (như máy chủ thật) */
-  DEMO_DB={clients:D, checked:ci.checked||{}, at:ci.at||{}, log:[], stats:{ok:true, month:d0, days:days, perClient:per, com:{month:d0,total:9769250}, hist:hist}};
+  DEMO_DB={clients:D.concat(E), checked:ci.checked||{}, at:ci.at||{}, log:[], stats:{ok:true, month:d0, days:days, perClient:per, com:{month:d0,total:9769250}, hist:hist},
+           astats:{ok:true, admin:true, month:d0, days:daysAll, perClient:perAll, rev:{month:d0,total:96500000}, hist:hist}};
   return DEMO_DB;
 }
 function demoApi(body){
@@ -338,15 +362,23 @@ function demoApi(body){
     if(body.action==='admin') return res(body.apin==='0000' ? {ok:true} : {ok:false,error:'sai_pin'});
     if(body.action==='setip') return res(body.apin==='0000' ? {ok:true, ip:body.ip||'demo'} : {ok:false,error:'sai_pin'});
     if(body.action==='iplist'||body.action==='addip'||body.action==='delip'){ if(body.apin!=='0000') return res({ok:false,error:'sai_pin'});
-      var ips=[]; try{ ips=JSON.parse(SES('demo_ips')||'null')||['203.0.113.7','']; }catch(e){ ips=['203.0.113.7','']; }
-      if(body.action==='addip'){ var ip=body.ip||'198.51.100.'+(1+Math.floor(Math.random()*200)); if(ips.indexOf(ip)<0){ var f=ips.indexOf(''); if(f<0) return res({ok:false,error:'full'}); ips[f]=ip; } }
-      if(body.action==='delip'){ var s=+body.slot; if(s===1||s===2) ips[s-1]=''; }
-      SES('demo_ips', JSON.stringify(ips)); return res({ok:true, ips:ips}); }
+      var ips=[]; try{ ips=JSON.parse(SES('demo_ips')||'null')||['203.0.113.7']; }catch(e){ ips=['203.0.113.7']; }
+      ips=ips.filter(Boolean);
+      if(body.action==='addip'){ var ip=body.ip||'198.51.100.'+(1+Math.floor(Math.random()*200)); if(ips.indexOf(ip)<0){ if(ips.length>=2) return res({ok:false,error:'full',ips:ips,max:2}); ips.push(ip); } }
+      if(body.action==='delip'){ var k=ips.indexOf(String(body.del||'')); if(k>=0){ if(ips.length<=1) return res({ok:false,error:'con_1_ip',ips:ips,max:2}); ips.splice(k,1); } }
+      SES('demo_ips', JSON.stringify(ips)); return res({ok:true, ips:ips, max:2}); }
+    /* chế độ Admin (demo): mọi khách của phòng */
+    if(/^adm_/.test(body.action) && body.apin!=='0000') return res({ok:false,error:'sai_pin'});
+    if(body.action==='adm_data'){ var snapA={}; db.clients.forEach(function(c){ snapA[c.name]=c.snap; });
+      return res({ok:true, admin:true, coach:'Admin', members:db.clients.map(function(c){return {name:c.name,done:c.done,total:c.total,left:c.left,coach:c.coach==='Quyết'?'Quyết Hán':c.coach,start:c.start,exp:c.exp,kind:c.kind||'',checked:db.checked[c.name]===isoToday(),signed:db.checked[c.name]===isoToday()?(db.at[c.name]||''):''}}), snapshot:JSON.parse(JSON.stringify(snapA)), library:null, today:isoToday()}); }
+    if(body.action==='adm_stats'){ var sa=JSON.parse(JSON.stringify(db.astats)); var ta=0; Object.keys(sa.days).forEach(function(k){ ta+=sa.days[k]; }); sa.monthTotal=ta; return res(sa); }
+    if(body.action==='adm_checkin'){ body.action='checkin_coach'; body._adm=1; }
+    if(body.action==='adm_log'){ body.action='log'; }
     if(body.pin==='0000') return res({ok:false,error:'sai_pin'});
-    if(body.action==='coach'){ var snap={}; db.clients.forEach(function(c){ snap[c.name]=c.snap; });
-      return res({ok:true, coach:'Quyết Hán', members:db.clients.map(function(c){return {name:c.name,done:c.done,total:c.total,left:c.left,coach:c.coach,start:c.start,exp:c.exp,kind:c.kind||'',checked:db.checked[c.name]===isoToday(),signed:db.checked[c.name]===isoToday()?(db.at[c.name]||''):''}}), snapshot:JSON.parse(JSON.stringify(snap)), library:null, today:isoToday()}); }
+    if(body.action==='coach'){ var snap={}, own=db.clients.filter(function(c){ return c.coach==='Quyết'; }); own.forEach(function(c){ snap[c.name]=c.snap; });
+      return res({ok:true, coach:'Quyết Hán', members:own.map(function(c){return {name:c.name,done:c.done,total:c.total,left:c.left,coach:c.coach,start:c.start,exp:c.exp,kind:c.kind||'',checked:db.checked[c.name]===isoToday(),signed:db.checked[c.name]===isoToday()?(db.at[c.name]||''):''}}), snapshot:JSON.parse(JSON.stringify(snap)), library:null, today:isoToday()}); }
     if(body.action==='stats'){ var st=JSON.parse(JSON.stringify(db.stats)); var t=0; Object.keys(st.days).forEach(function(k){ t+=st.days[k]; }); st.monthTotal=t; return res(st); }
-    if(body.action==='checkin_coach'){ var c=db.clients.filter(function(x){return x.name===body.name})[0]; if(!c) return res({ok:false,error:'khong_phai_khach_cua_ban'});
+    if(body.action==='checkin_coach'){ var c=db.clients.filter(function(x){return x.name===body.name && (body._adm || x.coach==='Quyết');})[0]; if(!c) return res({ok:false,error:body._adm?'khong_thay_khach':'khong_phai_khach_cua_ban'});
       if(db.checked[c.name]===isoToday()) return res({ok:false,error:'da_checkin',at:db.at[c.name]});
       db.checked[c.name]=isoToday(); db.at[c.name]=nowHM(); c.done++; c.left--; SES('demo_ci', JSON.stringify({checked:db.checked, at:db.at})); return res({ok:true,row:0,member:{name:c.name,done:c.done,total:c.total,left:c.left,coach:c.coach},coach:'Quyết Hán',at:db.at[c.name]}); }
     if(body.action==='log'){ var n=0; (body.events||[]).forEach(function(e){ if(db.log.some(function(x){return x.id===e.id})) return; db.log.push(e); n++;
@@ -359,7 +391,7 @@ function demoApi(body){
   }, 350); });
 }
 
-var state={screen:null, pin:'', apin:'', coach:'', clients:[], lib:null, stats:null, ip:ST('lb_ip')||'', dataTs:0, loading:false,
+var state={screen:null, pin:'', apin:'', admin:false, coach:'', clients:[], lib:null, stats:null, ip:ST('lb_ip')||'', dataTs:0, loading:false,
            client:null, back:'p-clients', sel:[], session:null, homeRange:'1m',
            msForm:{}, msActive:'weight', tgMetric:'weight', tgVal:0, pfMetric:'weight', sumIdx:0};
 
@@ -409,6 +441,7 @@ function go(id, dir){
   if(HOOK[id]) HOOK[id](dir);
   show(id, dir);
   var s=$(id);
+  edgeFit(s);                                   /* đo ngay khi trang vừa hiện → khung đầu tiên đã đúng chỗ */
   if(id!=='p-loop') loopSleep();
   syncTheme();
   setTimeout(function(){ afterShow(s); }, 40);
@@ -428,7 +461,7 @@ function notify(text, o){
   var was=el.classList.contains('on'), onAcid=(state.screen==='p-loop' && LOOPS[0] && LOOPS[0].root.classList.contains('acid'));
   el.className='pill'+(was?' on':'')+(o.err?' err':'')+(onAcid?' onacid':'');
   el.innerHTML=(o.spin?'<i class="spin"></i>':ico(o.icon||(o.err?'i-x':'i-check')))+'<span class="tx">'+esc(text).replace(/(\d[\d:,\.\/×]*)/g,'<span class="n">$1</span>')+'</span>'+(o.action?'<button class="act">'+esc(o.action.label)+'</button>':'');
-  var act=el.querySelector('.act'); if(act) act.onclick=function(e){ e.stopPropagation(); hidePill(); o.action.fn(); };
+  var act=el.querySelector('.act'), ep=AUTH_EP; if(act) act.onclick=function(e){ e.stopPropagation(); hidePill(); if(ep===AUTH_EP) o.action.fn(); };
   el.onclick=function(){ if(!PILL.drag) hidePill(); };
   if(!was){ void el.offsetWidth; el.classList.add('on'); }
   PILL.t=setTimeout(function(){ hidePill(); }, o.ms||(o.err||o.sticky?6000:2400));
@@ -446,17 +479,19 @@ var hideIsl=hidePill;
 var BUSY_N=0;
 function busyLine(on){ BUSY_N=Math.max(0, BUSY_N+(on?1:-1)); $('busy').classList.toggle('on', BUSY_N>0); }
 
-/* ---- FOG: mask trong suốt của chính nội dung, co theo vị trí cuộn ---- */
+/* ---- FOG: mask trong suốt của chính nội dung, co theo vị trí cuộn (chỉ còn cho vùng cuộn KHÔNG phải .ex, ví dụ tổng kết) ---- */
 var FOG_TOP=32, FOG_BOT=72;
-/* khoảng ghost cuối vùng cuộn = chiều cao đúng bằng phần tử cuối (tạo nhịp với nav bên dưới) */
+/* khoảng ghost cuối vùng cuộn = chiều cao đúng bằng phần tử cuối (tạo nhịp với nav bên dưới).
+   Danh sách .ex (mép cuộn iOS) tràn tới đáy màn hình → cộng thêm chiều cao thanh đáy (--bz) để phần tử cuối vẫn dừng đúng chỗ cũ. */
 function tailPad(el){
   if(el.id==='pl-scroll') return;
   var lc=el.lastElementChild; while(lc && lc.lastElementChild && /\b(exrows|rows|next)\b/.test(lc.className)) lc=lc.lastElementChild;
   var pad=lc ? Math.round(lc.getBoundingClientRect().height) : 0;
-  if(el._tp!==pad){ el._tp=pad; el.style.paddingBottom=pad+'px'; }
+  if(el._tp!==pad){ el._tp=pad; el.style.paddingBottom=el.classList.contains('ex') ? 'calc(var(--bz,0px) + '+pad+'px)' : pad+'px'; }
 }
 function fogUpdate(el){
   tailPad(el);
+  if(el.classList.contains('ex')){ if(el._fogM){ el._fogM=''; el.style.webkitMaskImage=''; el.style.maskImage=''; } edgeScroll(el); return; }   /* mép do lớp .eg đảm nhận */
   var top=el._fogTop!=null?el._fogTop:FOG_TOP, bot=el._fogBot!=null?el._fogBot:FOG_BOT;
   var t=Math.min(top, el.scrollTop), b=Math.min(bot, el.scrollHeight-el.clientHeight-el.scrollTop);
   if(t<1) t=0; if(b<1) b=0;
@@ -464,9 +499,56 @@ function fogUpdate(el){
   if(el._fogM!==m){ el._fogM=m; el.style.webkitMaskImage=m; el.style.maskImage=m; }
 }
 document.querySelectorAll('.scroll').forEach(function(el){
-  el.addEventListener('scroll', function(){ fogUpdate(el); }, {passive:true});
+  el.addEventListener('scroll', el.classList.contains('ex') ? function(){ edgeScroll(el); } : function(){ fogUpdate(el); }, {passive:true});
   if(window.ResizeObserver){ new ResizeObserver(function(){ fogUpdate(el); }).observe(el); }
 });
+
+/* ---- MÉP CUỘN KIỂU iOS (v2.4) ----
+   Khung .edge (trang / sheet) chứa một danh sách .scroll.ex. Danh sách được đặt tuyệt đối phủ KÍN khung (mép trên màn hình →
+   mép dưới màn hình) và đệm lại đúng khoảng cũ, nên lúc chưa cuộn mọi thứ nằm y chỗ cũ; khi cuộn, nội dung trôi dưới khối đỉnh
+   và dưới nav qua hai lớp .eg (làm tối + blur tăng dần). edgeFit() đo khung bằng offsetTop/offsetHeight (không bị transform
+   của hiệu ứng chuyển màn làm lệch) rồi ghi biến CSS lên phần tử chứa danh sách. */
+function edgeFit(fr){
+  if(!fr || !fr.classList || !fr.classList.contains('edge')) return;
+  var list=fr.querySelector('.scroll.ex'); if(!list) return;
+  if(!fr.clientHeight) return;                                  /* khung đang ẩn: đo lúc hiện (go / ResizeObserver) */
+  var C=list.parentNode, same=(C===fr), mk=C.querySelector(':scope>.eg-m'), bar=fr.querySelector(':scope>.nav, :scope>.foot');
+  var W=fr.clientWidth, H=fr.clientHeight, ct=same?0:C.offsetTop, cl=same?0:C.offsetLeft;
+  var cs=getComputedStyle(C), v={
+    xt:ct, xl:cl, xr:same?0:Math.max(0, W-(cl+C.clientWidth)), xb:same?0:Math.max(0, H-(ct+C.clientHeight)),
+    pl:parseFloat(cs.paddingLeft)||0, pr:parseFloat(cs.paddingRight)||0 };
+  v.tz=ct+(mk?mk.offsetTop:0)+(parseFloat(getComputedStyle(list).getPropertyValue('--lmt'))||0);
+  v.bz=bar ? Math.max(0, H-bar.offsetTop) : v.xb;
+  var sig=[v.xt,v.xl,v.xr,v.xb,v.pl,v.pr,v.tz,v.bz].join(',');
+  if(C._edge!==sig){ C._edge=sig; for(var k in v) C.style.setProperty('--'+k, v[k]+'px'); }
+  edgeScroll(list);
+}
+/* dải chuyển của lớp mép theo vị trí cuộn (luật fog cũ): đầu danh sách → 0, cuộn quá 32px → đủ; dải đáy tương tự theo quãng còn lại.
+   Chỉ ghi biến --r lên chính lớp mép (4 phần tử) → không làm tính lại style cả danh sách mỗi khung hình cuộn. */
+var EDGE_R={t:32, b:48};
+function edgeScroll(el){
+  var t=el._egT, b=el._egB; if(!t || !b) return;
+  var st=el.scrollTop, max=el.scrollHeight-el.clientHeight;
+  var rt=Math.round(Math.max(0, Math.min(EDGE_R.t, st))), rb=Math.round(Math.max(0, Math.min(EDGE_R.b, max-st)));
+  if(t._r!==rt){ t._r=rt; t.style.setProperty('--r', rt+'px'); }
+  if(b._r!==rb){ b._r=rb; b.style.setProperty('--r', rb+'px'); }
+}
+var EDGE_RO=window.ResizeObserver ? new ResizeObserver(function(es){ var seen=[]; es.forEach(function(e){ var fr=e.target.closest('.edge'); if(fr && seen.indexOf(fr)<0){ seen.push(fr); edgeFit(fr); } }); }) : null;
+function edgeInit(){
+  document.querySelectorAll('.edge').forEach(function(fr){
+    var list=fr.querySelector('.scroll.ex'); if(!list) return; var C=list.parentNode;
+    if(!C.querySelector(':scope>.eg-m')){ var mk=document.createElement('i'); mk.className='eg-m'; C.insertBefore(mk, list); }
+    if(!C.querySelector(':scope>.eg')) ['t','b'].forEach(function(k){ var g=document.createElement('div'); g.className='eg '+k; g.setAttribute('aria-hidden','true'); g.innerHTML='<i class="d"></i><i class="b1"></i><i class="b2"></i><i class="b3"></i>'; C.appendChild(g); });
+    list._egT=C.querySelector(':scope>.eg.t'); list._egB=C.querySelector(':scope>.eg.b');
+    if(EDGE_RO){
+      EDGE_RO.observe(fr);
+      [].forEach.call(C.children, function(ch){ if(!ch.classList.contains('ex') && !ch.classList.contains('eg')) EDGE_RO.observe(ch); });   /* ô tìm / chip / nhãn đổi cao → mép trên danh sách đổi */
+      [].forEach.call(fr.querySelectorAll(':scope>.head, :scope>.nav, :scope>.foot'), function(el){ EDGE_RO.observe(el); });
+    }
+  });
+}
+edgeInit();
+window.addEventListener('resize', function(){ document.querySelectorAll('.edge').forEach(edgeFit); });
 
 /* ---- MARQUEE: tên/tiêu đề 1 dòng; dài quá → "…" → chạy trái 32px/s → giữ → mờ → lặp ---- */
 var MQ=[];
@@ -601,20 +683,36 @@ function tryPin(){
   var pin=pinState.val, lastc=null; try{ lastc=JSON.parse(ST('lb_last')||'null'); }catch(e){}
   if(lastc && lastc.h===hashPin(pin)){
     var c=loadCache(lastc.coach);
-    if(c){ state.pin=pin; SES('lb_pin',pin); buildClients(c.res); state.stats=loadStats(state.coach); state.dataTs=c.ts; go('p-home','fwd'); refreshData(true); flush(); return; }
+    if(c){ if(lastc.adm) setAdmin(true, pin); else { setAdmin(false); state.pin=pin; } SES('lb_pin',pin); buildClients(c.res); state.stats=loadStats(state.coach); state.dataTs=c.ts; go('p-home','fwd'); refreshData(true); flush(); return; }
   }
-  state.pin=pin; state.coach=''; state.clients=[]; state.stats=null; state.loading=true; state.dataTs=Date.now();
+  setAdmin(false); state.pin=pin; state.coach=''; state.clients=[]; state.stats=null; state.loading=true; state.dataTs=Date.now();
   go('p-home','fwd'); busyLine(true); var t0=Date.now();
   api({action:'coach'}, 2, 600, 0, 30000).then(function(res){
     if(state.pin!==pin){ busyLine(false); return; }
     if(res&&res.ok){ busyLine(false); state.loading=false; SES('lb_pin',pin); buildClients(res, t0); saveCache(res); state.dataTs=Date.now(); state.stats=loadStats(state.coach); if(state.screen==='p-home') renderHome(true); refreshStats(true); flush(); return; }
     if(res&&res.error==='sai_pin'){
-      return api({action:'admin', apin:pin}, 2, 600, 0, 30000).then(function(ad){ busyLine(false); state.loading=false; if(ad&&ad.ok){ openAdminPanel(pin); return; } backToPin('MÃ PIN KHÔNG ĐÚNG'); });
+      /* không phải PIN coach → thử PIN admin; đúng thì vào chế độ Admin (trang chủ + tab Cài đặt) */
+      return api({action:'admin', apin:pin}, 2, 600, 0, 30000).then(function(ad){
+        if(state.pin!==pin){ busyLine(false); return; }
+        if(ad&&ad.ok){ adminLoad(pin, t0); return; }
+        busyLine(false); state.loading=false; backToPin('MÃ PIN KHÔNG ĐÚNG');
+      });
     }
     busyLine(false); backToPin('MÁY CHỦ LỖI — THỬ LẠI');
   }).catch(function(){ busyLine(false); backToPin('MÁY CHỦ CHẬM — THỬ LẠI'); });
 }
-function backToPin(msg){ state.pin=''; state.loading=false; state.clients=[]; go('p-pin','back'); setTimeout(function(){ pinError(msg); },300); }
+/* PIN admin đã đúng: tải dữ liệu MỌI khách (adm_data · Apps Script). Vạch bận của tryPin chạy tiếp tới khi xong. */
+function adminLoad(pin, t0){
+  setAdmin(true, pin); SES('lb_pin', pin); state.clients=[]; state.stats=null; state.loading=true; state.dataTs=Date.now();
+  if(state.screen==='p-home') renderHome(false);
+  api({action:'coach'}, 2, 600, 0, 30000).then(function(res){
+    if(!state.admin || state.apin!==pin){ busyLine(false); return; }
+    busyLine(false); state.loading=false;
+    if(res&&res.ok){ buildClients(res, t0); saveCache(res); state.dataTs=Date.now(); state.stats=loadStats(state.coach); if(state.screen==='p-home') renderHome(true); refreshStats(true); flush(); return; }
+    backToPin(res&&res.error==='sai_pin' ? 'MÃ PIN KHÔNG ĐÚNG' : res&&res.error==='unknown_action' ? 'MÁY CHỦ CHƯA CÓ CHẾ ĐỘ ADMIN' : 'MÁY CHỦ LỖI — THỬ LẠI');
+  }).catch(function(){ if(!state.admin || state.apin!==pin) return; busyLine(false); backToPin('MÁY CHỦ CHẬM — THỬ LẠI'); });
+}
+function backToPin(msg){ state.pin=''; setAdmin(false); hidePill(); SES('lb_pin',null); state.loading=false; state.clients=[]; go('p-pin','back'); setTimeout(function(){ pinError(msg); },300); }
 HOOK['p-pin']=function(){ startPin(); warm(); };
 /* chẩn đoán bố cục trên máy thật: chạm wordmark 5 lần */
 (function(){ var n=0, t=0; $('wordmark').addEventListener('click', function(){
@@ -622,44 +720,52 @@ HOOK['p-pin']=function(){ startPin(); warm(); };
   var pr=document.createElement('div'); pr.style.cssText='position:fixed;left:0;top:0;width:0;height:0;padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom) 0;visibility:hidden'; document.body.appendChild(pr);
   var cs=getComputedStyle(pr), vv=window.visualViewport;
   $('diag').hidden=false;
-  $('diag').textContent='WIN '+innerWidth+'×'+innerHeight+' · SCREEN '+screen.width+'×'+screen.height+' · VV '+(vv?Math.round(vv.height):'-')+' · SAT '+cs.paddingTop+' · SAB '+cs.paddingBottom+' · '+(matchMedia('(display-mode: standalone)').matches?'STANDALONE':'BROWSER')+' · DPR '+devicePixelRatio+' · '+APP_VER;
+  var rs=getComputedStyle(document.documentElement), bot=(function(){ var q=document.createElement('div'); q.style.cssText='position:fixed;left:0;right:0;bottom:0;height:1px;visibility:hidden'; document.body.appendChild(q); var y=Math.round(q.getBoundingClientRect().bottom); q.remove(); return y; })();
+  $('diag').textContent='WIN '+innerWidth+'×'+innerHeight+' · SCREEN '+screen.width+'×'+screen.height+' · VV '+(vv?Math.round(vv.height):'-')+' · SAT '+cs.paddingTop+' · SAB '+cs.paddingBottom+' · '+(matchMedia('(display-mode: standalone)').matches?'STANDALONE':'BROWSER')+(navigator.standalone?' · NAV.SA':'')+' · '+(document.documentElement.classList.contains('sb-legacy')?'BẢN CÀI CŨ (THANH ĐEN)':'TRÀN MÀN HÌNH')+' · TOP '+rs.getPropertyValue('--top').trim()+' · ĐÁY FIXED '+bot+' · DPR '+devicePixelRatio+' · '+APP_VER;
   pr.remove();
 }); })();
 
-/* ---- ADMIN ---- */
-function openAdminPanel(pin){ state.apin=pin; state.pin=''; state.clients=[]; go('p-admin','fwd'); }
-/* ADMIN — tối đa 2 IP được check-in (cả hai đều hợp lệ): ô 1 = IP phòng (STUDIO_IP), ô 2 = STUDIO_IP2. Thêm = lấy IP thiết bị này vào ô trống; × để xoá. */
-var ADM={ips:['','']};
-HOOK['p-admin']=function(){ $('am-ip').textContent=state.ip||'—'; renderIps(); refreshIp().then(function(){ if(state.screen==='p-admin') $('am-ip').textContent=state.ip||'—'; renderIps(); }); loadIps(); };
+/* ---- ADMIN · TAB CÀI ĐẶT: IP được check-in ----
+   Nguồn: Script Property STUDIO_IP (danh sách ngăn dấu phẩy — đúng thứ ipOk_ của Apps Script đang đọc) qua iplist/addip/delip (Admin.gs).
+   Ô 1 = IP phòng, ô 2 = IP thứ 2. "Thêm IP" ghi IP của thiết bị đang mở app vào ô trống; × xoá theo GIÁ TRỊ.
+   Không xoá được IP cuối cùng (danh sách rỗng = Apps Script tắt khoá IP). Worker Cloudflare đọc ALLOW_IP riêng — app tự lui về Apps Script. */
+var ADM={ips:[], max:2, busy:false, loaded:false};
+HOOK['p-admin']=function(){
+  $('am-ip').textContent=state.ip||'—'; $('am-ver').textContent='ADMIN · KHÔNG KHOÁ IP · '+upper(APP_VER);
+  renderIps(); refreshIp().then(function(){ if(state.screen==='p-admin'){ $('am-ip').textContent=state.ip||'—'; renderIps(); } }); loadIps();
+};
 function renderIps(){
-  var el=$('am-list'), ips=ADM.ips, n=ips.filter(String).length; el.innerHTML='';
-  $('am-note').textContent='IP ĐƯỢC CHECK-IN · '+n+'/2';
-  ips.forEach(function(ip,i){
-    var b=document.createElement('div'); b.className='row'+(ip?'':' off');
-    b.innerHTML='<span class="lt"><span class="nm mono">'+(ip?esc(ip):'—')+'</span><span class="lab">'+(i===0?'IP PHÒNG':'IP THỨ 2')+(ip && ip===state.ip?' · THIẾT BỊ NÀY':'')+'</span></span>'+(ip?'<button class="ghost x" aria-label="Xoá IP">'+ico('i-x')+'</button>':'');
-    var x=b.querySelector('.x'); if(x) x.onclick=function(){ delIp(i+1); };
+  var el=$('am-list'), ips=ADM.ips, max=Math.max(ADM.max||2, ips.length), n=ips.length; el.innerHTML='';
+  $('am-note').textContent='IP ĐƯỢC CHECK-IN · '+(ADM.loaded?n:'—')+'/'+max;
+  for(var i=0;i<max;i++)(function(i){
+    var ip=ips[i]||'', b=document.createElement('div'); b.className='row'+(ip?'':' off');
+    b.innerHTML='<span class="lt"><span class="nm mono">'+(ip?esc(ip):'—')+'</span><span class="lab">'+(i===0?'IP PHÒNG':'IP THỨ '+(i+1))+(ip && ip===state.ip?' · THIẾT BỊ NÀY':'')+'</span></span>'+(ip && n>1?'<button class="ghost x" aria-label="Xoá IP">'+ico('i-x')+'</button>':'');
+    var x=b.querySelector('.x'); if(x) x.onclick=function(){ delIp(ip); };
     el.appendChild(b);
-  });
-  var add=$('am-add'); var full=n>=2, dup=!!state.ip && ips.indexOf(state.ip)>=0;
-  add.classList.toggle('off', full || dup || !state.ip || !!ADM.busy); add.textContent= dup ? 'IP này đã có' : full ? 'Đã đủ 2 IP · xoá bớt' : 'Thêm IP';
+  })(i);
+  var add=$('am-add'), full=n>=(ADM.max||2), dup=!!state.ip && ips.indexOf(state.ip)>=0;
+  add.classList.toggle('off', !ADM.loaded || full || dup || !state.ip || ADM.busy);
+  add.textContent= dup ? 'IP này đã có' : full ? 'Đã đủ '+(ADM.max||2)+' IP · xoá bớt' : 'Thêm IP';
 }
-function ipsFrom(res){ ADM.ips=[String((res.ips&&res.ips[0])||res.ip||''), String((res.ips&&res.ips[1])||'')]; renderIps(); }
-function loadIps(){ api({action:'iplist', pin:state.apin, apin:state.apin}, 1, 800, 0, 30000).then(function(res){ if(res&&res.ok) ipsFrom(res); else if(res&&res.error==='unknown_action') notify('Backend chưa có iplist', {err:true}); }).catch(function(){}); }
+function ipsFrom(res){ ADM.ips=(res.ips||[]).map(String).filter(Boolean); ADM.max=+res.max||ADM.max||2; ADM.loaded=true; renderIps(); }
+function ipErr(res){
+  var e=res&&res.error; if(e==='sai_pin'){ logout('MÃ PIN KHÔNG CÒN HIỆU LỰC'); return; }
+  notify(e==='full'?'Đã đủ '+(ADM.max||2)+' IP':e==='con_1_ip'?'Phải giữ ít nhất 1 IP':e==='unknown_action'?'Máy chủ chưa có chế độ Admin':(e==='sai_ip'||e==='thieu_ip')?'Chưa lấy được IP thiết bị':'Không lưu được', {err:true});
+}
+function loadIps(){ api({action:'iplist'}, 1, 800, 0, 30000).then(function(res){ if(res&&res.ok) ipsFrom(res); else ipErr(res); }).catch(function(){ notify('Máy chủ chậm', {err:true}); }); }
 function addIp(){
   if(ADM.busy) return; ADM.busy=true; busyLine(true); renderIps();
-  refreshIp().then(function(){ $('am-ip').textContent=state.ip||'—'; return api({action:'addip', pin:state.apin, apin:state.apin}, 1, 800, 0, 30000); })
-  .then(function(res){ busyLine(false); ADM.busy=false;
-    if(res&&res.ok){ ipsFrom(res); notify('Đã thêm IP'); }
-    else { renderIps(); notify(res&&res.error==='full'?'Đã đủ 2 IP':res&&res.error==='unknown_action'?'Backend chưa có addip':'Không thêm được', {err:true}); } })
+  refreshIp().then(function(){ $('am-ip').textContent=state.ip||'—'; if(!state.ip) throw new Error('no_ip'); return api({action:'addip'}, 1, 800, 0, 30000); })
+  .then(function(res){ busyLine(false); ADM.busy=false; if(res&&res.ok){ ipsFrom(res); notify('Đã thêm IP '+state.ip); } else { renderIps(); ipErr(res); } })
+  .catch(function(e){ busyLine(false); ADM.busy=false; renderIps(); notify(e&&e.message==='no_ip'?'Chưa lấy được IP thiết bị':'Máy chủ chậm', {err:true}); });
+}
+function delIp(ip){
+  if(ADM.busy || !ip) return; ADM.busy=true; busyLine(true); renderIps();
+  api({action:'delip', del:ip}, 1, 800, 0, 30000).then(function(res){ busyLine(false); ADM.busy=false;
+    if(res&&res.ok){ ipsFrom(res); notify('Đã xoá IP'); } else { renderIps(); ipErr(res); } })
   .catch(function(){ busyLine(false); ADM.busy=false; renderIps(); notify('Máy chủ chậm', {err:true}); });
 }
-function delIp(slot){
-  if(ADM.busy) return; ADM.busy=true; busyLine(true);
-  api({action:'delip', slot:slot, pin:state.apin, apin:state.apin}, 1, 800, 0, 30000).then(function(res){ busyLine(false); ADM.busy=false;
-    if(res&&res.ok){ ipsFrom(res); notify('Đã xoá IP'); } else { renderIps(); notify('Không xoá được', {err:true}); } })
-  .catch(function(){ busyLine(false); ADM.busy=false; renderIps(); notify('Máy chủ chậm', {err:true}); });
-}
-function adminDone(){ state.apin=''; go('p-pin','back'); }
+function adminLogout(){ logout(); }
 
 /* =====================================================================
    1 — TRANG CHỦ
@@ -680,13 +786,15 @@ function tweenNum(el, from, to, dur){
 var HB={mode:'month', total:null, cur:null, scrub:false, t:0};
 function heroL1(text, fade){ var l1=$('h-month'); l1.classList.remove('sw'); l1.textContent=text; if(fade && !rm()){ void l1.offsetWidth; l1.classList.add('sw'); } }
 function heroNum(){ var n=$('h-taught').querySelector('.n'); return n ? (parseInt(n.textContent,10)||0) : 0; }
-function heroL2(to){ var ht=$('h-taught'), from=heroNum(); ht.innerHTML='Đã dạy <span class="n">'+from+'</span> buổi'; tweenNum(ht.querySelector('.n'), from, to, 260); }
+/* dòng 2 của hero: coach "Đã dạy n buổi" · Admin "Tổng n buổi" (cả phòng, Figma Admin 538:193) */
+function heroWord(){ return state.admin ? 'Tổng' : 'Đã dạy'; }
+function heroL2(to){ var ht=$('h-taught'), from=heroNum(); ht.innerHTML=heroWord()+' <span class="n">'+from+'</span> buổi'; tweenNum(ht.querySelector('.n'), from, to, 260); }
 function heroDay(k, v){ var sw=HB.mode!=='day'; HB.mode='day'; heroL1(k.slice(8,10)+'/'+k.slice(5,7), sw); heroL2(v); }
 function heroMonth(){
   clearTimeout(HB.t); HB.t=0; if(HB.cur){ HB.cur.classList.remove('hit'); HB.cur=null; }
   if(HB.mode==='month') return; HB.mode='month';
   heroL1('Tháng '+TODAY_ISO.slice(5,7), true);
-  if(HB.total==null) $('h-taught').textContent='Đã dạy — buổi'; else heroL2(HB.total);
+  if(HB.total==null) $('h-taught').textContent=heroWord()+' — buổi'; else heroL2(HB.total);
 }
 function renderHome(animate){
   var s=state.stats, m=monthOf(TODAY_ISO), cur=s && s.month===m;
@@ -696,12 +804,14 @@ function renderHome(animate){
   var total=cur ? (s.monthTotal!=null ? s.monthTotal : Object.keys(s.days||{}).reduce(function(a,k){ return k.slice(0,7)===m ? a+(+s.days[k]||0) : a; },0)) : null;
   HB.total=total;
   var ht=$('h-taught');
-  if(total==null) ht.textContent='Đã dạy — buổi';
-  else { ht.innerHTML='Đã dạy <span class="n">'+total+'</span> buổi'; if(animate) countUp(ht.querySelector('.n'), total, 700, 420); }
+  if(total==null) ht.textContent=heroWord()+' — buổi';
+  else { ht.innerHTML=heroWord()+' <span class="n">'+total+'</span> buổi'; if(animate) countUp(ht.querySelector('.n'), total, 700, 420); }
   renderBars(animate);
   var active=state.clients.filter(function(c){ return c.left>0; }).length;
   var slow=slowClients(), today=state.clients.filter(function(c){ return c.checked || (ciFor(c.name)&&ciFor(c.name).status==='ok'); }).length;
-  var com=s && s.com && s.com.total!=null ? s.com : null, comLab='Hoa hồng'+(com && com.month && com.month!==m ? ' T'+(+com.month.slice(5,7)) : '');
+  /* ô tiền: coach = Hoa hồng của mình (tab COM) · Admin = Doanh thu cả phòng (dòng Tổng tab COM). Tháng COM khác tháng này → ghi rõ "T8". */
+  var com=state.admin ? (s && s.rev && s.rev.total!=null ? s.rev : null) : (s && s.com && s.com.total!=null ? s.com : null),
+      comLab=(state.admin?'Doanh thu':'Hoa hồng')+(com && com.month && com.month!==m ? ' T'+(+com.month.slice(5,7)) : '');
   var tiles=[
     {l:'Tổng số khách', v:state.loading?'—':String(active), ic:'t-people', go:'p-clients'},
     {l:'Khách tập chậm', v:slow?String(slow.length):'—', ic:'t-trend', go:'p-clients', q:'slow'},
@@ -801,7 +911,7 @@ function clientRow(m, animate, i, meta, onclick, icon, cls){
   b.innerHTML='<span class="lt"><span class="nm mq"><span>'+esc(m.name)+'</span></span><span class="lab">'+meta+'</span></span>'+(icon===false?'':ico(icon||'i-arr', cls));
   b.onclick=onclick; return b;
 }
-function clientMeta(m){ return 'GÓI '+m.total+' · '+(m.left>0?'CÒN '+m.left+' BUỔI':'ĐÃ HẾT'); }
+function clientMeta(m){ return 'GÓI '+m.total+' · '+(m.left>0?'CÒN '+m.left+' BUỔI':'ĐÃ HẾT')+(state.admin && m.coach ? ' · '+upper(String(m.coach).split('(')[0].trim()) : ''); }   /* Admin: kèm coach phụ trách */
 var SLOW_ICO=' <svg class="ic s13 slow"><use href="#t-trend"/></svg>';   /* khách tập chậm: icon chậm tiến độ (như ô trang chủ) thay chữ */
 function renderClients(animate){
   var q=norm($('cl-q').value), el=$('cl-list'), f=state.clFilter||''; el.innerHTML=''; var i=0;
@@ -1126,7 +1236,7 @@ function sendCheckin(m, many){
     }
     if(err==='da_checkin'){ ciOk(m, ci, ci.no, res.at||m.signed||'', many); return true; }
     if(err==='sai_pin'){ delete CI[m.name]; ciSave(); logout('MÃ PIN KHÔNG CÒN HIỆU LỰC'); return false; }
-    ciFail(m, ci, err==='wrong_ip' ? 'Chỉ check-in được ở phòng' : err==='khong_phai_khach_cua_ban' ? 'Không phải khách của bạn' : 'Chưa check-in', many);
+    ciFail(m, ci, err==='wrong_ip' ? 'Chỉ check-in được ở phòng' : err==='khong_phai_khach_cua_ban' ? 'Không phải khách của bạn' : err==='khong_thay_khach' ? 'Không thấy khách trong MEMBERS' : 'Chưa check-in', many);
     return false;
   }).catch(function(){ busyLine(false); m=live(); var ci=ciFor(m.name); if(ci) ciFail(m, ci, 'Chưa check-in', many); return false; });
 }
@@ -1324,8 +1434,15 @@ function primePerson(p){
    5–9 — VÒNG LẶP SET (một Loop cho mỗi khách; 1:2 = hai nửa)
    ===================================================================== */
 var LOOPS=[], LOOP_RAF=0, LOOP_ON=false, CURVE='cubic-bezier(.22,.85,.22,1)', FOCUS=-1;
-/* thanh trạng thái iOS (theme-color) đi theo màu nền phần đỉnh: Acid khi nửa trên đang nghỉ */
-function syncTheme(){ var acid=(state.screen==='p-loop' && LOOPS[0] && LOOPS[0].root.classList.contains('acid')); var m=document.querySelector('meta[name=theme-color]'); var c=acid?'#D4FF00':'#0A0A0A'; if(m && m.getAttribute('content')!==c) m.setAttribute('content', c); }
+/* thanh trạng thái iOS (theme-color) đi theo màu nền phần đỉnh: Acid khi nửa trên đang nghỉ.
+   v2.4 · nền gốc html/body (--bg) đi theo màu phần ĐÁY: Acid khi nửa dưới đã phủ Acid (và mực Ink chưa phủ kín).
+   iOS tô vùng web view không vẽ tới (nếu có, ví dụ dải đáy của lỗi viewport iOS 26) bằng màu nền gốc → màn nghỉ Acid luôn kín. */
+function syncTheme(){
+  var loop=(state.screen==='p-loop'), top=loop && LOOPS[0] && LOOPS[0].root, bot=loop && LOOPS.length && LOOPS[LOOPS.length-1].root;
+  var acid=!!(top && top.classList.contains('acid')); var m=document.querySelector('meta[name=theme-color]'); var c=acid?'#D4FF00':'#0A0A0A'; if(m && m.getAttribute('content')!==c) m.setAttribute('content', c);
+  var bg=(bot && bot.classList.contains('bga') && !bot.classList.contains('inkfull')) ? '#D4FF00' : '#0A0A0A';
+  if(syncTheme._bg!==bg){ syncTheme._bg=bg; document.documentElement.style.setProperty('--bg', bg); }
+}
 /* 1:2 — chỉ một nửa được chọn: nửa đó hiện nút chức năng, nửa kia ẩn. Chạm lại nửa đang chọn (ngoài bánh xe/nút) → ẩn. */
 function setFocus(i){ FOCUS=i; LOOPS.forEach(function(l){ l.root.classList.toggle('ovl', l.idx===i); }); }
 HOOK['p-loop']=function(){ buildLoops(); };
@@ -1422,8 +1539,8 @@ function Loop(host, p, o){
     g1.setAttribute('aria-label', ph==='rest-setup'?'Hoàn tác set':ph==='rest'?'Bước khác':'Quay lại');
     repsW.set(p.reps); kgW.set(p.kg); fReps.set(p.reps); fKg.set(p.kg); restW.set(p.restTotal); restW.render();
     if(ph==='rest'){ q('.ik1').textContent=setLabel(); q('.iks').textContent=restSub(); q('.ikt').textContent=mmss(restLeft()); }
-    if(ph!=='rest') root.classList.remove('inkd');
-    if(o.idx===0) syncTheme();
+    if(ph!=='rest') root.classList.remove('inkd','inkfull');
+    syncTheme();
     /* vành nhịp: thiết lập = chase Paper, lực hút 0, không Acid (Figma 478:398) · đang tập = chase đầy đủ */
     ring.tint='ink'; ring.calm=(ph==='setup'); ring.dot=(ph==='active'); ring.slow=1;
     if(ph==='setup'){ ring.on=true; if(ring.alpha<.5){ ring.alpha=0; ring.fade(.75,460); } else ring.alpha=.75; }
@@ -1449,7 +1566,7 @@ function Loop(host, p, o){
   var WASH=false;
   function washTo(color, o, swap){
     var acid=(color==='#D4FF00');
-    if(rm()){ swap(); root.classList.toggle('bga', acid); if(!acid) inkTo(1); return; }
+    if(rm()){ swap(); root.classList.toggle('bga', acid); if(!acid) inkTo(1); syncTheme(); return; }
     var rr=root.getBoundingClientRect(), b=document.createElement('div'), cx=rr.width/2, cy=ring.cy;
     if(o && o.from){ var fr=o.from.getBoundingClientRect(); cx=fr.left+fr.width/2-rr.left; cy=fr.top+fr.height/2-rr.top; }
     var R=Math.ceil(Math.hypot(Math.max(cx, rr.width-cx), Math.max(cy, rr.height-cy)))+2;
@@ -1457,14 +1574,14 @@ function Loop(host, p, o){
     root.appendChild(b); WASH=true;
     requestAnimationFrame(function(){ requestAnimationFrame(function(){ b.style.transform='scale(1)'; }); });
     setTimeout(function(){ crossfadeTop(); swap(); }, 200);
-    setTimeout(function(){ WASH=false; root.classList.toggle('bga', acid); if(!acid) inkTo(1); b.style.transition='opacity 120ms linear'; b.style.opacity='0'; setTimeout(function(){ b.remove(); }, 130); }, 540);
+    setTimeout(function(){ WASH=false; root.classList.toggle('bga', acid); if(!acid) inkTo(1); syncTheme(); b.style.transition='opacity 120ms linear'; b.style.opacity='0'; setTimeout(function(){ b.remove(); }, 130); }, 540);
   }
   /* rời màn nghỉ: mực đã phủ kín → màn đã là Ink: chỉ mờ lớp mực đi (crossfade) · chưa kín → vòng loang Ink từ nút */
   function leaveRest(from, after){
     var full=(p.phase==='rest' || p.phase==='setup') && inkY>=0 && inkY<=0.6 && root.classList.contains('acid');
     if(!full){ washTo('#0A0A0A', {from:from}, after); return; }
-    if(rm()){ root.classList.remove('bga'); after(); inkTo(1); return; }
-    root.classList.remove('bga'); after();
+    if(rm()){ root.classList.remove('bga'); after(); inkTo(1); syncTheme(); return; }
+    root.classList.remove('bga'); after(); syncTheme();
     ink.style.transition='opacity 300ms linear'; ink.style.opacity='0';
     setTimeout(function(){ inkTo(1); ink.style.transition=''; ink.style.opacity=''; }, 320);
   }
@@ -1570,6 +1687,7 @@ function Loop(host, p, o){
       var left=restLeft(), sec=Math.ceil(left);
       if(sec!==lastSec){ lastSec=sec; restW.render(); q('.ikt').textContent=mmss(left); if(left<=0 && subEl.textContent!=='Hết giờ nghỉ'){ subEl.textContent='Hết giờ nghỉ'; q('.iks').textContent='Hết giờ nghỉ'; if(navigator.vibrate) navigator.vibrate([8,60,8]); } }
       var fl=Math.max(0,Math.min(1,left/p.restTotal)); inkTo(fl); root.classList.toggle('inkd', fl<.5);
+      if((fl<=0)!==root.classList.contains('inkfull')){ root.classList.toggle('inkfull', fl<=0); syncTheme(); }   /* mực phủ kín tới đáy → nền gốc về Ink */
     }
     ring.draw(now);
   };
@@ -1679,8 +1797,8 @@ function ptrRefresh(){
   PTR.busy=true; ptr.classList.add('load'); ptr.classList.remove('armed'); fg.style.strokeDashoffset='';
   ptrMove(PTR.hold,true);
   var t0=Date.now(), upd=Promise.race([checkUpdate(), new Promise(function(r){ setTimeout(function(){ r(false); },1500); })]);
-  var data=(state.pin&&!state.loading) ? refreshData(true).then(function(){ return true; }, function(){ return false; }) : Promise.resolve(null);
-  busyLine(true); Promise.all([data, flush().catch(function(){})]).then(function(r){ busyLine(false); if(r[0]===true && state.pin) notify('Đã làm mới'); else if(r[0]===false) notify('Máy chủ chậm', {err:true}); });
+  var data=(authed()&&!state.loading) ? refreshData(true).then(function(){ return true; }, function(){ return false; }) : Promise.resolve(null);
+  busyLine(true); Promise.all([data, flush().catch(function(){})]).then(function(r){ busyLine(false); if(r[0]===true && authed()) notify('Đã làm mới'); else if(r[0]===false) notify('Máy chủ chậm', {err:true}); });
   upd.then(function(isNew){
     var wait=Math.max(0, 650-(Date.now()-t0));
     setTimeout(function(){
@@ -1695,7 +1813,7 @@ function ptrRefresh(){
 (function boot(){
   refreshIp();
   var p=SES('lb_pin'), lastc=null; try{ lastc=JSON.parse(ST('lb_last')||'null'); }catch(e){}
-  if(p && lastc && lastc.h===hashPin(p)){ var c=loadCache(lastc.coach); if(c){ state.pin=p; buildClients(c.res); state.stats=loadStats(state.coach); state.dataTs=c.ts; var ss=loadSession(); if(ss){ state.session=ss; go(ss.started&&ss.plan.length?'p-loop':'p-plan','fwd'); } else go('p-home','fwd'); refreshData(true); flush(); return; } }
+  if(p && lastc && lastc.h===hashPin(p)){ var c=loadCache(lastc.coach); if(c){ if(lastc.adm) setAdmin(true, p); else state.pin=p; buildClients(c.res); state.stats=loadStats(state.coach); state.dataTs=c.ts; var ss=loadSession(); if(ss){ state.session=ss; go(ss.started&&ss.plan.length?'p-loop':'p-plan','fwd'); } else go('p-home','fwd'); refreshData(true); flush(); return; } }
   go('p-pin','fwd');
 })();
 if('serviceWorker' in navigator && !DEMO && location.protocol==='https:'){ navigator.serviceWorker.register('sw.js').catch(function(){}); }

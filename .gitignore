@@ -3,3 +3,9 @@ test/out11/
 test/video/
 node_modules/
 .claude/
+test/out_v24/
+test/out_admin/
+test/out_edge/
+test/uc/
+gas_live/
+lab/

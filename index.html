@@ -2,12 +2,18 @@
 <html lang="vi">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<!-- v2.4 (26/09): cấu hình web app như Luma — KHÔNG apple-mobile-web-app-capable, KHÔNG apple-mobile-web-app-status-bar-style,
+     manifest không có "display". iOS 26+ mở web app tràn kín màn hình: nội dung vẽ cả dưới thanh trạng thái lẫn vùng home indicator.
+     Meta đọc LÚC CÀI: bản đã cài trước đó giữ thanh "black" cho tới khi xoá app khỏi Home Screen rồi Add lại (xem html.sb-legacy). -->
+<meta name="viewport" content="width=device-width,height=device-height,initial-scale=1,maximum-scale=1,user-scalable=no,shrink-to-fit=no,viewport-fit=cover">
 <meta name="color-scheme" content="dark">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<!-- "black" (đặc): trên iOS 26 web app KHÔNG được vẽ dưới thanh trạng thái (black-translucent chỉ đẩy layout xuống, thanh vẫn đen) → giữ black, web view bắt đầu ngay dưới thanh. -->
-<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="B0DY">
+<script>
+/* Bản cài CŨ (thanh trạng thái "black"): web view nằm DƯỚI thanh trạng thái nên safe-area-inset-top = 0.
+   Bản cài MỚI tràn kín màn hình: inset > 0. Đánh dấu html.sb-legacy để khối đỉnh đặt đúng ở cả hai (app.css :root --top). */
+(function(){try{var d=document.documentElement,p=document.createElement('div');p.style.cssText='position:fixed;left:0;top:0;width:1px;height:env(safe-area-inset-top,0px);visibility:hidden;pointer-events:none';d.appendChild(p);var sat=p.getBoundingClientRect().height;d.removeChild(p);var mm=window.matchMedia,sa=(window.navigator.standalone===true)||!!(mm&&(mm('(display-mode: standalone)').matches||mm('(display-mode: fullscreen)').matches));if(sa&&sat<1)d.className+=(d.className?' ':'')+'sb-legacy';}catch(e){}})();
+</script>
 <title>B0DY — Coach</title>
 <meta name="theme-color" content="#0A0A0A">
 <link rel="manifest" href="manifest.webmanifest">
@@ -29,6 +35,8 @@
 </symbol>
 <!-- bộ icon lấy nguyên hình học từ file Figma (nét 1,5 · đầu vuông) -->
 <symbol id="i-home" viewBox="0 0 20 20"><path d="M10 2.5L2.5 9.16667V17.5H17.5V9.16667L10 2.5Z"/></symbol>
+<!-- icon/cai-dat (Figma 280:19, bánh răng) quy về khung 20 như các icon nav khác -->
+<symbol id="i-gear" viewBox="0 0 20 20"><path d="M16.4583 8.3417L18.6167 8.4917L18.6167 11.5083L16.4583 11.6583L15.7417 13.3917L17.1583 15.0333L15.0333 17.1583L13.3917 15.7417L11.6583 16.4583L11.5083 18.6167L8.4917 18.6167L8.3417 16.4583L6.6083 15.7417L4.9667 17.1583L2.8417 15.0333L4.2583 13.3917L3.5417 11.6583L1.3833 11.5083L1.3833 8.4917L3.5417 8.3417L4.2583 6.6083L2.8417 4.9667L4.9667 2.8417L6.6083 4.2583L8.3417 3.5417L8.4917 1.3833L11.5083 1.3833L11.6583 3.5417L13.3917 4.2583L15.0333 2.8417L17.1583 4.9667L15.7417 6.6083L16.4583 8.3417Z"/><circle cx="10" cy="10" r="2.9167"/></symbol>
 <symbol id="i-people" viewBox="0 0 20 20"><circle cx="10" cy="6.25" r="2.5"/><circle cx="4.33333" cy="8.5" r="2"/><circle cx="15.6667" cy="8.5" r="2"/><path d="M5.41667 16.2498C5.41667 13.2498 7.5 11.6665 10 11.6665C12.5 11.6665 14.5833 13.2498 14.5833 16.2498M1.25 16.6665C1.25 14.4165 2.58333 13.1665 4.33333 13.1665M18.75 16.6665C18.75 14.4165 17.4167 13.1665 15.6667 13.1665"/></symbol>
 <symbol id="i-back" viewBox="0 0 20 20"><path d="M17.5 9.99984H2.5M8.33333 15.8332L2.5 9.99984L8.33333 4.1665"/></symbol>
 <symbol id="i-chev" viewBox="0 0 20 20"><path d="M7.5 4.16699L13.3333 10.0003L7.5 15.8337"/></symbol>
@@ -78,17 +86,23 @@
   <div class="wordmark" id="wordmark"><svg viewBox="0 0 132 43"><use href="#b0dy"/></svg></div>
 </section>
 
-<!-- ================= ADMIN ================= -->
+<!-- ================= ADMIN · TAB CÀI ĐẶT (tab thứ 3, chỉ hiện khi đăng nhập PIN admin) ================= -->
 <section class="page" id="p-admin">
-  <div class="head st"><span class="t1">Admin</span></div>
+  <div class="head st"><span class="t1">Cài đặt</span></div>
   <div class="body st">
     <div class="lab" style="margin-top:32px">IP CỦA THIẾT BỊ NÀY</div>
     <div class="ipval" id="am-ip">—</div>
     <div class="lab" id="am-note" style="margin-top:32px">IP ĐƯỢC CHECK-IN · 0/2</div>
     <div class="rows" id="am-list"></div>
+    <div class="lab" style="margin-top:32px">TÀI KHOẢN</div>
+    <div class="rows"><button class="row" id="am-out" onclick="adminLogout()"><span class="lt"><span class="nm">Đăng xuất</span><span class="lab" id="am-ver">ADMIN · KHÔNG KHOÁ IP</span></span><svg class="ic"><use href="#i-arr"/></svg></button></div>
   </div>
   <div class="nav">
-    <button class="ghost" onclick="adminDone()" aria-label="Xong"><svg class="ic s24"><use href="#i-back"/></svg></button>
+    <div class="left">
+      <button class="ghost" onclick="go('p-home','back')" aria-label="Trang chủ"><svg class="ic"><use href="#i-home"/></svg></button>
+      <button class="ghost" onclick="go('p-clients','back')" aria-label="Khách hàng"><svg class="ic"><use href="#i-people"/></svg></button>
+      <button class="ghost cur" aria-label="Cài đặt"><svg class="ic"><use href="#i-gear"/></svg></button>
+    </div>
     <button class="cta" id="am-add" onclick="addIp()">Thêm IP</button>
   </div>
 </section>
@@ -108,31 +122,35 @@
     <div class="left">
       <button class="ghost cur" aria-label="Trang chủ"><svg class="ic"><use href="#i-home"/></svg></button>
       <button class="ghost" onclick="go('p-clients','fwd')" aria-label="Khách hàng"><svg class="ic"><use href="#i-people"/></svg></button>
+      <button class="ghost tab-adm" onclick="go('p-admin','fwd')" aria-label="Cài đặt"><svg class="ic"><use href="#i-gear"/></svg></button>
     </div>
     <button class="cta" id="h-go" onclick="enterSession()">Vào buổi tập</button>
   </div>
 </section>
 
 <!-- ================= SUB 1 · KHÁCH HÀNG ================= -->
-<section class="page" id="p-clients">
+<!-- .edge + .ex: danh sách cuộn tràn tới mép trên/dưới màn hình, lướt dưới khối đỉnh + nav qua lớp mờ + blur tăng dần
+     (scroll edge kiểu iOS). Lớp mép và mốc đo do edgeInit() trong app.js tự chèn. -->
+<section class="page edge" id="p-clients">
   <div class="head st"><span class="t1">Khách hàng</span></div>
   <div class="body">
     <div class="search"><svg class="ic"><use href="#i-search"/></svg><input id="cl-q" type="search" placeholder="Tìm khách" autocomplete="off" oninput="renderClients(false)"></div>
-    <div class="scroll grow" id="cl-list"></div>
+    <div class="scroll grow ex" id="cl-list"></div>
   </div>
   <div class="nav">
     <div class="left">
       <button class="ghost" onclick="go('p-home','back')" aria-label="Trang chủ"><svg class="ic"><use href="#i-home"/></svg></button>
       <button class="ghost cur" aria-label="Khách hàng"><svg class="ic"><use href="#i-people"/></svg></button>
+      <button class="ghost tab-adm" onclick="go('p-admin','fwd')" aria-label="Cài đặt"><svg class="ic"><use href="#i-gear"/></svg></button>
     </div>
     <button class="cta" onclick="enterSession()">Vào buổi tập</button>
   </div>
 </section>
 
 <!-- ================= SUB 2 · HỒ SƠ ================= -->
-<section class="page g12" id="p-profile">
+<section class="page g12 edge" id="p-profile">
   <div class="head st"><span class="t1 mq"><span id="pf-name">—</span></span></div>
-  <div class="body scroll st" id="pf-scroll">
+  <div class="body"><div class="scroll grow ex st" id="pf-scroll">
     <div class="pcard">
       <svg class="arc"><use href="#arc"/></svg>
       <div class="r1">
@@ -155,18 +173,18 @@
         <button class="row" onclick="go('p-perf','fwd')"><span class="lt"><span class="nm">Hiệu suất tập</span></span><svg class="ic"><use href="#i-arr"/></svg></button>
       </div>
     </div>
-  </div>
+  </div></div>
   <div class="nav">
     <button class="ghost" onclick="go(state.back||'p-clients','back')" aria-label="Quay lại"><svg class="ic s24"><use href="#i-back"/></svg></button>
   </div>
 </section>
 
 <!-- ================= SUB 3 · ĐO LƯỜNG ================= -->
-<section class="page" id="p-measure">
+<section class="page edge" id="p-measure">
   <div class="head st"><span class="t1">Đo lường</span></div>
   <div class="body">
     <div class="lab" id="ms-count">LẦN ĐO · 0</div>
-    <div class="scroll grow" id="ms-list"></div>
+    <div class="scroll grow ex" id="ms-list"></div>
   </div>
   <div class="nav">
     <button class="ghost" onclick="go('p-profile','back')" aria-label="Quay lại"><svg class="ic s24"><use href="#i-back"/></svg></button>
@@ -202,11 +220,11 @@
 </section>
 
 <!-- ================= SUB 5 · HIỆU SUẤT TẬP ================= -->
-<section class="page" id="p-perf">
+<section class="page edge" id="p-perf">
   <div class="head st"><span class="t1">Hiệu suất tập</span></div>
   <div class="body">
     <div class="search g"><svg class="ic"><use href="#i-search"/></svg><input id="pe-q" type="search" placeholder="Tìm bài tập" autocomplete="off" oninput="renderPerf(false)"></div>
-    <div class="scroll grow" id="pe-list"></div>
+    <div class="scroll grow ex" id="pe-list"></div>
   </div>
   <div class="nav">
     <button class="ghost" onclick="go('p-profile','back')" aria-label="Quay lại"><svg class="ic s24"><use href="#i-back"/></svg></button>
@@ -214,12 +232,12 @@
 </section>
 
 <!-- ================= 2 · CHỌN KHÁCH ================= -->
-<section class="page" id="p-pick">
+<section class="page edge" id="p-pick">
   <div class="head st"><span class="t1">Chọn khách</span></div>
   <div class="body">
     <div class="search"><svg class="ic"><use href="#i-search"/></svg><input id="pk-q" type="search" placeholder="Tìm tên khách" autocomplete="off" oninput="renderPick(false)"></div>
     <div class="chipw" id="pk-chipw"><div class="chips"><div class="chiprow" id="pk-chips"></div></div></div>
-    <div class="scroll grow" id="pk-list"></div>
+    <div class="scroll grow ex" id="pk-list"></div>
   </div>
   <div class="nav">
     <button class="ghost" onclick="go('p-home','back')" aria-label="Quay lại"><svg class="ic"><use href="#i-back"/></svg></button>
@@ -237,10 +255,10 @@
 </section>
 
 <!-- ================= 4 · BÀI TẬP HÔM NAY ================= -->
-<section class="page g12" id="p-plan">
+<section class="page g12 edge" id="p-plan">
   <div class="head st"><span class="t1">Bài tập hôm nay</span></div>
   <div class="body">
-    <div class="scroll grow" id="pl-scroll"><div class="pgrid" id="pl-grid"></div></div>
+    <div class="scroll grow ex" id="pl-scroll"><div class="pgrid" id="pl-grid"></div></div>
     <div class="dropzone" id="pl-drop">Thả vào đây để xoá</div>
   </div>
   <div class="nav">
@@ -251,18 +269,18 @@
 
 <!-- window thư viện bài -->
 <div class="dimmer" id="lib-dim" onclick="closeLib()"></div>
-<div class="sheet" id="lib">
+<div class="sheet edge" id="lib">
   <div class="handle" id="lib-handle"><i></i></div>
   <div class="search g"><svg class="ic"><use href="#i-search"/></svg><input id="lib-q" type="search" placeholder="Tìm bài tập" autocomplete="off" oninput="renderLib(false)"></div>
-  <div class="scroll list" id="lib-list"></div>
+  <div class="scroll list ex" id="lib-list"></div>
   <div class="foot"><button class="cta" id="lib-go" onclick="closeLib()">Chọn</button></div>
 </div>
 <!-- window khách từ ô trang chủ (khách tập chậm / khách hôm nay): cùng phong cách window thư viện -->
 <div class="dimmer" id="cs-dim" onclick="closeClientSheet()"></div>
-<div class="sheet" id="csheet">
+<div class="sheet edge" id="csheet">
   <div class="handle" id="cs-handle"><i></i></div>
   <div class="search g"><svg class="ic"><use href="#i-search"/></svg><input id="cs-q" type="search" placeholder="Tìm khách" autocomplete="off" oninput="renderClientSheet(false)"></div>
-  <div class="scroll list" id="cs-list"></div>
+  <div class="scroll list ex" id="cs-list"></div>
   <div class="foot"><button class="cta paper" id="cs-go" onclick="closeClientSheet()">Đóng</button></div>
 </div>
 
