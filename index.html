@@ -2,24 +2,21 @@
 <html lang="vi">
 <head>
 <meta charset="UTF-8">
-<!-- v2.4.5 (26/09) · APP CÀI TRÊN HOME SCREEN: black-translucent + viewport-fit=cover là cách DUY NHẤT để iOS 26/27 vẽ trang dưới thanh
-     trạng thái (env(safe-area-inset-top) = 59). Cấu hình "kiểu Luma" của v2.4.0 (không meta status-bar) hoá ra đặt vùng web DƯỚI thanh
-     và iOS tự tô thanh đen đặc — không CSS nào đổi được. Với black-translucent, iOS 26 tô vùng thanh bằng đúng cơ chế lấy mẫu màu mép
-     như Safari (fixedContainerEdges) → hai dải .wkedge cho màu Acid/Ink đúng màn. Lỗi hụt đáy 301108 (iOS 26.0) đã sửa ở Safari 26.1
-     cho layout có container fixed phủ kín (body); bỏ height=device-height vì lỗi đó nêu đích danh nó.
-     Meta đọc LÚC CÀI: bản đã cài trước (thanh đen, inset 0) được nhận ra bằng html.sb-legacy (--top 2px, tắt dải) cho tới khi xoá app
-     khỏi Home Screen rồi Add lại. v2.4.2: trong Safari màu vùng dưới thanh không lấy từ theme-color mà từ hai dải .wkedge. -->
-<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,shrink-to-fit=no,viewport-fit=cover">
+<!-- v2.4.6 (26/09) · APP CÀI TRÊN HOME SCREEN: KHÔNG có meta apple-mobile-web-app-status-bar-style. Vùng web nằm DƯỚI thanh trạng thái,
+     iOS tô thanh đen đặc — trên iOS này không CSS nào đổi được. Đã thử black-translucent (v2.4.5, 26/09): trang vẽ dưới thanh nhưng
+     viewport bị tính ngắn đúng bằng thanh → hụt một dải đen ở đáy không vẽ tới được (WebKit 301108, máy chủ studio còn dính), và lớp
+     kính iOS làm mờ khối đỉnh. Đừng thử lại black-translucent cho tới khi Apple sửa trên máy thật.
+     Meta đọc LÚC CÀI: mọi bản cài hiện có (inset 0) được nhận ra bằng html.sb-legacy (--top 2px, tắt dải .wkedge).
+     v2.4.2: trong Safari màu vùng dưới thanh trạng thái / thanh công cụ không lấy từ theme-color mà từ hai dải .wkedge. -->
+<meta name="viewport" content="width=device-width,height=device-height,initial-scale=1,maximum-scale=1,user-scalable=no,shrink-to-fit=no,viewport-fit=cover">
 <meta name="color-scheme" content="dark">
 <meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="B0DY">
 <script>
 /* Bản cài CŨ (thanh trạng thái "black"): web view nằm DƯỚI thanh trạng thái nên safe-area-inset-top = 0.
    Bản cài MỚI tràn kín màn hình: inset > 0. Đánh dấu html.sb-legacy để khối đỉnh đặt đúng ở cả hai (app.css :root --top).
-   html.standalone: mọi bản cài. Chỉ html.sb-legacy mới tắt hai dải .wkedge (v2.4.3: dải 12px từng che dấu tiếng Việt của khối đỉnh
-   vì --top chỉ 2px); bản cài black-translucent (inset 59) giữ dải vì iOS tô vùng thanh bằng màu lấy từ dải. */
+   html.standalone: mọi bản cài. html.sb-legacy (inset 0, tức mọi bản cài hiện nay) tắt hai dải .wkedge (v2.4.3: dải 12px từng che dấu
+   tiếng Việt của khối đỉnh vì --top chỉ 2px). */
 (function(){try{var d=document.documentElement,p=document.createElement('div');p.style.cssText='position:fixed;left:0;top:0;width:1px;height:env(safe-area-inset-top,0px);visibility:hidden;pointer-events:none';d.appendChild(p);var sat=p.getBoundingClientRect().height;d.removeChild(p);var mm=window.matchMedia,sa=(window.navigator.standalone===true)||!!(mm&&(mm('(display-mode: standalone)').matches||mm('(display-mode: fullscreen)').matches));if(sa)d.className+=(d.className?' ':'')+'standalone';if(sa&&sat<1)d.className+=(d.className?' ':'')+'sb-legacy';}catch(e){}})();
 </script>
 <title>B0DY — Coach</title>

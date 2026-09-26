@@ -42,13 +42,13 @@ body::after{content:'';position:fixed;left:0;right:0;top:-140px;bottom:-240px;ba
    bị xếp loại "viewport-sized" → WebKit GIỮ NGUYÊN màu đã lấy lần đầu (preferExistingColor): đó là lý do v2.4.0–2.4.1 đổi --bg và
    theme-color mà thanh vẫn đen. Hai dải này là container "thường" (rộng 100 %, cao 12px) nên màu được đọc lại mỗi lần đổi.
    z 59: trên mọi trang / sheet / dimmer, dưới #pill (70) và khung kéo thả (60). pointer-events:none không ảnh hưởng — lượt hit-test
-   đầu của WebKit bỏ qua pointer-events. Dùng trong Safari và bản cài black-translucent; bản cài kiểu cũ tắt dải (html.sb-legacy, xem dưới). */
+   đầu của WebKit bỏ qua pointer-events. Chỉ dùng trong Safari; app cài tắt dải (html.sb-legacy, xem dưới). */
 .wkedge{position:fixed;left:0;right:0;height:12px;z-index:59;pointer-events:none;background:var(--edge-b)}
 .wkedge.t{top:0;background:var(--edge-t)}
 .wkedge.b{bottom:0}
-/* Bản cài kiểu cũ (html.sb-legacy: vùng web nằm DƯỚI thanh trạng thái, inset 0, --top 2px): không có vùng nào để tô → tắt dải, nếu không
-   dải 12px che dấu tiếng Việt của khối đỉnh và vạch .busy (sự cố v2.4.2). Bản cài black-translucent (inset 59) và Safari giữ dải:
-   iOS 26 tô vùng thanh trạng thái bằng màu lấy từ dải (cùng cơ chế fixedContainerEdges). */
+/* App cài (html.sb-legacy: vùng web nằm DƯỚI thanh trạng thái, inset 0, --top 2px): không có vùng nào để tô → tắt dải, nếu không dải 12px
+   che dấu tiếng Việt của khối đỉnh và vạch .busy (sự cố v2.4.2). Chỉ Safari dùng dải. (black-translucent bị lùi ở v2.4.6: WebKit 301108
+   hụt đáy trên máy chủ studio.) */
 html.sb-legacy .wkedge{display:none}
 /* element fixed 4px ngoài màn hình; syncTheme() bật/tắt display mỗi lần đổi màu → WebKit bật cờ tính lại màu mép ở lần commit kế
    (RenderLayerModelObject::styleDidChange → addViewportConstrainedObject → didAddOrRemoveViewportConstrainedObjects) */
