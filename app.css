@@ -21,7 +21,7 @@
   --sat:env(safe-area-inset-top,0px);
   --top:max(56px,calc(var(--sat) - 3px));
   --bot:28px;
-  --bg:#0A0A0A;                            /* nền gốc html/body — app.js đổi theo mép dưới (Acid khi màn nghỉ phủ Acid); màu dự phòng của Safari khi không có dải .wkedge */
+  --bg:#0A0A0A;                            /* nền gốc html/body = màu mép dưới của app (app.js syncTheme): màu dự phòng của Safari và màu của dải đáy không vẽ tới trên bản cài black-translucent (WebKit 301108) */
   --edge-t:#0A0A0A; --edge-b:#0A0A0A;      /* màu hai dải .wkedge = màu app đang hiện ở mép trên / mép dưới (app.js syncTheme) */
   color-scheme:dark;
 }
@@ -42,13 +42,12 @@ body::after{content:'';position:fixed;left:0;right:0;top:-140px;bottom:-240px;ba
    bị xếp loại "viewport-sized" → WebKit GIỮ NGUYÊN màu đã lấy lần đầu (preferExistingColor): đó là lý do v2.4.0–2.4.1 đổi --bg và
    theme-color mà thanh vẫn đen. Hai dải này là container "thường" (rộng 100 %, cao 12px) nên màu được đọc lại mỗi lần đổi.
    z 59: trên mọi trang / sheet / dimmer, dưới #pill (70) và khung kéo thả (60). pointer-events:none không ảnh hưởng — lượt hit-test
-   đầu của WebKit bỏ qua pointer-events. Chỉ dùng trong Safari; app cài tắt dải (html.sb-legacy, xem dưới). */
+   đầu của WebKit bỏ qua pointer-events. Dùng trong Safari và bản cài black-translucent; bản cài cũ tắt dải (html.sb-legacy, xem dưới). */
 .wkedge{position:fixed;left:0;right:0;height:12px;z-index:59;pointer-events:none;background:var(--edge-b)}
 .wkedge.t{top:0;background:var(--edge-t)}
 .wkedge.b{bottom:0}
-/* App cài (html.sb-legacy: vùng web nằm DƯỚI thanh trạng thái, inset 0, --top 2px): không có vùng nào để tô → tắt dải, nếu không dải 12px
-   che dấu tiếng Việt của khối đỉnh và vạch .busy (sự cố v2.4.2). Chỉ Safari dùng dải. (black-translucent bị lùi ở v2.4.6: WebKit 301108
-   hụt đáy trên máy chủ studio.) */
+/* Bản cài cũ (html.sb-legacy: vùng web nằm DƯỚI thanh trạng thái, inset 0, --top 2px): không có vùng nào để tô → tắt dải, nếu không dải
+   12px che dấu tiếng Việt của khối đỉnh và vạch .busy (sự cố v2.4.2). Safari và bản cài black-translucent (inset 59) dùng dải. */
 html.sb-legacy .wkedge{display:none}
 /* element fixed 4px ngoài màn hình; syncTheme() bật/tắt display mỗi lần đổi màu → WebKit bật cờ tính lại màu mép ở lần commit kế
    (RenderLayerModelObject::styleDidChange → addViewportConstrainedObject → didAddOrRemoveViewportConstrainedObjects) */
@@ -226,7 +225,7 @@ svg{display:block}
 .pill.err .act{background:var(--red);color:var(--paper)}
 
 /* vạch bận Acid mép trên (không chặn thao tác) */
-.busy{position:absolute;left:0;right:0;top:max(0px,calc(var(--top) - 2px));height:2px;z-index:50;overflow:hidden;opacity:0;transition:opacity .2s;pointer-events:none}
+.busy{position:absolute;left:0;right:0;top:max(var(--sat),calc(var(--top) - 2px));height:2px;z-index:50;overflow:hidden;opacity:0;transition:opacity .2s;pointer-events:none}
 .busy.on{opacity:1}
 .busy i{position:absolute;top:0;bottom:0;width:40%;background:var(--acid);transform:translateX(-120%);animation:busyrun 1.1s linear infinite}
 @keyframes busyrun{to{transform:translateX(320%)}}

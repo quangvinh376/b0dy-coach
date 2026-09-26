@@ -7,7 +7,7 @@
    ===================================================================== */
 'use strict';
 var $=function(id){ return document.getElementById(id); };
-var APP_VER='v2.4.6';
+var APP_VER='v2.4.7';
 
 /* ---------------- tiện ích ---------------- */
 function isoToday(d){ d=d||new Date(); return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2); }
@@ -1486,12 +1486,12 @@ var LOOPS=[], LOOP_RAF=0, LOOP_ON=false, CURVE='cubic-bezier(.22,.85,.22,1)', FO
    vì thế đổi --bg / theme-color không đổi được thanh. Hai dải #wk-t / #wk-b (.wkedge: fixed, cao 12px) là container "thường" nên màu
    được đọc lại ngay khi đổi. Màu dải = màu app đang hiện ở mép đó: mép trên theo Loop đầu (Acid khi nền đã Acid và mực chưa dâng),
    mép dưới theo Loop cuối (Acid tới khi mực phủ kín); màng .film pha 93 % lên trên; sheet mở → mép dưới = Tile.
-   Ba tín hiệu cố ý đổi ở ba thời điểm khác nhau: --edge-* đổi đúng lúc vòng loang chạm mép (washEdges, 100–520ms) hoặc khi mực
-   dâng/phủ kín; --bg (nền html/body) theo mép dưới nhưng chỉ khi vòng đã phủ kín (.bga, 540ms) — màu dự phòng của Safari khi
-   không tìm thấy container (underPageBackgroundColor) và cho bản PWA cài cũ; theme-color giữ luật cũ cho iOS ≤ 18: Acid khi nửa
-   trên đang nghỉ (.acid, đổi ở lần swap 200ms). Đừng "đồng bộ" ba cái này với nhau. Bản cài kiểu cũ (html.sb-legacy) tắt dải. */
+   --edge-t / --edge-b đổi đúng lúc vòng loang chạm mép (washEdges, 100–520ms) hoặc khi mực dâng / phủ kín. --bg (nền html/body)
+   = màu mép dưới (v2.4.7): màu dự phòng của Safari khi không tìm thấy container (underPageBackgroundColor) và màu của dải đáy
+   không vẽ tới trên bản cài black-translucent (WebKit 301108) — dải đó phải đổi cùng nhịp với mép dưới. theme-color giữ luật cũ
+   cho iOS ≤ 18: Acid khi nửa trên đang nghỉ (.acid, đổi ở lần swap 200ms). Bản cài cũ (html.sb-legacy) tắt dải. */
 var EDGE_INK='#0A0A0A', EDGE_ACID='#D4FF00', EDGE_TILE='#222222', RGB_INK=[10,10,10], RGB_ACID=[212,255,0];
-var EDGE_CUR={t:'', b:''};
+var EDGE_CUR={t:'', b:'', bg:''};
 function edgeMix(over, a, under){ return [0,1,2].map(function(i){ return Math.round(over[i]*a+under[i]*(1-a)); }); }
 function edgeHex(c){ return '#'+c.map(function(v){ return (v<16?'0':'')+v.toString(16).toUpperCase(); }).join(''); }
 function setEdge(side, c){ if(EDGE_CUR[side]===c) return; EDGE_CUR[side]=c; document.documentElement.style.setProperty('--edge-'+side, c); }
@@ -1507,10 +1507,11 @@ function edgeOfLoop(root, side){
 function syncTheme(){
   var loop=(state.screen==='p-loop'), top=loop && LOOPS[0] && LOOPS[0].root, bot=loop && LOOPS.length && LOOPS[LOOPS.length-1].root;
   var ct= top ? edgeOfLoop(top,'t') : EDGE_INK, cb= bot ? edgeOfLoop(bot,'b') : EDGE_INK;
-  if(document.querySelector('.sheet.on')) cb=EDGE_TILE;                           /* sheet (Tile) phủ mép dưới; sheet chỉ mở trên trang Ink */
+  if(document.querySelector('.sheet.on')) cb=EDGE_TILE;                           /* sheet (Tile) phủ mép dưới; sheet chỉ mở trên trang Ink. --bg theo mép dưới
+                                                                                       → nền body cũng Tile và trang (nền trong) lộ ra dưới dimmer 75 % Ink: sáng hơn
+                                                                                       Ink ≤ 6/255, mắt không thấy; mép trên giữ Ink */
   setEdge('t', ct); setEdge('b', cb);
-  var bg=(bot && bot.classList.contains('bga') && !bot.classList.contains('inkfull')) ? EDGE_ACID : EDGE_INK;
-  if(syncTheme._bg!==bg){ syncTheme._bg=bg; document.documentElement.style.setProperty('--bg', bg); }
+  if(EDGE_CUR.bg!==cb){ EDGE_CUR.bg=cb; document.documentElement.style.setProperty('--bg', cb); }
   var tc=(top && top.classList.contains('acid')) ? EDGE_ACID : EDGE_INK;
   var m=document.querySelector('meta[name=theme-color]'); if(m && m.getAttribute('content')!==tc) m.setAttribute('content', tc);
   /* thêm/bớt một element fixed → WebKit bật cờ tính lại màu mép ở lần commit kế (didAddOrRemoveViewportConstrainedObjects):
