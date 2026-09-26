@@ -7,7 +7,7 @@
    ===================================================================== */
 'use strict';
 var $=function(id){ return document.getElementById(id); };
-var APP_VER='v2.4.1';
+var APP_VER='v2.4.2';
 
 /* ---------------- tiện ích ---------------- */
 function isoToday(d){ d=d||new Date(); return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2); }
@@ -1581,7 +1581,7 @@ function Loop(host, p, o){
     g1.setAttribute('aria-label', ph==='rest-setup'?'Hoàn tác set':ph==='rest'?'Bước khác':'Quay lại');
     repsW.set(p.reps); kgW.set(p.kg); fReps.set(p.reps); fKg.set(p.kg); restW.set(p.restTotal); restW.render();
     if(ph==='rest'){ q('.ik1').textContent=setLabel(); q('.iks').textContent=restSub(); q('.ikt').textContent=mmss(restLeft()); }
-    if(ph!=='rest') root.classList.remove('inkd','inkfull');
+    if(ph!=='rest') root.classList.remove('inkfull');
     syncTheme();
     /* vành nhịp: thiết lập = chase Paper, lực hút 0, không Acid (Figma 478:398) · đang tập = chase đầy đủ */
     ring.tint='ink'; ring.calm=(ph==='setup'); ring.dot=(ph==='active'); ring.slow=1;
@@ -1728,7 +1728,7 @@ function Loop(host, p, o){
     if(p.phase==='rest'){
       var left=restLeft(), sec=Math.ceil(left);
       if(sec!==lastSec){ lastSec=sec; restW.render(); q('.ikt').textContent=mmss(left); if(left<=0 && subEl.textContent!=='Hết giờ nghỉ'){ subEl.textContent='Hết giờ nghỉ'; q('.iks').textContent='Hết giờ nghỉ'; if(navigator.vibrate) navigator.vibrate([8,60,8]); } }
-      var fl=Math.max(0,Math.min(1,left/p.restTotal)); inkTo(fl); root.classList.toggle('inkd', fl<.5);
+      var fl=Math.max(0,Math.min(1,left/p.restTotal)); inkTo(fl);   /* nav: không đổi tông theo mốc — lớp mực mang bản sao nav tông Ink (app.css) */
       if((fl<=0)!==root.classList.contains('inkfull')){ root.classList.toggle('inkfull', fl<=0); syncTheme(); }   /* mực phủ kín tới đáy → nền gốc về Ink */
     }
     ring.draw(now);

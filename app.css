@@ -608,21 +608,25 @@ svg{display:block}
 .two .lp .foot{gap:0}
 .two .lp .foot .nav{margin-top:0}
 .two .nxt{margin-bottom:0}
-.two .loop .ink .nav{display:none}
 .two .film .inner{gap:20px}
 .two .film .exl{gap:20px}
 .two .film .exl button .nmx,.two .film .exl button .sn,.two .film .act{font-size:16px;line-height:19px;letter-spacing:-.16px}
 /* 1:2 — chạm section: toàn bộ section mờ (blur 40) và nút chức năng hiện ở GIỮA section (.ovl); bánh xe/số vẫn kéo được trực tiếp khi chưa mở */
 .two .loop>.lp .foot{position:static}
-.two .loop>.lp .nav{position:absolute;left:var(--rail);right:var(--rail);top:50%;transform:translateY(-50%) scale(.96);justify-content:center;gap:12px;z-index:5;
+.two .loop>.lp .nav{position:absolute;left:var(--rail);right:var(--rail);top:50%;transform:translateY(-50%) scale(.96);justify-content:center;gap:12px;z-index:3;
                     opacity:0;pointer-events:none;transition:opacity .22s linear,transform .3s var(--eo)}
 .two .loop>.lp .nav .sp{display:none}
 .two .loop.ovl>.lp .nav{opacity:1;transform:translateY(-50%);pointer-events:auto}
 .two .loop .dimable:not(.nav),.two .loop .ink .head,.two .loop .ink .clock{transition:filter .32s var(--eio),opacity .32s var(--eio)}
 .two .loop.ovl .dimable:not(.nav),.two .loop.ovl .ink .head,.two .loop.ovl .ink .clock{filter:blur(40px);opacity:.45;pointer-events:none}
-/* nút ở giữa nằm trên lớp mực đã dâng qua nửa màn → tông Ink */
-.loop.acid.inkd>.lp .nav .ghost{border-color:var(--hair);color:var(--paper)}
-.loop.acid.inkd>.lp .nav .cta.dark{background:var(--acid);color:var(--ink)}
+/* v2.4.2 · nav KHÔNG tự đổi tông theo mốc thời gian (bản cũ: .inkd khi còn < 50% giờ nghỉ → cả cụm nút đổi màu dù mực chưa tới).
+   Nav gốc (tông Acid) nằm DƯỚI lớp mực (z 3 < 4); lớp mực mang bản sao nav tông Ink ở đúng chỗ → mực chảy tới đâu, tông Ink lộ ra tới đó.
+   1:2: bản sao nav trong lớp mực là nút nổi giữa section, hiện/ẩn cùng .ovl, cùng nhịp chuyển. */
+.two .loop .ink .lp .foot{position:static}
+.two .loop .ink .nav{position:absolute;left:var(--rail);right:var(--rail);top:50%;transform:translateY(-50%) scale(.96);justify-content:center;gap:12px;
+                     opacity:0;transition:opacity .22s linear,transform .3s var(--eo)}
+.two .loop .ink .nav .sp{display:none}
+.two .loop.ovl .ink .nav{opacity:1;transform:translateY(-50%)}
 
 /* ============ TỔNG KẾT (rail 12, nội dung 24) ============ */
 #sm-scroll{padding:32px 12px 0}
