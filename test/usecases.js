@@ -126,10 +126,11 @@ var CLIP={hard:[], ell:[]};
     check(hit2 && hit && hit2.k!==hit.k, 'kéo sang cột khác: '+JSON.stringify(hit2));
     if(hit2){ check((await h.txt('#h-month'))===hit2.k.slice(8,10)+'/'+hit2.k.slice(5,7), '#h-month sau kéo: '+(await h.txt('#h-month')));
       check((await h.txt('#h-taught'))==='Đã dạy '+hit2.v+' buổi', '#h-taught sau kéo: '+(await h.txt('#h-taught'))); }
-    await page.mouse.up(); await h.wait(300);
-    check((await h.txt('#h-month'))!=='Tháng '+mm, 'ngay sau khi nhả vẫn còn ngày (chưa về tháng)');
+    /* luật đã chốt (app.js up(): "nhả tay: về trạng thái mặc định NGAY") — không còn giữ ngày ~1s sau khi nhả */
+    await page.mouse.up(); await h.wait(150);
+    check((await h.txt('#h-month'))==='Tháng '+mm, 'nhả tay → về tháng ngay: '+(await h.txt('#h-month')));
     await h.wait(1100);
-    check((await h.txt('#h-month'))==='Tháng '+mm, 'sau ~1s về tháng: '+(await h.txt('#h-month')));
+    check((await h.txt('#h-month'))==='Tháng '+mm, 'sau ~1s vẫn là tháng: '+(await h.txt('#h-month')));
     check((await h.txt('#h-taught'))==='Đã dạy '+total+' buổi', 'số tháng phục hồi: '+(await h.txt('#h-taught')));
     check(!(await h.count('#h-bars i.hit')), 'không còn cột .hit');
     await page.click('#h-7d'); await h.wait(700);
@@ -160,10 +161,14 @@ var CLIP={hard:[], ell:[]};
   await run('C', 'Chuyển màn: nav đứng yên (.still), head/body có animation; hồ sơ và quay lại', async function(){
     await page.click('#p-home .nav .ghost:nth-child(2)');
     var st=await h.ev(function(){ var pg=document.getElementById('p-clients'); return {scr:state.screen, btns:[].map.call(pg.querySelectorAll('.nav button'), function(b){ return b.className; }),
+      vis:[].filter.call(pg.querySelectorAll('.nav button'), function(b){ return getComputedStyle(b).display!=='none'; }).map(function(b){ return b.className; }),
+      adm:getComputedStyle(pg.querySelector('.nav .tab-adm')).display,
       nav:getComputedStyle(pg.querySelector(':scope>.nav')).animationName, head:getComputedStyle(pg.querySelector(':scope>.head')).animationName, body:getComputedStyle(pg.querySelector(':scope>.body')).animationName,
       leave:getComputedStyle(document.querySelector('#p-home>.body')).animationName}; });
     check(st.scr==='p-clients', 'sang p-clients');
-    check(st.btns.length===3 && st.btns.every(function(c){ return /\bstill\b/.test(c); }), 'ghost/CTA nav có .still: '+st.btns.join(' | '));
+    /* v2.4: nav có thêm nút tab Cài đặt (.tab-adm) — chỉ hiện với PIN admin; coach vẫn thấy đúng 3 nút */
+    check(st.vis.length===3 && st.btns.every(function(c){ return /\bstill\b/.test(c); }), 'ghost/CTA nav có .still (3 nút hiện): '+st.vis.join(' | ')+' / tất cả: '+st.btns.join(' | '));
+    check(st.adm==='none', 'coach không thấy tab Cài đặt: display='+st.adm);
     check(st.nav==='none', '.nav không animation: '+st.nav); check(st.head==='inF', '.head trượt vào: '+st.head); check(st.body==='inF', '.body trượt vào: '+st.body); check(st.leave==='outF', 'trang cũ .body trượt ra: '+st.leave);
     check(/curswap/.test(st.btns[1]), 'tab Khách hàng đổi .cur mềm (curswap): '+st.btns[1]);
     await h.wait(800); await h.clip('clients');
@@ -340,7 +345,12 @@ var CLIP={hard:[], ell:[]};
   await run('I', 'Bài tập hôm nay: window thư viện, vùng cuộn sát ô tìm, tìm/chọn/bỏ, dimmer, lưới, kéo thả xoá, CTA', async function(){
     check(await h.has('#lib','on') && await h.has('#lib-dim','on'), 'window tự mở khi chưa có bài');
     check(await h.has('#pl-go','off') && (await h.txt('#pl-go'))==='Bắt đầu', 'CTA tắt khi chưa có bài');
-    var s=await h.rect('#lib .search'), l=await h.rect('#lib-list'); check(near(l.y, s.b, 1), 'top #lib-list == bottom ô tìm: '+l.y+' vs '+s.b);
+    /* v2.4 mép cuộn iOS: danh sách phủ kín sheet (trôi dưới ô tìm), nhưng lúc chưa cuộn nội dung vẫn bắt đầu đúng chỗ cũ:
+       mép lớp .eg.t == đáy ô tìm, dòng đầu == đáy ô tìm + 32px (padding cũ của .sheet .list) */
+    var s=await h.rect('#lib .search'), l=await h.rect('#lib-list'), sh=await h.rect('#lib'), eg=await h.rect('#lib>.eg.t'), r1=await h.rect('#lib-list > :first-child');
+    check(near(l.y, sh.y, 1) && near(l.b, sh.b, 1), '#lib-list phủ kín sheet: '+l.y+'..'+l.b+' vs '+sh.y+'..'+sh.b);
+    check(eg && near(eg.b, s.b, 1), 'mép lớp .eg.t == bottom ô tìm: '+(eg&&eg.b)+' vs '+s.b);
+    check(r1 && near(r1.y, s.b+32, 1), 'phần tử đầu cách ô tìm 32px như cũ: '+(r1&&r1.y)+' vs '+(s.b+32));
     check((await h.txt('#lib-go'))==='Đóng', 'nút Đóng khi chưa chọn');
     await page.fill('#lib-q','squat'); await h.wait(250);
     var nm=await h.ev(function(){ return [].map.call(document.querySelectorAll('#lib-list .row .nm'), function(e){ return e.textContent; }); });
