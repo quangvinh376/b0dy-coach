@@ -4,7 +4,7 @@
    bị coi là "viewport-sized" và WebKit giữ màu đã lấy lần đầu. App dùng hai dải .wkedge (fixed 12px) làm nguồn màu (app.js syncTheme).
    Chromium không có cơ chế này → test GIẢ LẬP đúng thuật toán WebKit (điểm lấy mẫu, phân loại container, ngưỡng 0,9 / 10px / opacity 0,1)
    và đối chiếu màu dải với PIXEL THẬT ở mép khi tạm ẩn dải (oracle: dải phải đúng màu app đang hiện ở mép đó).
-   W0 tắt dải → WebKit tìm thấy body "viewport-sized" (bẫy v2.4.0–2.4.1) · W1 PIN / trang chủ / khách hàng (kể cả cuộn): dải là container, Ink
+   W0 tắt dải → WebKit tìm thấy body "viewport-sized" (bẫy v2.4.0–2.4.1); app cài (standalone/sb-legacy) dải display:none, không che khối đỉnh · W1 PIN / trang chủ / khách hàng (kể cả cuộn): dải là container, Ink
    W2 cửa sổ khách + thư viện: mép dưới Tile khi mở, về Ink sau khi đóng · W3 loop 1:1: setup Ink → rest-setup Acid/Acid → nghỉ: trên Ink, dưới Acid
    → mực phủ kín Ink/Ink · W4 pill: đang hiện không che điểm lấy mẫu, ẩn hẳn (display:none) sau khi tắt · W5 màng .film: tối trên Ink = Ink,
    Acid 93 % trên Ink = #C6EE01, trên Acid = Acid · W6 rời loop → Ink · W7 loop 1:2: nửa trên Acid, nửa dưới Ink rồi cả hai Acid
@@ -131,6 +131,13 @@ function wkEdgesInPage(){
     var k0=await ev(function(){ return document.getElementById('wk-k').hidden; }); await ev(function(){ syncTheme(); }); var k1=await ev(function(){ return document.getElementById('wk-k').hidden; });
     check(k0!==k1, 'kicker #wk-k đổi trạng thái mỗi lần syncTheme (thêm/bớt element fixed → WebKit tính lại)');
     var pillHidden=await ev(function(){ return document.getElementById('pill').hidden; }); check(pillHidden, 'pill ẩn hẳn (hidden) lúc khởi động');
+    /* app cài (standalone): không có thanh Safari → dải tắt; bản cài cũ --top 2px: khối đỉnh và vạch .busy không bị dải che (sự cố v2.4.2) */
+    var sa=await ev(function(){ var d=document.documentElement; d.classList.add('standalone','sb-legacy'); var t=document.getElementById('wk-t'), b=document.getElementById('wk-b');
+      var r={dt:getComputedStyle(t).display, db:getComputedStyle(b).display, top:getComputedStyle(d).getPropertyValue('--top').trim(), busyTop:Math.round(document.getElementById('busy').getBoundingClientRect().top)};
+      var st=document.createElement('style'); st.textContent='*{pointer-events:auto!important}'; document.head.appendChild(st); var e=document.elementFromPoint(196,4); st.remove(); r.hit=e&&(e.id||e.className||e.tagName);
+      d.classList.remove('standalone','sb-legacy'); return r; });
+    check(sa.dt==='none' && sa.db==='none', 'standalone: hai dải display:none — '+JSON.stringify(sa));
+    check(sa.top==='2px' && sa.busyTop===0 && !/wk-/.test(sa.hit||''), 'bản cài cũ: --top 2px, .busy ở y=0, điểm (196,4) không còn là dải: '+JSON.stringify(sa));
   });
   await run('W1', 'PIN · trang chủ · khách hàng (cuộn 40): dải là container ở cả hai mép, màu Ink, pixel mép tối', async function(){
     await expectEdges('PIN', INK, INK, {darkOnly:true});
@@ -156,8 +163,10 @@ function wkEdgesInPage(){
     await page.click('#pl-go'); await screen('p-loop'); await w(1300); await expectEdges('thiết lập set', INK, INK, {darkOnly:true});
     await page.click(L+'.c1'); await w(600); await expectEdges('đang tập', INK, INK, {darkOnly:true});
     await page.click(L+'.j1'); await w(300);
-    var mid=await ev(function(){ return getComputedStyle(document.documentElement).getPropertyValue('--edge-t').trim()+'/'+getComputedStyle(document.documentElement).getPropertyValue('--edge-b').trim(); });
-    check(/#0A0A0A\/#0A0A0A/i.test(mid), 'vòng loang đang chạy (300ms) dải chưa đổi: '+mid);
+    /* vòng loang từ nút Đạt (sát đáy): mép dưới phủ kín sau ~100ms → dải dưới Acid; mép trên chỉ khi vòng tới (~520ms) → dải trên còn Ink;
+       syncTheme() gọi chen ngang (ví dụ pill) không được kéo dải dưới về Ink */
+    var mid=await ev(function(){ syncTheme(); var cs=getComputedStyle(document.documentElement); return cs.getPropertyValue('--edge-t').trim()+'/'+cs.getPropertyValue('--edge-b').trim(); });
+    check(/#0A0A0A\/#D4FF00/i.test(mid), 'vòng loang 300ms: dải trên Ink, dải dưới Acid (theo mép vòng đã chạm), syncTheme không ghi đè: '+mid);
     await w(900); await pillGone(); await expectEdges('rest-setup (màn Acid)', ACID, ACID); await shot('rest-setup-acid');
     await ev(function(){ state.session.people[0].restTotal=3; saveSession(); });
     await page.click(L+'.c1'); await w(400); await expectEdges('đang nghỉ 400ms (mực dâng từ trên)', INK, ACID); await shot('rest-ink-rising');
@@ -178,6 +187,16 @@ function wkEdgesInPage(){
     var st2=await ev(function(){ var p=document.getElementById('pill'); return {on:p.classList.contains('on'), hidden:p.hidden, disp:getComputedStyle(p).display}; });
     check(!st2.on && st2.hidden && st2.disp==='none', 'pill ẩn hẳn sau 240ms: '+JSON.stringify(st2));
     await expectEdges('pill đã ẩn', ACID, ACID);
+    /* hai vòng loang chồng nhau (QA v2.4.3): Hoàn tác 380ms sau Đạt → vòng Ink chạm mép dưới trước khi vòng Acid kết thúc;
+       khi vòng Acid kết thúc (540ms) không được kéo mép dưới về Acid, và nền chỉ về Ink khi vòng Ink phủ kín */
+    await page.click(L+'.g1'); await w(900);                                   /* Hoàn tác → thiết lập (Ink) */
+    await page.click(L+'.c1'); await w(500); await page.click(L+'.j1'); await w(380); await page.click(L+'.g1'); await w(240);
+    var ov=await ev(function(){ var cs=getComputedStyle(document.documentElement), l=document.querySelector('#loop-host .loop'); return {b:cs.getPropertyValue('--edge-b').trim(), bga:l.classList.contains('bga')}; });
+    check(/#0A0A0A/i.test(ov.b), 'vòng Ink đã chạm mép dưới, vòng Acid kết thúc không ghi đè: '+JSON.stringify(ov));
+    await w(700); await pillGone();
+    var ov2=await ev(function(){ var l=document.querySelector('#loop-host .loop'); return {ph:state.session.people[0].phase, bga:l.classList.contains('bga')}; });
+    check(ov2.ph==='setup' && !ov2.bga, 'sau hai vòng: thiết lập, nền Ink: '+JSON.stringify(ov2)); await expectEdges('sau hai vòng chồng nhau', INK, INK, {darkOnly:true});
+    await page.click(L+'.c1'); await w(500); await page.click(L+'.j1'); await w(1200); await pillGone(); await expectEdges('rest-setup lần 3', ACID, ACID);
   });
   await run('W5', 'Màng .film: Acid 93 % trên nửa Ink = #C6EE01, trên Acid = Acid; đóng màng → về màu nền', async function(){
     await ev(function(){ state.session.people[0].restTotal=60; saveSession(); });
