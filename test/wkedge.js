@@ -114,10 +114,11 @@ function wkEdgesInPage(){
       return {t:cs.getPropertyValue('--edge-t').trim(), b:cs.getPropertyValue('--edge-b').trim(), bg:cs.getPropertyValue('--bg').trim(), theme:m&&m.getAttribute('content'), acidTop:!!acidTop, k:document.getElementById('wk-k').hidden}; });
     check(v.t.toUpperCase()===hex(expT) && v.b.toUpperCase()===hex(expB), label+' · --edge-t/--edge-b: '+v.t+' / '+v.b);
     check((v.theme||'').toUpperCase()===(v.acidTop?'#D4FF00':'#0A0A0A'), label+' · theme-color (iOS ≤ 18, luật cũ: Acid khi nửa trên nghỉ): '+v.theme+' acidTop='+v.acidTop);
-    check(v.bg.toUpperCase()===((expB.join()===ACID.join())?'#D4FF00':'#0A0A0A') || o.filmB, label+' · --bg theo mép dưới: '+v.bg);
+    check(v.bg.toUpperCase()===hex(expB), label+' · --bg = màu mép dưới (dải đáy WebKit 301108 trên bản cài): '+v.bg);
     var on=await pix(false), off=await pix(true);
-    /* trang có lớp mép blur (.edge): backdrop-filter ở sát mép màn hình lấy mẫu ra ngoài khung → tối hơn Ink 2–3 mức; dải Ink đặc phủ 12px → chênh ≤ 4/255 (mắt không thấy) */
-    var invis=o.edge?4:1; check(near(on.t, off.t, invis) && near(on.b, off.b, invis), label+' · dải phải vô hình (pixel dải hiện == dải ẩn, ±'+invis+'): '+JSON.stringify(on)+' vs '+JSON.stringify(off));
+    /* trang có lớp mép blur (.edge): backdrop-filter ở sát mép màn hình lấy mẫu ra ngoài khung → tối hơn Ink 2–3 mức; dải Ink đặc phủ 12px → chênh ≤ 4/255 (mắt không thấy).
+       sheet mở (dim): --bg = Tile (dải đáy WebKit 301108) nên trang nền trong lộ Tile dưới dimmer 75 % Ink → mép trên 8–16 tuỳ trang; dải Ink chênh ≤ 8/255 */
+    var invis=o.dim?8:(o.edge?4:1); if(o.dim) o.tol=8; check(near(on.t, off.t, invis) && near(on.b, off.b, invis), label+' · dải phải vô hình (pixel dải hiện == dải ẩn, ±'+invis+'): '+JSON.stringify(on)+' vs '+JSON.stringify(off));
     if(o.darkOnly) check(off.t.every(function(x){return x<=40;}) && off.b.every(function(x){return x<=40;}), label+' · pixel app thật ở mép (dải ẩn) phải tối: '+JSON.stringify(off));
     else check(near(off.t, expT, o.tol||3) && near(off.b, expB, o.tol||3), label+' · pixel app thật ở mép (dải ẩn) phải đúng màu dải: '+JSON.stringify(off)+' mong '+hex(expT)+' / '+hex(expB));
     return {e:e, v:v, on:on, off:off};
@@ -131,10 +132,10 @@ function wkEdgesInPage(){
     var k0=await ev(function(){ return document.getElementById('wk-k').hidden; }); await ev(function(){ syncTheme(); }); var k1=await ev(function(){ return document.getElementById('wk-k').hidden; });
     check(k0!==k1, 'kicker #wk-k đổi trạng thái mỗi lần syncTheme (thêm/bớt element fixed → WebKit tính lại)');
     var pillHidden=await ev(function(){ return document.getElementById('pill').hidden; }); check(pillHidden, 'pill ẩn hẳn (hidden) lúc khởi động');
-    /* app cài (standalone + sb-legacy, vùng web dưới thanh, --top 2px): dải tắt, khối đỉnh và vạch .busy không bị che (sự cố v2.4.2).
-       Giữ kiểm "standalone + inset 59 → dải bật" để nếu ngày nào dùng lại black-translucent (WebKit 301108 đã sửa) thì không phải đổi CSS */
-    var bt=await ev(function(){ var d=document.documentElement; d.classList.add('standalone'); d.style.setProperty('--sat','59px'); var r={dt:getComputedStyle(document.getElementById('wk-t')).display, top:getComputedStyle(document.getElementById('p-pin')).paddingTop}; d.classList.remove('standalone'); d.style.removeProperty('--sat'); return r; });
-    check(bt.dt==='block' && bt.top==='56px', 'standalone có inset 59 (black-translucent, chưa dùng): dải bật, --top 56 — '+JSON.stringify(bt));
+    /* bản cài cũ (standalone + sb-legacy, vùng web dưới thanh, --top 2px): dải tắt, khối đỉnh và vạch .busy không bị che (sự cố v2.4.2);
+       bản cài black-translucent (standalone, inset 59): dải bật, --top 56, vạch .busy nằm ngay dưới thanh (59) */
+    var bt=await ev(function(){ var d=document.documentElement; d.classList.add('standalone'); d.style.setProperty('--sat','59px'); var r={dt:getComputedStyle(document.getElementById('wk-t')).display, top:getComputedStyle(document.getElementById('p-pin')).paddingTop, busy:getComputedStyle(document.getElementById('busy')).top}; d.classList.remove('standalone'); d.style.removeProperty('--sat'); return r; });
+    check(bt.dt==='block' && bt.top==='56px' && bt.busy==='59px', 'bản cài black-translucent (inset 59): dải bật, --top 56, .busy ở 59 — '+JSON.stringify(bt));
     var sa=await ev(function(){ var d=document.documentElement; d.classList.add('standalone','sb-legacy'); var t=document.getElementById('wk-t'), b=document.getElementById('wk-b');
       var r={dt:getComputedStyle(t).display, db:getComputedStyle(b).display, top:getComputedStyle(d).getPropertyValue('--top').trim(), busyTop:Math.round(document.getElementById('busy').getBoundingClientRect().top)};
       var st=document.createElement('style'); st.textContent='*{pointer-events:auto!important}'; document.head.appendChild(st); var e=document.elementFromPoint(196,4); st.remove(); r.hit=e&&(e.id||e.className||e.tagName);
@@ -151,14 +152,14 @@ function wkEdgesInPage(){
     await page.click('#p-clients .nav .ghost:nth-child(1)'); await screen('p-home'); await w(800);
   });
   await run('W2', 'Cửa sổ khách (trang chủ) + thư viện (bài tập hôm nay): mép dưới Tile khi mở, về Ink 380ms sau khi đóng', async function(){
-    await ev(function(){ openClientSheet('today'); }); await w(600); await expectEdges('cửa sổ khách mở', INK, TILE, {tol:3, edge:true}); await shot('csheet');
+    await ev(function(){ openClientSheet('today'); }); await w(600); await expectEdges('cửa sổ khách mở', INK, TILE, {dim:true}); await shot('csheet');
     await ev(function(){ closeClientSheet(); }); await w(150); var mid=await ev(function(){ return getComputedStyle(document.documentElement).getPropertyValue('--edge-b').trim(); });
     check(/#222222/i.test(mid), 'đang trượt xuống (150ms) mép dưới vẫn Tile: '+mid);
     await w(500); await expectEdges('cửa sổ khách đóng', INK, INK, {darkOnly:true});
     await page.click('#h-go'); await screen('p-pick'); await w(600);
     await page.click('#pk-list .row:has-text("Thành Công")'); await screen('p-confirm'); await w(1300);
     await page.click('#cf-go'); await screen('p-plan'); await page.waitForSelector('#lib.on'); await w(900);
-    await expectEdges('thư viện mở', INK, TILE, {tol:3, edge:true});
+    await expectEdges('thư viện mở', INK, TILE, {dim:true});
     await page.click('#lib-list .row:nth-of-type(1)'); await page.click('#lib-go'); await w(700); await expectEdges('thư viện đóng', INK, INK, {darkOnly:true, edge:true});
   });
   var L='#loop-host .loop:nth-child(1) ';
@@ -207,7 +208,7 @@ function wkEdgesInPage(){
     await page.click(L+'.g1'); await w(600);
     var f=await ev(function(){ var f=document.querySelector('#loop-host .loop .film'); return {on:f.classList.contains('on'), dark:f.classList.contains('dark'), op:getComputedStyle(f).opacity}; });
     check(f.on && !f.dark && f.op==='1', 'màng Acid mở: '+JSON.stringify(f));
-    await expectEdges('màng Acid', FILM_INK, ACID, {tol:3, filmB:true}); await shot('film-acid');
+    await expectEdges('màng Acid', FILM_INK, ACID, {tol:3}); await shot('film-acid');
     await page.click(L+'.film .exl button:first-child'); await w(1000); await expectEdges('vào set mới (Ink)', INK, INK, {darkOnly:true});
   });
   await run('W6', 'Rời loop (Bước khác → Kết thúc buổi tập) → tổng kết Ink/Ink', async function(){

@@ -2,22 +2,24 @@
 <html lang="vi">
 <head>
 <meta charset="UTF-8">
-<!-- v2.4.6 (26/09) · APP CÀI TRÊN HOME SCREEN: KHÔNG có meta apple-mobile-web-app-status-bar-style. Vùng web nằm DƯỚI thanh trạng thái,
-     iOS tô thanh đen đặc — trên iOS này không CSS nào đổi được. Đã thử black-translucent (v2.4.5, 26/09): trang vẽ dưới thanh nhưng
-     viewport bị tính ngắn đúng bằng thanh → hụt một dải đen ở đáy không vẽ tới được (WebKit 301108, máy chủ studio còn dính), và lớp
-     kính iOS làm mờ khối đỉnh. Đừng thử lại black-translucent cho tới khi Apple sửa trên máy thật.
-     Meta đọc LÚC CÀI: mọi bản cài hiện có (inset 0) được nhận ra bằng html.sb-legacy (--top 2px, tắt dải .wkedge).
+<!-- v2.4.7 (26/09) · APP CÀI TRÊN HOME SCREEN: black-translucent + viewport-fit=cover là cách DUY NHẤT để iOS 26/27 vẽ trang dưới thanh
+     trạng thái. Trên iOS của máy chủ studio còn lỗi WebKit 301108: trang vẽ từ mép trên nhưng viewport bị tính ngắn đúng bằng thanh (59)
+     → đáy màn hình có một dải KHÔNG vẽ tới được; dải đó hiện màu nền html/body (--bg). Chủ studio chấp nhận (26/09): app.js giữ --bg
+     luôn bằng màu mép dưới của app (Acid màn nghỉ, Ink, Tile khi mở cửa sổ) nên dải hoà vào trang. Vùng thanh trạng thái: iOS tô bằng
+     màu lấy từ dải .wkedge (cùng cơ chế fixedContainerEdges như Safari). Không dùng height=device-height (lỗi 301108 nêu đích danh).
+     Meta đọc LÚC CÀI: bản cài trước (thanh đen đặc, vùng web nằm dưới thanh, inset 0) nhận ra bằng html.sb-legacy (--top 2px, tắt dải).
      v2.4.2: trong Safari màu vùng dưới thanh trạng thái / thanh công cụ không lấy từ theme-color mà từ hai dải .wkedge. -->
-<meta name="viewport" content="width=device-width,height=device-height,initial-scale=1,maximum-scale=1,user-scalable=no,shrink-to-fit=no,viewport-fit=cover">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,shrink-to-fit=no,viewport-fit=cover">
 <meta name="color-scheme" content="dark">
 <meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="B0DY">
 <script>
-/* Bản cài CŨ (thanh trạng thái "black"): web view nằm DƯỚI thanh trạng thái nên safe-area-inset-top = 0.
-   Bản cài MỚI tràn kín màn hình: inset > 0. Đánh dấu html.sb-legacy để khối đỉnh đặt đúng ở cả hai (app.css :root --top).
-   html.standalone: mọi bản cài. html.sb-legacy (inset 0, tức mọi bản cài hiện nay) tắt hai dải .wkedge (v2.4.3: dải 12px từng che dấu
-   tiếng Việt của khối đỉnh vì --top chỉ 2px). */
-(function(){try{var d=document.documentElement,p=document.createElement('div');p.style.cssText='position:fixed;left:0;top:0;width:1px;height:env(safe-area-inset-top,0px);visibility:hidden;pointer-events:none';d.appendChild(p);var sat=p.getBoundingClientRect().height;d.removeChild(p);var mm=window.matchMedia,sa=(window.navigator.standalone===true)||!!(mm&&(mm('(display-mode: standalone)').matches||mm('(display-mode: fullscreen)').matches));if(sa)d.className+=(d.className?' ':'')+'standalone';if(sa&&sat<1)d.className+=(d.className?' ':'')+'sb-legacy';}catch(e){}})();
+/* App cài: html.standalone. Bản cài CŨ (thanh đen đặc): vùng web nằm DƯỚI thanh nên env(safe-area-inset-top) = 0 → html.sb-legacy
+   (--top 2px, tắt dải .wkedge). Bản cài black-translucent: inset = 59. iOS có thể báo inset muộn hơn lúc parse <head> (v2.4.5 đo một
+   lần tại đây và nhận nhầm bản mới là bản cũ) → đo lại sau khung hình đầu, lúc load và khi resize; class bật/tắt theo phép đo mới nhất. */
+(function(){try{var d=document.documentElement,mm=window.matchMedia,sa=(window.navigator.standalone===true)||!!(mm&&(mm('(display-mode: standalone)').matches||mm('(display-mode: fullscreen)').matches));if(!sa)return;d.className+=(d.className?' ':'')+'standalone';var p=document.createElement('div');p.style.cssText='position:fixed;left:0;top:0;width:1px;height:env(safe-area-inset-top,0px);visibility:hidden;pointer-events:none';function m(){d.appendChild(p);var sat=p.getBoundingClientRect().height;d.removeChild(p);d.classList.toggle('sb-legacy',sat<1);}m();requestAnimationFrame(m);addEventListener('load',m);addEventListener('resize',m);}catch(e){}})();
 </script>
 <title>B0DY — Coach</title>
 <meta name="theme-color" content="#0A0A0A">
