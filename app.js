@@ -7,7 +7,7 @@
    ===================================================================== */
 'use strict';
 var $=function(id){ return document.getElementById(id); };
-var APP_VER='v2.4.2';
+var APP_VER='v2.4.3';
 
 /* ---------------- tiện ích ---------------- */
 function isoToday(d){ d=d||new Date(); return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2); }
@@ -472,13 +472,13 @@ function show(id, dir){
 }
 var HOOK={};
 function go(id, dir){
-  mqStopAll(); closeLib(true);
+  var prev=state.screen; mqStopAll(); closeLib(true);
   if(HOOK[id]) HOOK[id](dir);
   show(id, dir);
   var s=$(id);
   edgeFit(s);                                   /* đo ngay khi trang vừa hiện → khung đầu tiên đã đúng chỗ */
   if(id!=='p-loop') loopSleep();
-  syncTheme();
+  if(prev==='p-loop' && id!=='p-loop') setTimeout(syncTheme, 100); else syncTheme();   /* rời loop: trang mờ đi .2s → vùng thanh đổi ở giữa quãng */
   setTimeout(function(){ afterShow(s); }, 40);
 }
 function afterShow(s){ s.querySelectorAll('.scroll').forEach(fogUpdate); mqInit(s); if(s._after){ s._after(); s._after=null; } }
@@ -1492,7 +1492,9 @@ var LOOPS=[], LOOP_RAF=0, LOOP_ON=false, CURVE='cubic-bezier(.22,.85,.22,1)', FO
 var EDGE_INK='#0A0A0A', EDGE_ACID='#D4FF00', EDGE_TILE='#222222';
 function edgeMix(over, a, under){ return [0,1,2].map(function(i){ return Math.round(over[i]*a+under[i]*(1-a)); }); }
 function edgeHex(c){ return '#'+c.map(function(v){ return (v<16?'0':'')+v.toString(16).toUpperCase(); }).join(''); }
+function setEdge(side, c){ var k='_'+side; if(syncTheme[k]===c) return; syncTheme[k]=c; document.documentElement.style.setProperty('--edge-'+side, c); }
 function edgeOfLoop(root, side){
+  if(root._wash && root._wash[side]) return root._wash[side];                     /* vòng loang đã chạm mép này: giữ màu đích tới khi nền đổi hẳn */
   var bga=root.classList.contains('bga');
   var acid= side==='t' ? (bga && !root.classList.contains('inkon')) : (bga && !root.classList.contains('inkfull'));
   var c= acid ? [212,255,0] : [10,10,10];
@@ -1503,11 +1505,9 @@ function syncTheme(){
   var loop=(state.screen==='p-loop'), top=loop && LOOPS[0] && LOOPS[0].root, bot=loop && LOOPS.length && LOOPS[LOOPS.length-1].root;
   var ct= top ? edgeOfLoop(top,'t') : EDGE_INK, cb= bot ? edgeOfLoop(bot,'b') : EDGE_INK;
   if(document.querySelector('.sheet.on')) cb=EDGE_TILE;                           /* sheet (Tile) phủ mép dưới; sheet chỉ mở trên trang Ink */
-  var st=document.documentElement.style;
-  if(syncTheme._t!==ct){ syncTheme._t=ct; st.setProperty('--edge-t', ct); }
-  if(syncTheme._b!==cb){ syncTheme._b=cb; st.setProperty('--edge-b', cb); }
+  setEdge('t', ct); setEdge('b', cb);
   var bg=(bot && bot.classList.contains('bga') && !bot.classList.contains('inkfull')) ? EDGE_ACID : EDGE_INK;
-  if(syncTheme._bg!==bg){ syncTheme._bg=bg; st.setProperty('--bg', bg); }
+  if(syncTheme._bg!==bg){ syncTheme._bg=bg; document.documentElement.style.setProperty('--bg', bg); }
   var tc=(top && top.classList.contains('acid')) ? EDGE_ACID : EDGE_INK;
   var m=document.querySelector('meta[name=theme-color]'); if(m && m.getAttribute('content')!==tc) m.setAttribute('content', tc);
   /* thêm/bớt một element fixed → WebKit bật cờ tính lại màu mép ở lần commit kế (didAddOrRemoveViewportConstrainedObjects):
@@ -1643,9 +1643,22 @@ function Loop(host, p, o){
     var R=Math.ceil(Math.hypot(Math.max(cx, rr.width-cx), Math.max(cy, rr.height-cy)))+2;
     b.style.cssText='position:absolute;left:'+(cx-R)+'px;top:'+(cy-R)+'px;width:'+(2*R)+'px;height:'+(2*R)+'px;border-radius:50%;background:'+color+';z-index:5;transform:scale(.01);transition:transform 520ms cubic-bezier(.3,.7,.2,1);pointer-events:none;will-change:transform';
     root.appendChild(b); WASH=true;
-    requestAnimationFrame(function(){ requestAnimationFrame(function(){ b.style.transform='scale(1)'; }); });
+    requestAnimationFrame(function(){ requestAnimationFrame(function(){ b.style.transform='scale(1)'; washEdges(b, color, cx, cy, R, rr); }); });
     setTimeout(function(){ crossfadeTop(); swap(); }, 200);
-    setTimeout(function(){ WASH=false; root.classList.toggle('bga', acid); if(!acid) inkTo(1); syncTheme(); b.style.transition='opacity 120ms linear'; b.style.opacity='0'; setTimeout(function(){ b.remove(); }, 130); }, 540);
+    setTimeout(function(){ WASH=false; root._wash=null; root.classList.toggle('bga', acid); if(!acid) inkTo(1); syncTheme(); b.style.transition='opacity 120ms linear'; b.style.opacity='0'; setTimeout(function(){ b.remove(); }, 130); }, 540);
+  }
+  /* Vùng dưới thanh trạng thái / thanh công cụ (Safari) đổi màu đúng khoảnh khắc vòng loang phủ kín mép đó — không chờ vòng phủ
+     hết màn (540ms). Đọc scale thật của vòng mỗi khung hình (không tính lại đường cong). Chỉ mép mà Loop này chạm tới: mép trên
+     thuộc Loop đầu, mép dưới thuộc Loop cuối (1:1 = cả hai). */
+  function washEdges(b, color, cx, cy, R, rr){
+    var mx=Math.max(cx, rr.width-cx), need={t:Math.hypot(mx, cy), b:Math.hypot(mx, rr.height-cy)};
+    var left={t:LOOPS[0]===L, b:LOOPS[LOOPS.length-1]===L}; root._wash={t:null, b:null};
+    (function tick(){
+      if(!b.parentNode || !root._wash) return;
+      var m=getComputedStyle(b).transform, s=(m && m!=='none') ? parseFloat(m.slice(m.indexOf('(')+1)) : 1;
+      ['t','b'].forEach(function(side){ if(left[side] && s*R>=need[side]){ left[side]=false; root._wash[side]=color; setEdge(side, color); } });
+      if(left.t || left.b) requestAnimationFrame(tick);
+    })();
   }
   /* rời màn nghỉ: mực đã phủ kín → màn đã là Ink: chỉ mờ lớp mực đi (crossfade) · chưa kín → vòng loang Ink từ nút */
   function leaveRest(from, after){

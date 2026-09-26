@@ -131,6 +131,13 @@ function wkEdgesInPage(){
     var k0=await ev(function(){ return document.getElementById('wk-k').hidden; }); await ev(function(){ syncTheme(); }); var k1=await ev(function(){ return document.getElementById('wk-k').hidden; });
     check(k0!==k1, 'kicker #wk-k đổi trạng thái mỗi lần syncTheme (thêm/bớt element fixed → WebKit tính lại)');
     var pillHidden=await ev(function(){ return document.getElementById('pill').hidden; }); check(pillHidden, 'pill ẩn hẳn (hidden) lúc khởi động');
+    /* app cài (standalone): không có thanh Safari → dải tắt; bản cài cũ --top 2px: khối đỉnh và vạch .busy không bị dải che (sự cố v2.4.2) */
+    var sa=await ev(function(){ var d=document.documentElement; d.classList.add('standalone','sb-legacy'); var t=document.getElementById('wk-t'), b=document.getElementById('wk-b');
+      var r={dt:getComputedStyle(t).display, db:getComputedStyle(b).display, top:getComputedStyle(d).getPropertyValue('--top').trim(), busyTop:Math.round(document.getElementById('busy').getBoundingClientRect().top)};
+      var st=document.createElement('style'); st.textContent='*{pointer-events:auto!important}'; document.head.appendChild(st); var e=document.elementFromPoint(196,4); st.remove(); r.hit=e&&(e.id||e.className||e.tagName);
+      d.classList.remove('standalone','sb-legacy'); return r; });
+    check(sa.dt==='none' && sa.db==='none', 'standalone: hai dải display:none — '+JSON.stringify(sa));
+    check(sa.top==='2px' && sa.busyTop===0 && !/wk-/.test(sa.hit||''), 'bản cài cũ: --top 2px, .busy ở y=0, điểm (196,4) không còn là dải: '+JSON.stringify(sa));
   });
   await run('W1', 'PIN · trang chủ · khách hàng (cuộn 40): dải là container ở cả hai mép, màu Ink, pixel mép tối', async function(){
     await expectEdges('PIN', INK, INK, {darkOnly:true});
@@ -156,8 +163,10 @@ function wkEdgesInPage(){
     await page.click('#pl-go'); await screen('p-loop'); await w(1300); await expectEdges('thiết lập set', INK, INK, {darkOnly:true});
     await page.click(L+'.c1'); await w(600); await expectEdges('đang tập', INK, INK, {darkOnly:true});
     await page.click(L+'.j1'); await w(300);
-    var mid=await ev(function(){ return getComputedStyle(document.documentElement).getPropertyValue('--edge-t').trim()+'/'+getComputedStyle(document.documentElement).getPropertyValue('--edge-b').trim(); });
-    check(/#0A0A0A\/#0A0A0A/i.test(mid), 'vòng loang đang chạy (300ms) dải chưa đổi: '+mid);
+    /* vòng loang từ nút Đạt (sát đáy): mép dưới phủ kín sau ~100ms → dải dưới Acid; mép trên chỉ khi vòng tới (~520ms) → dải trên còn Ink;
+       syncTheme() gọi chen ngang (ví dụ pill) không được kéo dải dưới về Ink */
+    var mid=await ev(function(){ syncTheme(); var cs=getComputedStyle(document.documentElement); return cs.getPropertyValue('--edge-t').trim()+'/'+cs.getPropertyValue('--edge-b').trim(); });
+    check(/#0A0A0A\/#D4FF00/i.test(mid), 'vòng loang 300ms: dải trên Ink, dải dưới Acid (theo mép vòng đã chạm), syncTheme không ghi đè: '+mid);
     await w(900); await pillGone(); await expectEdges('rest-setup (màn Acid)', ACID, ACID); await shot('rest-setup-acid');
     await ev(function(){ state.session.people[0].restTotal=3; saveSession(); });
     await page.click(L+'.c1'); await w(400); await expectEdges('đang nghỉ 400ms (mực dâng từ trên)', INK, ACID); await shot('rest-ink-rising');

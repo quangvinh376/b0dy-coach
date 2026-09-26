@@ -42,10 +42,14 @@ body::after{content:'';position:fixed;left:0;right:0;top:-140px;bottom:-240px;ba
    bị xếp loại "viewport-sized" → WebKit GIỮ NGUYÊN màu đã lấy lần đầu (preferExistingColor): đó là lý do v2.4.0–2.4.1 đổi --bg và
    theme-color mà thanh vẫn đen. Hai dải này là container "thường" (rộng 100 %, cao 12px) nên màu được đọc lại mỗi lần đổi.
    z 59: trên mọi trang / sheet / dimmer, dưới #pill (70) và khung kéo thả (60). pointer-events:none không ảnh hưởng — lượt hit-test
-   đầu của WebKit bỏ qua pointer-events. Bản PWA cài (không có thanh) chỉ thấy hai dải 12px đúng màu mép trang → vô hình. */
+   đầu của WebKit bỏ qua pointer-events. Chỉ dùng trong Safari; app cài trên Home Screen tắt dải (html.standalone, xem dưới). */
 .wkedge{position:fixed;left:0;right:0;height:12px;z-index:59;pointer-events:none;background:var(--edge-b)}
 .wkedge.t{top:0;background:var(--edge-t)}
 .wkedge.b{bottom:0}
+/* App cài trên Home Screen (standalone): không có thanh Safari để tô màu → tắt dải. Bắt buộc: bản cài cũ có --top:2px, dải 12px sẽ che
+   dấu tiếng Việt của khối đỉnh và vạch .busy (sự cố v2.4.2). html.standalone do script đầu index.html gắn; media query là lớp dự phòng. */
+html.standalone .wkedge{display:none}
+@media (display-mode:standalone),(display-mode:fullscreen){.wkedge{display:none}}
 /* element fixed 4px ngoài màn hình; syncTheme() bật/tắt display mỗi lần đổi màu → WebKit bật cờ tính lại màu mép ở lần commit kế
    (RenderLayerModelObject::styleDidChange → addViewportConstrainedObject → didAddOrRemoveViewportConstrainedObjects) */
 .wkkick{position:fixed;left:-8px;top:-8px;width:4px;height:4px;pointer-events:none}

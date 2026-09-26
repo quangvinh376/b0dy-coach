@@ -13,8 +13,10 @@
 <meta name="apple-mobile-web-app-title" content="B0DY">
 <script>
 /* Bản cài CŨ (thanh trạng thái "black"): web view nằm DƯỚI thanh trạng thái nên safe-area-inset-top = 0.
-   Bản cài MỚI tràn kín màn hình: inset > 0. Đánh dấu html.sb-legacy để khối đỉnh đặt đúng ở cả hai (app.css :root --top). */
-(function(){try{var d=document.documentElement,p=document.createElement('div');p.style.cssText='position:fixed;left:0;top:0;width:1px;height:env(safe-area-inset-top,0px);visibility:hidden;pointer-events:none';d.appendChild(p);var sat=p.getBoundingClientRect().height;d.removeChild(p);var mm=window.matchMedia,sa=(window.navigator.standalone===true)||!!(mm&&(mm('(display-mode: standalone)').matches||mm('(display-mode: fullscreen)').matches));if(sa&&sat<1)d.className+=(d.className?' ':'')+'sb-legacy';}catch(e){}})();
+   Bản cài MỚI tràn kín màn hình: inset > 0. Đánh dấu html.sb-legacy để khối đỉnh đặt đúng ở cả hai (app.css :root --top).
+   html.standalone (mọi bản cài): không có thanh Safari → tắt hai dải .wkedge (v2.4.3: dải 12px từng che dấu tiếng Việt của khối đỉnh
+   trên bản cài cũ vì --top chỉ 2px). */
+(function(){try{var d=document.documentElement,p=document.createElement('div');p.style.cssText='position:fixed;left:0;top:0;width:1px;height:env(safe-area-inset-top,0px);visibility:hidden;pointer-events:none';d.appendChild(p);var sat=p.getBoundingClientRect().height;d.removeChild(p);var mm=window.matchMedia,sa=(window.navigator.standalone===true)||!!(mm&&(mm('(display-mode: standalone)').matches||mm('(display-mode: fullscreen)').matches));if(sa)d.className+=(d.className?' ':'')+'standalone';if(sa&&sat<1)d.className+=(d.className?' ':'')+'sb-legacy';}catch(e){}})();
 </script>
 <title>B0DY — Coach</title>
 <meta name="theme-color" content="#0A0A0A">
