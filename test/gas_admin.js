@@ -133,6 +133,7 @@ SDate = vm.runInContext('Date', sandbox);
 [CODE, path.join(ROOT, 'backend/Logbook.gs'), path.join(ROOT, 'backend/Stats.gs'), path.join(ROOT, 'backend/Admin.gs')].forEach(function (f) {
   vm.runInContext(fs.readFileSync(f, 'utf8'), sandbox, { filename: path.basename(f) });
 });
+vm.runInContext('if (typeof ADM_PERF !== "undefined") ADM_PERF = false;', sandbox);   /* tắt log thời gian của Admin.gs v2.4.1 trong test */
 /* nối 7 case như sẽ dán vào api_() */
 vm.runInContext(fs.readFileSync(CODE, 'utf8').indexOf("case 'adm_data'") >= 0 ? '' : '', sandbox);
 function call(p) {

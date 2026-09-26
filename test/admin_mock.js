@@ -2,6 +2,8 @@
    Kiểm: định tuyến lệnh (adm_* chỉ đi Apps Script, kèm apin; Worker không bao giờ thấy apin), check-in không khoá IP,
    coach VẪN bị khoá IP, tab Cài đặt (IP phòng: thêm / xoá / đủ / giữ ≥1), outbox tách người, khôi phục khi reload,
    PIN sai, backend chưa nâng cấp, PIN admin bị đổi giữa chừng, bố cục 375/393/430.
+   v2.4.1 (tốc độ): không còn lượt 'admin' riêng; adm_data + adm_stats song song; đổi coach ⇄ Admin vào ngay từ cache (lb_acc);
+   kết quả làm mới của phiên cũ bị bỏ khi đổi người; sang tháng giữa chừng → thống kê gọi lại. Máy chủ giả có độ trễ theo lệnh (SRV.latW / SRV.latG).
    PIN trong file này là PIN GIẢ của mock — PIN thật chỉ nằm trong Script Properties.
    Chạy: NODE_PATH=/opt/node22/lib/node_modules node test/admin_mock.js */
 var {chromium}=require('playwright'); var serve=require('./serve'); var path=require('path'); var fs=require('fs');
@@ -11,7 +13,8 @@ fs.rmSync(OUT,{recursive:true,force:true}); fs.mkdirSync(OUT,{recursive:true});
 
 var RES=[], CUR=null, PAGEERR=[];
 function check(c, msg){ if(!c) CUR.fails.push(msg); return !!c; }
-async function run(id, name, fn){ CUR={id:id,name:name,fails:[]}; RES.push(CUR);
+var ONLY=(process.env.ONLY||'').split(',').filter(Boolean);   /* ONLY=AD14 → chỉ chạy các ca này (đo so sánh giữa hai bản) */
+async function run(id, name, fn){ if(ONLY.length && ONLY.indexOf(id)<0) return; CUR={id:id,name:name,fails:[]}; RES.push(CUR);
   try{ await fn(); }catch(e){ CUR.fails.push('EXC '+String(e&&e.message||e).split('\n').slice(0,6).join(' | ')); }
   console.log((CUR.fails.length?'FAIL ':'PASS ')+id+' '+name+(CUR.fails.length?'\n   - '+CUR.fails.join('\n   - '):'')); }
 
@@ -19,7 +22,7 @@ async function run(id, name, fn){ CUR={id:id,name:name,fails:[]}; RES.push(CUR);
 function today(){ var d=new Date(); return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2); }
 var SRV;
 function resetSrv(){
-  SRV={wk:[], gas:[], ipList:[ROOM_IP], noAdm:false, down:false, apin:A_PIN, checkins:[], alogs:[], clogs:[],
+  SRV={wk:[], gas:[], ipList:[ROOM_IP], noAdm:false, down:false, apin:A_PIN, checkins:[], alogs:[], clogs:[], latW:{}, latG:{},
     mem:[{name:'Bùi Doãn Quang',done:14,total:24,left:10,coach:'Quyết Hán',kind:'PT 1:2'},
          {name:'Nguyễn Quang Vinh',done:11,total:12,left:1,coach:'Quyết Hán',kind:''},
          {name:'Vũ Sao Mai',done:3,total:24,left:21,coach:'Hiền Mai',kind:''},
@@ -29,8 +32,11 @@ function resetSrv(){
 resetSrv();
 function coachRes(){ return {ok:true, coach:'Quyết Hán', members:SRV.mem.filter(function(m){ return /Quyết/.test(m.coach); }), snapshot:{}, library:null, today:today()}; }
 function send(r, out){ return r.fulfill({status:200, contentType:'application/json', body:JSON.stringify(out)}); }
+function lag(ms){ return ms ? new Promise(function(res){ setTimeout(res, ms); }) : Promise.resolve(); }
+function monthOf(p){ return /^\d{4}-\d{2}$/.test(String(p.month||'')) ? p.month : today().slice(0,7); }   /* máy chủ thật trả lại đúng tháng được hỏi */
 async function wk(r){
-  var p=JSON.parse(r.request().postData()||'{}'); SRV.wk.push({action:p.action, pin:p.pin, apin:p.apin, ip:p.ip});
+  var p=JSON.parse(r.request().postData()||'{}'); SRV.wk.push({action:p.action, pin:p.pin, apin:p.apin, ip:p.ip, t:Date.now()});
+  await lag(SRV.latW[p.action]);
   if(p.action==='ping') return send(r,{ok:true});
   if(p.action==='coach') return send(r, p.pin===C_PIN ? coachRes() : {ok:false,error:'sai_pin'});
   if(p.action==='checkin_coach' || p.action==='log'){ if(SRV.ipList.indexOf(p.ip)<0) return send(r,{ok:false,error:'wrong_ip'}); }
@@ -38,8 +44,9 @@ async function wk(r){
   return send(r,{ok:false,error:'unknown_action'});
 }
 async function gas(r){
-  var p=JSON.parse(r.request().postData()||'{}'); SRV.gas.push({action:p.action, pin:p.pin, apin:p.apin, ip:p.ip, del:p.del, events:p.events, name:p.name});
+  var p=JSON.parse(r.request().postData()||'{}'); SRV.gas.push({action:p.action, pin:p.pin, apin:p.apin, ip:p.ip, del:p.del, events:p.events, name:p.name, month:p.month, t:Date.now()});
   if(SRV.down && p.action!=='ping') return r.abort('internetdisconnected');
+  await lag(SRV.latG[p.action]);
   var a=p.action, isA=(p.apin===SRV.apin);
   if(a==='ping') return send(r,{ok:true,pong:1});
   if(a==='admin') return send(r, isA?{ok:true}:{ok:false,error:'sai_pin'});
@@ -47,7 +54,7 @@ async function gas(r){
     if(SRV.noAdm) return send(r,{ok:false,error:'unknown_action'});
     if(!isA) return send(r,{ok:false,error:'sai_pin'});
     if(a==='adm_data') return send(r,{ok:true, admin:true, coach:'Admin', members:JSON.parse(JSON.stringify(SRV.mem)), snapshot:{}, library:null, today:today()});
-    if(a==='adm_stats') return send(r,{ok:true, admin:true, month:today().slice(0,7), days:{}, monthTotal:309, perClient:{}, rev:{month:today().slice(0,7), total:96500000}, hist:{}});
+    if(a==='adm_stats') return send(r,{ok:true, admin:true, month:monthOf(p), days:{}, monthTotal:309, perClient:{}, rev:{month:today().slice(0,7), total:96500000}, hist:{}});
     if(a==='adm_checkin'){ var m=SRV.mem.filter(function(x){ return x.name===p.name; })[0]; if(!m) return send(r,{ok:false,error:'khong_thay_khach'});
       SRV.checkins.push({name:p.name, by:'Admin', ip:p.ip}); m.done++; m.left--; return send(r,{ok:true,row:42,member:m,coach:m.coach,by:'Admin',at:'09:41'}); }
     if(a==='adm_log'){ SRV.alogs=SRV.alogs.concat(p.events||[]); return send(r,{ok:true,written:(p.events||[]).length}); }
@@ -56,7 +63,7 @@ async function gas(r){
     if(a==='delip'){ var k=SRV.ipList.indexOf(String(p.del||'')); if(k>=0){ if(SRV.ipList.length<=1) return send(r,{ok:false,error:'con_1_ip',ips:SRV.ipList.slice(),max:2}); SRV.ipList.splice(k,1); } return send(r,{ok:true,ips:SRV.ipList.slice(),max:2}); }
   }
   if(a==='coach') return send(r, p.pin===C_PIN ? coachRes() : {ok:false,error:'sai_pin'});
-  if(a==='stats') return send(r, p.pin===C_PIN ? {ok:true, month:today().slice(0,7), days:{}, monthTotal:103, perClient:{}, com:{month:today().slice(0,7), total:14200000}, hist:{}} : {ok:false,error:'sai_pin'});
+  if(a==='stats') return send(r, p.pin===C_PIN ? {ok:true, month:monthOf(p), days:{}, monthTotal:103, perClient:{}, com:{month:today().slice(0,7), total:14200000}, hist:{}} : {ok:false,error:'sai_pin'});
   if(a==='checkin_coach'){ if(p.pin!==C_PIN) return send(r,{ok:false,error:'sai_pin'}); if(SRV.ipList.indexOf(p.ip)<0) return send(r,{ok:false,error:'wrong_ip'}); return send(r,{ok:true,row:7,at:'09:00'}); }
   if(a==='log'){ if(p.pin!==C_PIN) return send(r,{ok:false,error:'sai_pin'}); SRV.clogs=SRV.clogs.concat(p.events||[]); return send(r,{ok:true,written:(p.events||[]).length}); }
   return send(r,{ok:false,error:'unknown_action'});
@@ -82,6 +89,10 @@ async function gas(r){
   async function pin(p){ for(var k of p) await page.click('#pin-pad button:has-text("'+k+'")'); }
   async function shot(n){ await page.screenshot({path:path.join(OUT,n+'.png')}); }
   function since(arr, i){ return arr.slice(i); }
+  /* đếm số lần giao diện Admin BẬT (body.adm) — PIN sai không được làm nháy tab Cài đặt */
+  function watchAdm(){ return ev(function(){ window.__admOn=0; if(window.__admW) return; window.__admW=1; var T=DOMTokenList.prototype.toggle;
+    DOMTokenList.prototype.toggle=function(c,f){ if(this===document.body.classList && c==='adm' && f) window.__admOn++; return T.apply(this, arguments); }; }); }
+  var admOn=function(){ return ev(function(){ return window.__admOn||0; }); };
 
   await page.goto('http://localhost:'+PORT+'/'); await screen('p-pin'); await w(500);
 
@@ -113,12 +124,14 @@ async function gas(r){
     check((await ev(function(){ return window.__ran; }))===1, 'cùng phiên → "Thử lại" vẫn chạy');
   });
 
-  await run('AD2', 'PIN admin: Worker từ chối → admin (Apps Script) → adm_data; trang chủ "Admin", Tổng/Doanh thu, tab Cài đặt hiện', async function(){
+  await run('AD2', 'PIN admin lần đầu: Worker từ chối → adm_data + adm_stats SONG SONG (không còn lượt "admin"); trang chủ "Admin", Tổng/Doanh thu, tab Cài đặt hiện', async function(){
     var k0=SRV.wk.length, g0=SRV.gas.length;
     await pin(A_PIN); await screen('p-home'); await page.waitForFunction(function(){ return !state.loading && state.admin; }, null, {timeout:8000}); await w(1800);
-    var gw=since(SRV.gas,g0).map(function(x){ return x.action; }), kw=since(SRV.wk,k0).map(function(x){ return x.action; });
+    var gw=since(SRV.gas,g0).map(function(x){ return x.action; }).filter(function(a){ return a!=='ping'; }), kw=since(SRV.wk,k0).map(function(x){ return x.action; });
     check(kw.indexOf('coach')>=0, 'thử PIN coach ở Worker trước: '+kw.join(','));
-    check(gw.indexOf('admin')>=0 && gw.indexOf('adm_data')>gw.indexOf('admin') && gw.indexOf('adm_stats')>=0, 'chuỗi Apps Script: '+gw.join(','));
+    check(gw.indexOf('admin')<0, 'không còn lượt hỏi "admin" riêng: '+gw.join(','));
+    check(gw.join()==='adm_stats,adm_data', 'đúng 1 adm_stats + 1 adm_data, thống kê KHÔNG chờ danh sách: '+gw.join(','));
+    check(since(SRV.wk,k0).filter(function(x){ return x.action==='coach'; }).every(function(x){ return x.pin===A_PIN && !x.apin; }), 'lượt thử coach mang pin, không mang apin');
     check(since(SRV.wk,k0).every(function(x){ return !x.apin && !/^adm_|^iplist|^addip|^delip/.test(x.action); }), 'Worker không bao giờ thấy apin/adm_*');
     check(since(SRV.gas,g0).filter(function(x){ return /^adm_/.test(x.action); }).every(function(x){ return x.apin===A_PIN && !x.pin && x.ip===DEV_IP; }), 'adm_* mang apin, không mang pin, kèm ip');
     check((await txt('#h-name'))==='Admin', 'tên: '+(await txt('#h-name')));
@@ -241,20 +254,110 @@ async function gas(r){
     await ev(function(){ return refreshData(true); }); await w(900);
     check((await ev(function(){ return state.screen; }))==='p-pin' && !(await ev(function(){ return state.admin; })), 'về màn PIN');
     check((await txt('#pin-err'))==='MÃ PIN KHÔNG CÒN HIỆU LỰC', 'thông báo: '+(await txt('#pin-err')));
+    check(await ev(function(p){ return accFind(p)===null && !localStorage.getItem('lb_last'); }, A_PIN), 'quên tài khoản đó: lần sau PIN cũ không vào được bằng cache');
     SRV.apin=A_PIN;
   });
 
-  await run('AD10', 'PIN sai (không phải coach, không phải admin) → "MÃ PIN KHÔNG ĐÚNG"', async function(){
+  await run('AD10', 'PIN sai (không phải coach, không phải admin) → "MÃ PIN KHÔNG ĐÚNG", giao diện Admin không nháy', async function(){
+    await watchAdm(); var g0=SRV.gas.length;
     await pin('5555'); await w(2000);
     check((await txt('#pin-err'))==='MÃ PIN KHÔNG ĐÚNG' && (await ev(function(){ return state.screen; }))==='p-pin', 'lỗi: '+(await txt('#pin-err')));
     check(!(await ev(function(){ return state.admin; })), 'không vào admin');
+    check((await admOn())===0, 'tab Cài đặt / body.adm không bật lần nào: '+(await admOn()));
+    check(since(SRV.gas,g0).every(function(x){ return x.action!=='admin'; }), 'không còn lượt "admin"');
+    check((await ev(function(){ return BUSY_N; }))===0, 'vạch bận tắt hẳn (đếm = 0)');
   });
 
   await run('AD11', 'Backend chưa có Admin.gs (unknown_action) → "MÁY CHỦ CHƯA CÓ CHẾ ĐỘ ADMIN"', async function(){
-    SRV.noAdm=true; await ev(function(){ localStorage.removeItem('lb_last'); });
+    SRV.noAdm=true; await ev(function(){ localStorage.removeItem('lb_last'); localStorage.removeItem('lb_acc'); });
     await pin(A_PIN); await w(2500);
     check((await txt('#pin-err'))==='MÁY CHỦ CHƯA CÓ CHẾ ĐỘ ADMIN' && (await ev(function(){ return state.screen; }))==='p-pin', 'lỗi: '+(await txt('#pin-err')));
     SRV.noAdm=false;
+  });
+
+  /* ---------------- v2.4.1 · tốc độ ---------------- */
+  var homeReady=function(fn, t){ return page.waitForFunction(fn, null, {timeout:t||3000}); };
+  await run('AD12', 'Đổi qua lại coach ⇄ Admin: PIN đã từng vào trên máy → vào NGAY từ cache (mạng chậm 4 s cũng không chờ)', async function(){
+    /* máy "mới": cả hai tài khoản đăng nhập một lần bằng đường mạng */
+    await ev(function(){ localStorage.clear(); });
+    await pin(C_PIN); await homeReady(function(){ return state.screen==='p-home' && !state.loading && !!state.pin; }, 8000); await w(500);
+    await ev(function(){ logout(); }); await screen('p-pin'); await w(400);
+    await pin(A_PIN); await homeReady(function(){ return state.screen==='p-home' && !state.loading && state.admin; }, 8000); await w(500);
+    await ev(function(){ logout(); }); await screen('p-pin'); await w(400);
+    var acc=await ev(function(){ var a=accLoad(); return Object.keys(a).map(function(k){ return a[k].coach+':'+a[k].adm; }).sort().join(','); });
+    check(acc==='Admin:1,Quyết Hán:0', 'lb_acc nhớ cả hai tài khoản: '+acc);
+    check(await ev(function(p){ for(var i=0;i<localStorage.length;i++){ var v=localStorage.getItem(localStorage.key(i))||''; if(v===p || v.indexOf('"'+p+'"')>=0) return false; } return true; }, A_PIN), 'localStorage không chứa PIN dạng chữ (chỉ hash)');
+    SRV.latW={coach:4000}; SRV.latG={coach:4000, stats:4000, adm_data:4000, adm_stats:4000};
+    var t=Date.now(); await pin(C_PIN);
+    await homeReady(function(){ return state.screen==='p-home' && !!state.pin && state.clients.length===2; });
+    var tc=Date.now()-t;
+    check(tc<1500, 'coach vào từ cache sau '+tc+' ms (mạng 4.000 ms)');
+    check((await txt('#h-name'))!=='Đang tải…' && !(await ev(function(){ return state.admin; })), 'trang chủ coach có tên ngay: '+(await txt('#h-name')));
+    await ev(function(){ logout(); }); await screen('p-pin'); await w(400);
+    var g0=SRV.gas.length; t=Date.now(); await pin(A_PIN);
+    await homeReady(function(){ return state.screen==='p-home' && state.admin && state.clients.length===5; });
+    var ta=Date.now()-t;
+    console.log('   · vào từ cache (mạng chậm 4.000 ms): coach '+tc+' ms · Admin '+ta+' ms');
+    check(ta<1500, 'Admin vào từ cache sau '+ta+' ms (mạng 4.000 ms)');
+    check((await txt('#h-name'))==='Admin' && (await disp('#p-home .tab-adm'))==='flex', 'Admin + tab Cài đặt ngay');
+    await w(600);
+    var bg=since(SRV.gas,g0).filter(function(x){ return /^adm_(data|stats)$/.test(x.action); });
+    var d=bg.filter(function(x){ return x.action==='adm_data'; })[0], s=bg.filter(function(x){ return x.action==='adm_stats'; })[0];
+    check(d && s && Math.abs(d.t-s.t)<400, 'làm mới ngầm: adm_data + adm_stats cùng lúc, Δ='+(d&&s?Math.abs(d.t-s.t):'?')+' ms');
+    check(SRV.wk.filter(function(x){ return x.t>=t && (x.pin===A_PIN || x.apin); }).length===0, 'PIN Admin đã biết → không hỏi Worker');
+    await w(4200); SRV.latW={}; SRV.latG={};
+  });
+
+  await run('AD13', 'Đổi người giữa lúc đang làm mới: kết quả phiên cũ bị bỏ, phiên mới vẫn tự làm mới (không bị lệnh cũ chặn)', async function(){
+    await ev(function(){ logout(); }); await screen('p-pin'); await w(400);
+    SRV.latW={coach:2500}; SRV.latG={stats:2500};
+    await pin(C_PIN); await homeReady(function(){ return state.screen==='p-home' && !!state.pin; });
+    await w(300);                                                   /* làm mới của coach đang bay (2,5 s) */
+    await ev(function(){ logout(); }); await screen('p-pin'); await w(300);
+    var g0=SRV.gas.length;
+    await pin(A_PIN); await homeReady(function(){ return state.screen==='p-home' && state.admin; });
+    await w(400);
+    check(since(SRV.gas,g0).some(function(x){ return x.action==='adm_data'; }), 'Admin tự làm mới ngay: '+since(SRV.gas,g0).map(function(x){ return x.action; }).join(','));
+    await w(3000);                                                  /* kết quả của coach về muộn */
+    var st=await ev(function(){ return {coach:state.coach, n:state.clients.length, admin:state.admin, last:JSON.parse(localStorage.getItem('lb_last')||'null'), sa:!!(state.stats&&state.stats.admin), cache:(JSON.parse(localStorage.getItem('lb_stats_Admin')||'{}').res||{}).admin===true}; });
+    check(st.admin && st.coach==='Admin' && st.n===5, 'phiên Admin giữ nguyên: '+JSON.stringify(st));
+    check(st.last && st.last.adm===1 && st.last.coach==='Admin', 'lb_last không bị dữ liệu coach ghi đè: '+JSON.stringify(st.last));
+    check(st.sa && st.cache, 'thống kê (trên màn + cache) là của Admin, không phải của coach về muộn');
+    check((await ev(function(){ return BUSY_N; }))===0, 'vạch bận = 0');
+    SRV.latW={}; SRV.latG={};
+  });
+
+  await run('AD14', 'Admin lần đầu (chưa có cache): adm_data ∥ adm_stats — thống kê có cùng lúc với danh sách, không cộng dồn', async function(){
+    await ev(function(){ logout(); }); await screen('p-pin'); await w(300);
+    await ev(function(){ ['lb_acc','lb_last','lb_data_Admin','lb_stats_Admin'].forEach(function(k){ localStorage.removeItem(k); }); });
+    SRV.latW={coach:300}; SRV.latG={admin:1500, adm_data:2000, adm_stats:2000};
+    var g0=SRV.gas.length, t=Date.now();
+    await pin(A_PIN);
+    await page.waitForFunction(function(){ return state.admin && !state.loading; }, null, {timeout:9000}); var td=Date.now()-t;
+    await page.waitForFunction(function(){ return state.stats && state.stats.admin; }, null, {timeout:9000}); var ts=Date.now()-t;
+    var calls=since(SRV.gas,g0), d=calls.filter(function(x){ return x.action==='adm_data'; })[0], s=calls.filter(function(x){ return x.action==='adm_stats'; })[0];
+    console.log('   · Admin lần đầu (Worker 300 ms, adm_data 2.000 ms, adm_stats 2.000 ms): danh sách '+td+' ms · thống kê '+ts+' ms');
+    check(d && s && Math.abs(d.t-s.t)<400, 'gửi cùng lúc: Δ='+(d&&s?Math.abs(d.t-s.t):'?')+' ms');
+    check(td<3400, 'danh sách Admin sau '+td+' ms (v2.4.0: +1 lượt admin)');
+    check(ts<3600, 'thống kê sau '+ts+' ms (v2.4.0 nối đuôi ≥ 5.800 ms)');
+    await w(300);
+    check((await txt('#h-taught'))==='Tổng 309 buổi', 'hero: '+(await txt('#h-taught')));
+    check((await ev(function(){ return BUSY_N; }))===0, 'vạch bận = 0');
+    SRV.latW={}; SRV.latG={};
+  });
+
+  await run('AD15', 'Sang tháng giữa chừng: thống kê gọi lại đúng tháng mới (thống kê về trước hay sau danh sách đều đúng)', async function(){
+    var cur=today().slice(0,7);
+    for(var order of ['thống kê về trước','danh sách về trước']){
+      SRV.latG = order==='thống kê về trước' ? {adm_data:800} : {adm_stats:800};
+      var g0=SRV.gas.length;
+      await ev(function(){ TODAY_ISO='2020-01-31'; TODAY=vn(TODAY_ISO); state.stats=null; return refreshData(true); });
+      await w(2400);
+      var ms=since(SRV.gas,g0).filter(function(x){ return x.action==='adm_stats'; }).map(function(x){ return x.month; });
+      check(ms.length===2 && ms[0]==='2020-01' && ms[1]===cur, order+': tháng gửi đi '+ms.join(' → '));
+      check((await ev(function(){ return state.stats && state.stats.month; }))===cur && (await ev(function(){ return TODAY_ISO.slice(0,7); }))===cur, order+': thống kê cuối = tháng hiện tại');
+    }
+    SRV.latG={};
   });
   await C.ctx.close();
 
