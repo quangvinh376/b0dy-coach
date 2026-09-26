@@ -7,7 +7,7 @@
    ===================================================================== */
 'use strict';
 var $=function(id){ return document.getElementById(id); };
-var APP_VER='v2.4.0';
+var APP_VER='v2.4.1';
 
 /* ---------------- tiện ích ---------------- */
 function isoToday(d){ d=d||new Date(); return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2); }
@@ -184,7 +184,7 @@ function fetchJson(url, opts, timeoutMs){
 /* api(body, tries, wait, t0, tmo): retry theo hạn chót. Lệnh ghi đi qua outbox, KHÔNG retry trần. */
 function api(body, tries, wait, t0, tmo){
   tries=(tries===undefined)?2:tries; wait=wait||600; t0=t0||Date.now(); tmo=tmo||30000;
-  body.ip=state.ip; if(state.pin && !body.pin) body.pin=state.pin;
+  body.ip=state.ip; if(state.pin && !body.pin && !body.apin) body.pin=state.pin;
   if(state.admin && state.apin){ if(!body.apin) body.apin=state.apin; if(ADM_ACT[body.action]) body.action=ADM_ACT[body.action]; }
   if(DEMO) return demoApi(body);
   var payload=JSON.stringify(body);
@@ -232,14 +232,36 @@ function applyPending(){
     else if(e.type==='SET'){ if(e.ok) c.last[e.ex]={kg:e.kg,rep:e.rep,d:e.date}; }
   });
 }
-function saveCache(res){ SS('lb_data_'+res.coach, JSON.stringify({ts:Date.now(), res:res})); SS('lb_last', JSON.stringify({coach:res.coach, h:hashPin(state.admin?state.apin:state.pin), adm:state.admin?1:0})); }
+function saveCache(res){
+  SS('lb_data_'+res.coach, JSON.stringify({ts:Date.now(), res:res}));
+  var h=hashPin(curPin()), rec={coach:res.coach, h:h, adm:state.admin?1:0}, a=accLoad();
+  SS('lb_last', JSON.stringify(rec)); a[h]={coach:rec.coach, adm:rec.adm}; SS('lb_acc', JSON.stringify(a));
+}
+/* v2.4.1 — nhớ TỪNG tài khoản đã đăng nhập trên máy (hash PIN → coach | Admin), không chỉ người cuối:
+   đổi qua lại coach ⇄ Admin vẫn vào ngay từ cache rồi làm mới ngầm (trước đây PIN khác người cuối → luôn đi đường mạng). */
+function curPin(){ return state.admin ? state.apin : state.pin; }
+function accLoad(){ try{ var a=JSON.parse(ST('lb_acc')||'null'); return (a && typeof a==='object' && !Array.isArray(a)) ? a : {}; }catch(e){ return {}; } }
+function accFind(pin){
+  if(!pin) return null;
+  var h=hashPin(pin), a=accLoad()[h], l=null;
+  if(a && a.coach) return {coach:String(a.coach), adm:a.adm?1:0};
+  try{ l=JSON.parse(ST('lb_last')||'null'); }catch(e){}
+  return (l && l.h===h && l.coach) ? {coach:String(l.coach), adm:l.adm?1:0} : null;
+}
+/* máy chủ báo PIN không còn hiệu lực → quên tài khoản đó (không cho vào bằng cache lần sau) */
+function accDrop(pin){
+  if(!pin) return; var h=hashPin(pin), a=accLoad(), l=null;
+  if(a[h]){ delete a[h]; SS('lb_acc', JSON.stringify(a)); }
+  try{ l=JSON.parse(ST('lb_last')||'null'); }catch(e){}
+  if(l && l.h===h) SS('lb_last', null);
+}
 /* đã đăng nhập: PIN coach, hoặc PIN admin */
 function authed(){ return !!(state.pin || (state.admin && state.apin)); }
 /* mỗi lần đổi người dùng (đăng nhập / đăng xuất / coach ⇄ Admin) tăng AUTH_EP: nút hành động của pill tạo ở phiên trước
    (ví dụ "Thử lại" check-in của coach) không được chạy dưới phiên của người khác */
 var AUTH_EP=0;
 function setAdmin(on, pin){
-  AUTH_EP++;
+  AUTH_EP++; state._refreshing=null; state._stats=null;   /* lệnh làm mới đang bay thuộc phiên cũ: bỏ (xem refreshData/refreshStats) */
   state.admin=!!on; state.apin=on?String(pin||''):'';
   if(on){ state.pin=''; state.coach='Admin'; }
   document.body.classList.toggle('adm', !!on);
@@ -248,36 +270,49 @@ function loadCache(coach){ try{ var c=JSON.parse(ST('lb_data_'+coach)||'null'); 
 function hashPin(p){ var h=2166136261; p=String(p||''); for(var i=0;i<p.length;i++){ h^=p.charCodeAt(i); h=Math.imul(h,16777619)>>>0; } return h.toString(16); }
 function findClient(name){ return (state.clients||[]).filter(function(c){return c.name===name})[0]; }
 /* đồng bộ ngầm: lấy lại toàn bộ (stale-while-revalidate) */
+/* v2.4.1: danh sách + thống kê chạy SONG SONG (trước đây thống kê chờ danh sách xong mới gọi → Admin chờ ~15 s + ~12 s).
+   ep=AUTH_EP: kết quả về sau khi đã đổi người dùng (coach ⇄ Admin, đăng xuất) bị bỏ — không đổ dữ liệu phiên cũ vào phiên mới. */
 function refreshData(quiet){
   if(state._refreshing) return state._refreshing;
-  var t0=Date.now();
-  state._refreshing=api({action:'coach'}, 2, 600, 0, 30000).then(function(res){
+  var t0=Date.now(), ep=AUTH_EP;
+  refreshStats(true);
+  var p=state._refreshing=api({action:'coach'}, 2, 600, 0, 30000).then(function(res){
+    if(ep!==AUTH_EP) return;
     state._refreshing=null;
-    if(!res||!res.ok){ if(res&&res.error==='sai_pin'){ logout('MÃ PIN KHÔNG CÒN HIỆU LỰC'); } return; }
+    if(!res||!res.ok){ if(res&&res.error==='sai_pin') pinGone(ep); return; }
     var before=JSON.stringify(state.clients);
     buildClients(res, t0); saveCache(res); state.dataTs=Date.now();
     if(state.client) state.client=findClient(state.client.name)||state.client;
     if(JSON.stringify(state.clients)!==before && HOOK[state.screen] && REFRESHABLE[state.screen]){ HOOK[state.screen](null,true); afterShow($(state.screen)); }
-    refreshStats(true);
-  }).catch(function(){ state._refreshing=null; if(!quiet) notify('Máy chủ chậm', {err:true}); });
-  return state._refreshing;
+    /* máy chủ vừa đổi TODAY_ISO sang tháng mới mà thống kê đã về theo tháng cũ → lấy lại */
+    if(!state._stats && state.stats && state.stats.month && state.stats.month!==TODAY_ISO.slice(0,7)) refreshStats(true);
+  }).catch(function(){ if(ep!==AUTH_EP) return; state._refreshing=null; if(!quiet) notify('Máy chủ chậm', {err:true}); });
+  return p;
 }
 var REFRESHABLE={'p-home':1,'p-clients':1,'p-profile':1,'p-pick':1,'p-confirm':1,'p-measure':1,'p-perf':1};
 /* thống kê cho trang chủ + hiệu suất tập (action stats · Apps Script). Thiếu cũng không sao: ô hiện "—". */
-function refreshStats(quiet){
+function refreshStats(quiet, again){
   if(state._stats) return state._stats;
-  state._stats=api({action:'stats', month:TODAY_ISO.slice(0,7), _gas:1}, 1, 800, 0, 30000).then(function(res){
+  var ep=AUTH_EP, month=TODAY_ISO.slice(0,7);
+  var p=state._stats=api({action:'stats', month:month, _gas:1}, 1, 800, 0, 30000).then(function(res){
+    if(ep!==AUTH_EP) return;
     state._stats=null;
     if(!res||!res.ok) return;
-    state.stats=res; SS('lb_stats_'+state.coach, JSON.stringify({ts:Date.now(), res:res}));
-    if(state.screen==='p-home') renderHome(false);
-    else if(state.screen==='p-perf') renderPerf(false);
-    else if(state.screen==='p-confirm') HOOK['p-confirm'](null,true);
-  }).catch(function(){ state._stats=null; });
-  return state._stats;
+    if(month!==TODAY_ISO.slice(0,7) && !again) return refreshStats(true, 1);   /* sang tháng mới giữa chừng */
+    statsApply(res);
+  }).catch(function(){ if(ep===AUTH_EP) state._stats=null; });
+  return p;
+}
+function statsApply(res){
+  state.stats=res; SS('lb_stats_'+state.coach, JSON.stringify({ts:Date.now(), res:res}));
+  if(state.screen==='p-home') renderHome(false);
+  else if(state.screen==='p-perf') renderPerf(false);
+  else if(state.screen==='p-confirm') HOOK['p-confirm'](null,true);
 }
 function loadStats(coach){ try{ var c=JSON.parse(ST('lb_stats_'+coach)||'null'); return c&&c.res?c.res:null; }catch(e){ return null; } }
-function logout(msg){ state.pin=''; setAdmin(false); hidePill(); SES('lb_pin',null); state.clients=[]; state.stats=null; go('p-pin','back'); if(msg) setTimeout(function(){ pinError(msg); },300); }
+function logout(msg){ state.pin=''; setAdmin(false); hidePill(); SES('lb_pin',null); state.loading=false; state.clients=[]; state.stats=null; go('p-pin','back'); if(msg) setTimeout(function(){ pinError(msg); },300); }
+/* máy chủ trả sai_pin cho PIN của phiên này → quên tài khoản đó rồi về màn PIN. ep khác = kết quả của phiên cũ → bỏ qua. */
+function pinGone(ep){ if(ep!=null && ep!==AUTH_EP) return; accDrop(curPin()); logout('MÃ PIN KHÔNG CÒN HIỆU LỰC'); }
 
 /* ---- hàng đợi ghi (outbox): UI cập nhật ngay, nền gửi theo lô, id chống trùng ----
    ev.hold=1: sự kiện "đang giữ" (set vừa ghi, còn hoàn tác được) → chưa gửi cho tới khi release(). */
@@ -301,11 +336,11 @@ function flush(){
   if(OUT.busy || !authed()) return Promise.resolve();
   var batch=OUT.q.filter(function(e){ return !e.hold && mine(e); }).slice(0,150), ids={}; batch.forEach(function(e){ ids[e.id]=1; });
   if(!batch.length) return Promise.resolve();
-  OUT.busy=true;
+  OUT.busy=true; var ep=AUTH_EP;
   return api({action:'log', events:batch}, 1, 800, 0, 30000).then(function(res){
     OUT.busy=false;
     if(res&&res.ok){ OUT.q=OUT.q.filter(function(e){ return !ids[e.id]; }); outSave(); OUT.fail=0; if(OUT.q.some(function(e){return !e.hold && mine(e)})) flush(); }
-    else if(res&&res.error==='sai_pin'){ logout('MÃ PIN KHÔNG CÒN HIỆU LỰC'); }
+    else if(res&&res.error==='sai_pin'){ pinGone(ep); }
     else { OUT.fail=(OUT.fail||0)+1; }
   }).catch(function(){ OUT.busy=false; OUT.fail=(OUT.fail||0)+1; });
 }
@@ -680,37 +715,44 @@ function startPin(){
 function renderDots(){ var el=$('pin-dots'); el.classList.remove('err'); el.innerHTML=''; for(var i=0;i<4;i++){ var d=document.createElement('div'); d.className='dot'+(i<pinState.val.length?' f':''); el.appendChild(d); } }
 function pinError(msg){ $('pin-err').textContent=msg; pinState.val=''; var el=$('pin-dots'); el.innerHTML=''; for(var i=0;i<4;i++){ var d=document.createElement('div'); d.className='dot'; el.appendChild(d); } el.classList.add('err'); setTimeout(function(){ el.classList.remove('err'); }, 500); }
 function tryPin(){
-  var pin=pinState.val, lastc=null; try{ lastc=JSON.parse(ST('lb_last')||'null'); }catch(e){}
-  if(lastc && lastc.h===hashPin(pin)){
-    var c=loadCache(lastc.coach);
-    if(c){ if(lastc.adm) setAdmin(true, pin); else { setAdmin(false); state.pin=pin; } SES('lb_pin',pin); buildClients(c.res); state.stats=loadStats(state.coach); state.dataTs=c.ts; go('p-home','fwd'); refreshData(true); flush(); return; }
+  var pin=pinState.val, acc=accFind(pin), c=acc?loadCache(acc.coach):null;
+  if(c){
+    /* PIN đã từng vào được trên máy này (coach hoặc Admin): vào NGAY từ cache, làm mới ngầm */
+    if(acc.adm) setAdmin(true, pin); else { setAdmin(false); state.pin=pin; }
+    SES('lb_pin',pin); state.loading=false; buildClients(c.res); state.stats=loadStats(state.coach); state.dataTs=c.ts; go('p-home','fwd'); refreshData(true); flush(); return;
   }
-  setAdmin(false); state.pin=pin; state.coach=''; state.clients=[]; state.stats=null; state.loading=true; state.dataTs=Date.now();
-  go('p-home','fwd'); busyLine(true); var t0=Date.now();
-  api({action:'coach'}, 2, 600, 0, 30000).then(function(res){
-    if(state.pin!==pin){ busyLine(false); return; }
-    if(res&&res.ok){ busyLine(false); state.loading=false; SES('lb_pin',pin); buildClients(res, t0); saveCache(res); state.dataTs=Date.now(); state.stats=loadStats(state.coach); if(state.screen==='p-home') renderHome(true); refreshStats(true); flush(); return; }
-    if(res&&res.error==='sai_pin'){
-      /* không phải PIN coach → thử PIN admin; đúng thì vào chế độ Admin (trang chủ + tab Cài đặt) */
-      return api({action:'admin', apin:pin}, 2, 600, 0, 30000).then(function(ad){
-        if(state.pin!==pin){ busyLine(false); return; }
-        if(ad&&ad.ok){ adminLoad(pin, t0); return; }
-        busyLine(false); state.loading=false; backToPin('MÃ PIN KHÔNG ĐÚNG');
-      });
-    }
-    busyLine(false); backToPin('MÁY CHỦ LỖI — THỬ LẠI');
-  }).catch(function(){ busyLine(false); backToPin('MÁY CHỦ CHẬM — THỬ LẠI'); });
+  /* đường mạng. state.pin chỉ gán khi máy chủ đã nhận PIN — trước đó authed()=false nên flush() không gửi hàng đợi bằng một PIN chưa rõ của ai */
+  state.pin=''; setAdmin(false); state.coach=''; state.clients=[]; state.stats=null; state.loading=true; state.dataTs=Date.now();
+  go('p-home','fwd');
+  var ep=AUTH_EP, t0=Date.now(), n=1, end=function(){ if(n){ n=0; busyLine(false); } };
+  busyLine(true);
+  if(acc && acc.adm){ adminLoad(pin, t0, ep, end); return; }      /* PIN Admin đã biết (chỉ mất cache dữ liệu): khỏi hỏi Worker */
+  api({action:'coach', pin:pin}, 2, 600, 0, 30000).then(function(res){
+    if(ep!==AUTH_EP){ end(); return; }
+    if(res&&res.ok){ end(); state.pin=pin; state.loading=false; SES('lb_pin',pin); buildClients(res, t0); saveCache(res); state.dataTs=Date.now(); state.stats=loadStats(state.coach); if(state.screen==='p-home') renderHome(true); refreshStats(true); flush(); return; }
+    /* không phải PIN coach → thử Admin NGAY (adm_data tự kiểm PIN — bỏ lượt hỏi 'admin' riêng như v2.4.0) */
+    if(res&&res.error==='sai_pin'){ adminLoad(pin, t0, ep, end); return; }
+    end(); backToPin('MÁY CHỦ LỖI — THỬ LẠI');
+  }).catch(function(){ end(); if(ep===AUTH_EP) backToPin('MÁY CHỦ CHẬM — THỬ LẠI'); });
 }
-/* PIN admin đã đúng: tải dữ liệu MỌI khách (adm_data · Apps Script). Vạch bận của tryPin chạy tiếp tới khi xong. */
-function adminLoad(pin, t0){
-  setAdmin(true, pin); SES('lb_pin', pin); state.clients=[]; state.stats=null; state.loading=true; state.dataTs=Date.now();
-  if(state.screen==='p-home') renderHome(false);
-  api({action:'coach'}, 2, 600, 0, 30000).then(function(res){
-    if(!state.admin || state.apin!==pin){ busyLine(false); return; }
-    busyLine(false); state.loading=false;
-    if(res&&res.ok){ buildClients(res, t0); saveCache(res); state.dataTs=Date.now(); state.stats=loadStats(state.coach); if(state.screen==='p-home') renderHome(true); refreshStats(true); flush(); return; }
-    backToPin(res&&res.error==='sai_pin' ? 'MÃ PIN KHÔNG ĐÚNG' : res&&res.error==='unknown_action' ? 'MÁY CHỦ CHƯA CÓ CHẾ ĐỘ ADMIN' : 'MÁY CHỦ LỖI — THỬ LẠI');
-  }).catch(function(){ if(!state.admin || state.apin!==pin) return; busyLine(false); backToPin('MÁY CHỦ CHẬM — THỬ LẠI'); });
+/* v2.4.1 — PIN Admin: adm_data (tự kiểm PIN) và adm_stats chạy SONG SONG trên Apps Script
+   (v2.4.0: admin → adm_data → adm_stats nối đuôi ≈ 30 s). Giao diện Admin chỉ bật khi adm_data trả ok → PIN sai không nháy tab Cài đặt.
+   end(): tắt vạch bận của tryPin (đúng một lần). */
+function adminLoad(pin, t0, ep, end){
+  var month=TODAY_ISO.slice(0,7);
+  var ps=api({action:'adm_stats', apin:pin, month:month}, 1, 800, 0, 30000).catch(function(){ return null; });
+  api({action:'adm_data', apin:pin}, 2, 600, 0, 30000).then(function(res){
+    end(); if(ep!==AUTH_EP) return;
+    if(!(res&&res.ok)){ backToPin(res&&res.error==='sai_pin' ? 'MÃ PIN KHÔNG ĐÚNG' : res&&res.error==='unknown_action' ? 'MÁY CHỦ CHƯA CÓ CHẾ ĐỘ ADMIN' : 'MÁY CHỦ LỖI — THỬ LẠI'); return; }
+    setAdmin(true, pin); SES('lb_pin', pin); state.loading=false;
+    buildClients(res, t0); saveCache(res); state.dataTs=Date.now(); state.stats=loadStats(state.coach);
+    var ep2=AUTH_EP;
+    state._stats=ps.then(function(st){
+      if(ep2!==AUTH_EP) return; state._stats=null;
+      if(st && st.ok){ if(month===TODAY_ISO.slice(0,7)) statsApply(st); else refreshStats(true); }   /* sang tháng mới giữa chừng → lấy lại */
+    });
+    if(state.screen==='p-home') renderHome(true); flush();
+  }).catch(function(){ end(); if(ep===AUTH_EP) backToPin('MÁY CHỦ CHẬM — THỬ LẠI'); });
 }
 function backToPin(msg){ state.pin=''; setAdmin(false); hidePill(); SES('lb_pin',null); state.loading=false; state.clients=[]; go('p-pin','back'); setTimeout(function(){ pinError(msg); },300); }
 HOOK['p-pin']=function(){ startPin(); warm(); };
@@ -749,7 +791,7 @@ function renderIps(){
 }
 function ipsFrom(res){ ADM.ips=(res.ips||[]).map(String).filter(Boolean); ADM.max=+res.max||ADM.max||2; ADM.loaded=true; renderIps(); }
 function ipErr(res){
-  var e=res&&res.error; if(e==='sai_pin'){ logout('MÃ PIN KHÔNG CÒN HIỆU LỰC'); return; }
+  var e=res&&res.error; if(e==='sai_pin'){ pinGone(); return; }
   notify(e==='full'?'Đã đủ '+(ADM.max||2)+' IP':e==='con_1_ip'?'Phải giữ ít nhất 1 IP':e==='unknown_action'?'Máy chủ chưa có chế độ Admin':(e==='sai_ip'||e==='thieu_ip')?'Chưa lấy được IP thiết bị':'Không lưu được', {err:true});
 }
 function loadIps(){ api({action:'iplist'}, 1, 800, 0, 30000).then(function(res){ if(res&&res.ok) ipsFrom(res); else ipErr(res); }).catch(function(){ notify('Máy chủ chậm', {err:true}); }); }
@@ -1235,7 +1277,7 @@ function sendCheckin(m, many){
       return true;
     }
     if(err==='da_checkin'){ ciOk(m, ci, ci.no, res.at||m.signed||'', many); return true; }
-    if(err==='sai_pin'){ delete CI[m.name]; ciSave(); logout('MÃ PIN KHÔNG CÒN HIỆU LỰC'); return false; }
+    if(err==='sai_pin'){ delete CI[m.name]; ciSave(); pinGone(); return false; }
     ciFail(m, ci, err==='wrong_ip' ? 'Chỉ check-in được ở phòng' : err==='khong_phai_khach_cua_ban' ? 'Không phải khách của bạn' : err==='khong_thay_khach' ? 'Không thấy khách trong MEMBERS' : 'Chưa check-in', many);
     return false;
   }).catch(function(){ busyLine(false); m=live(); var ci=ciFor(m.name); if(ci) ciFail(m, ci, 'Chưa check-in', many); return false; });
@@ -1812,8 +1854,8 @@ function ptrRefresh(){
 /* ---------------- khởi động ---------------- */
 (function boot(){
   refreshIp();
-  var p=SES('lb_pin'), lastc=null; try{ lastc=JSON.parse(ST('lb_last')||'null'); }catch(e){}
-  if(p && lastc && lastc.h===hashPin(p)){ var c=loadCache(lastc.coach); if(c){ if(lastc.adm) setAdmin(true, p); else state.pin=p; buildClients(c.res); state.stats=loadStats(state.coach); state.dataTs=c.ts; var ss=loadSession(); if(ss){ state.session=ss; go(ss.started&&ss.plan.length?'p-loop':'p-plan','fwd'); } else go('p-home','fwd'); refreshData(true); flush(); return; } }
+  var p=SES('lb_pin'), acc=accFind(p);
+  if(acc){ var c=loadCache(acc.coach); if(c){ if(acc.adm) setAdmin(true, p); else state.pin=p; buildClients(c.res); state.stats=loadStats(state.coach); state.dataTs=c.ts; var ss=loadSession(); if(ss){ state.session=ss; go(ss.started&&ss.plan.length?'p-loop':'p-plan','fwd'); } else go('p-home','fwd'); refreshData(true); flush(); return; } }
   go('p-pin','fwd');
 })();
 if('serviceWorker' in navigator && !DEMO && location.protocol==='https:'){ navigator.serviceWorker.register('sw.js').catch(function(){}); }
