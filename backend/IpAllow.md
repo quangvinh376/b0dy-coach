@@ -1,3 +1,5 @@
+> ⛔ **ĐÃ THAY — KHÔNG ÁP DỤNG FILE NÀY (26/09/2026, v2.4).** Bản nháp này chưa từng được dán vào Apps Script. `ipOk_` đang chạy đọc `STUDIO_IP` dạng danh sách ngăn bằng dấu phẩy, và `iplist` / `addip` / `delip` nay nằm trong `backend/Admin.gs` (xem `backend/README.md` mục 7). Dán code dưới đây sẽ trùng `case` và đổi cách lưu IP. Giữ lại chỉ để tra lịch sử.
+
 # Hai IP được check-in — sửa `Code.gs` (v2.3.2)
 
 Màn Admin của app lưu **tối đa 2 IP**, cả hai đều được check-in: ô 1 = `STUDIO_IP` (IP phòng, giữ nguyên), ô 2 = `STUDIO_IP2`. Nút **Thêm IP** ghi IP của thiết bị đang mở app vào ô trống; nút × xoá ô đó (xoá xong mới thêm được IP mới). Ba action mới `iplist` / `addip` / `delip`, đều cần PIN admin.

@@ -65,5 +65,37 @@ Những gì đổi (chỉ trong `lbMembers_` và một dòng gọi ở `lbCoach_
 
 Lưu ý: `coach` đi qua Cloudflare Worker `b0dy-kiosk-api`. Worker chỉ chuyển tiếp JSON nên trường mới tự đi qua; nếu Worker có cache phản hồi `coach`, xoá cache hoặc chờ hết hạn. Nếu danh sách khách hết gói quá dài theo thời gian, thêm điều kiện lọc theo `end` (ví dụ chỉ 12 tháng gần nhất) ngay chỗ `if (left <= 0 && !withDone) continue;`.
 
-## 6. Hai IP được check-in (`iplist` / `addip` / `delip`, v2.3.2)
-Xem `backend/IpAllow.md`: `ipOk_` nhận `STUDIO_IP` hoặc `STUDIO_IP2`; thêm `apiIpList_`, `apiAddIp_`, `apiDelIp_` + 3 `case`. App: màn Admin hiện 2 ô IP, nút **Thêm IP**, × để xoá.
+## 6. Hai IP được check-in — ĐÃ THAY bằng mục 7 (`Admin.gs`, v2.4)
+`backend/IpAllow.md` (bản nháp v2.3.2 dùng `STUDIO_IP2`) **chưa từng được áp dụng** và nay đã bị thay: `ipOk_` đang chạy đọc `STUDIO_IP` dạng **danh sách ngăn bằng dấu phẩy**, và `iplist` / `addip` / `delip` nằm trong `Admin.gs` làm việc đúng trên danh sách đó. **Không dán code của IpAllow.md.**
+
+## 7. Chế độ Admin — `backend/Admin.gs` (v2.4, bắt buộc cho PIN admin trong app)
+
+Đăng nhập app bằng **ADMIN_PIN** (Script Properties) → tên **Admin**: xem và check-in **toàn bộ khách của phòng, không khoá IP**, ghi buổi tập như coach, tab **Cài đặt** (thứ 3, cạnh Trang chủ · Khách hàng) quản lý IP được check-in. Mọi lệnh admin đi **thẳng Apps Script** (Worker không có chế độ admin).
+
+Cài đặt (Apps Script **B0DY Discord KPI**):
+
+1. Files ▸ **+** ▸ Script ▸ đặt tên `Admin` ▸ dán toàn bộ `backend/Admin.gs` ▸ Save.
+2. `Code.gs` ▸ trong `switch` của `api_()`, ngay dưới dòng `case 'stats': …`, thêm 7 dòng:
+   ```js
+         case 'adm_data':      out = admData_(p);    break;
+         case 'adm_checkin':   out = admCheckin_(p); break;
+         case 'adm_log':       out = admLog_(p);     break;
+         case 'adm_stats':     out = admStats_(p);   break;
+         case 'iplist':        out = admIpList_(p);  break;
+         case 'addip':         out = admIpAdd_(p);   break;
+         case 'delip':         out = admIpDel_(p);   break;
+   ```
+3. **Deploy ▸ Manage deployments ▸ ✏️ (Coach API v1) ▸ Version: New version ▸ Deploy.**
+4. Kiểm (không cần PIN): POST `{"action":"adm_data"}` và `{"action":"iplist"}` phải trả `sai_pin` — trả `unknown_action` nghĩa là chưa deploy bản mới.
+
+| action | Việc | Ghi chú |
+|---|---|---|
+| `adm_data` | như `coach` nhưng MỌI khách (MEMBERS, mỗi tên một dòng: ưu tiên dòng còn buổi), kèm coach phụ trách, snapshot, thư viện, `checked`/`signed` hôm nay | `coach: "Admin"` |
+| `adm_checkin` | check-in + ký thay một lượt, mọi khách, không khoá IP | SESSION LOG: B chuỗi `M/d/yyyy` · G · K `Đã tập` · N `app HH:mm · ký: Admin`; cột E (Coach) là công thức → KPI vẫn tính cho coach phụ trách. Không auto-retry |
+| `adm_log` | ghi lô sự kiện vào sheet **Khách của <coach phụ trách>** (bỏ hậu tố "(giai đoạn 1)"), cột R = `Admin` | id trùng ở bất kỳ sheet coach nào bị bỏ qua |
+| `adm_stats` | trang chủ Admin: buổi "Đã tập" cả phòng theo ngày, `perClient` mọi khách, `rev` = Doanh thu (dòng "Tổng" tab COM, cột C), `hist` từ mọi sheet coach | |
+| `iplist` / `addip` / `delip` | đọc / thêm IP của thiết bị đang gọi / xoá theo giá trị trên `STUDIO_IP` (danh sách dấu phẩy) | tối đa 2 · **không bao giờ để rỗng** (rỗng = tắt khoá IP) → không xoá được IP cuối |
+
+⚠️ **IP phòng nằm ở HAI chỗ.** Tab Cài đặt chỉ sửa `STUDIO_IP` (Apps Script). Worker Cloudflare gác bằng biến `ALLOW_IP` riêng:
+- **Thêm** IP ở app → coach check-in từ IP đó vẫn được (Worker từ chối → app tự lui về Apps Script, chậm hơn vài giây). Muốn nhanh: thêm IP đó vào `ALLOW_IP`.
+- **Xoá** IP ở app **không** rút quyền phía Worker. Muốn chặn hẳn một IP: xoá cả trong `ALLOW_IP` (Cloudflare → Workers & Pages → `b0dy-kiosk-api` → Settings → Variables and secrets).
