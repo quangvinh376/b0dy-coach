@@ -131,12 +131,15 @@ function wkEdgesInPage(){
     var k0=await ev(function(){ return document.getElementById('wk-k').hidden; }); await ev(function(){ syncTheme(); }); var k1=await ev(function(){ return document.getElementById('wk-k').hidden; });
     check(k0!==k1, 'kicker #wk-k đổi trạng thái mỗi lần syncTheme (thêm/bớt element fixed → WebKit tính lại)');
     var pillHidden=await ev(function(){ return document.getElementById('pill').hidden; }); check(pillHidden, 'pill ẩn hẳn (hidden) lúc khởi động');
-    /* app cài (standalone): không có thanh Safari → dải tắt; bản cài cũ --top 2px: khối đỉnh và vạch .busy không bị dải che (sự cố v2.4.2) */
+    /* bản cài kiểu cũ (standalone + sb-legacy, vùng web dưới thanh, --top 2px): dải tắt, khối đỉnh và vạch .busy không bị che (sự cố v2.4.2);
+       bản cài black-translucent (standalone, inset 59): dải VẪN bật vì iOS tô vùng thanh bằng màu lấy từ dải */
+    var bt=await ev(function(){ var d=document.documentElement; d.classList.add('standalone'); d.style.setProperty('--sat','59px'); var r={dt:getComputedStyle(document.getElementById('wk-t')).display, top:getComputedStyle(document.getElementById('p-pin')).paddingTop}; d.classList.remove('standalone'); d.style.removeProperty('--sat'); return r; });
+    check(bt.dt==='block' && bt.top==='56px', 'bản cài black-translucent: dải bật, --top 56 — '+JSON.stringify(bt));
     var sa=await ev(function(){ var d=document.documentElement; d.classList.add('standalone','sb-legacy'); var t=document.getElementById('wk-t'), b=document.getElementById('wk-b');
       var r={dt:getComputedStyle(t).display, db:getComputedStyle(b).display, top:getComputedStyle(d).getPropertyValue('--top').trim(), busyTop:Math.round(document.getElementById('busy').getBoundingClientRect().top)};
       var st=document.createElement('style'); st.textContent='*{pointer-events:auto!important}'; document.head.appendChild(st); var e=document.elementFromPoint(196,4); st.remove(); r.hit=e&&(e.id||e.className||e.tagName);
       d.classList.remove('standalone','sb-legacy'); return r; });
-    check(sa.dt==='none' && sa.db==='none', 'standalone: hai dải display:none — '+JSON.stringify(sa));
+    check(sa.dt==='none' && sa.db==='none', 'bản cài kiểu cũ: hai dải display:none — '+JSON.stringify(sa));
     check(sa.top==='2px' && sa.busyTop===0 && !/wk-/.test(sa.hit||''), 'bản cài cũ: --top 2px, .busy ở y=0, điểm (196,4) không còn là dải: '+JSON.stringify(sa));
   });
   await run('W1', 'PIN · trang chủ · khách hàng (cuộn 40): dải là container ở cả hai mép, màu Ink, pixel mép tối', async function(){

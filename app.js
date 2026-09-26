@@ -7,7 +7,7 @@
    ===================================================================== */
 'use strict';
 var $=function(id){ return document.getElementById(id); };
-var APP_VER='v2.4.4';
+var APP_VER='v2.4.5';
 
 /* ---------------- tiện ích ---------------- */
 function isoToday(d){ d=d||new Date(); return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2); }
@@ -1489,7 +1489,7 @@ var LOOPS=[], LOOP_RAF=0, LOOP_ON=false, CURVE='cubic-bezier(.22,.85,.22,1)', FO
    Ba tín hiệu cố ý đổi ở ba thời điểm khác nhau: --edge-* đổi đúng lúc vòng loang chạm mép (washEdges, 100–520ms) hoặc khi mực
    dâng/phủ kín; --bg (nền html/body) theo mép dưới nhưng chỉ khi vòng đã phủ kín (.bga, 540ms) — màu dự phòng của Safari khi
    không tìm thấy container (underPageBackgroundColor) và cho bản PWA cài cũ; theme-color giữ luật cũ cho iOS ≤ 18: Acid khi nửa
-   trên đang nghỉ (.acid, đổi ở lần swap 200ms). Đừng "đồng bộ" ba cái này với nhau. App cài (html.standalone) tắt dải. */
+   trên đang nghỉ (.acid, đổi ở lần swap 200ms). Đừng "đồng bộ" ba cái này với nhau. Bản cài kiểu cũ (html.sb-legacy) tắt dải. */
 var EDGE_INK='#0A0A0A', EDGE_ACID='#D4FF00', EDGE_TILE='#222222', RGB_INK=[10,10,10], RGB_ACID=[212,255,0];
 var EDGE_CUR={t:'', b:''};
 function edgeMix(over, a, under){ return [0,1,2].map(function(i){ return Math.round(over[i]*a+under[i]*(1-a)); }); }
