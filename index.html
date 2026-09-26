@@ -4,7 +4,9 @@
 <meta charset="UTF-8">
 <!-- v2.4 (26/09): cấu hình web app như Luma — KHÔNG apple-mobile-web-app-capable, KHÔNG apple-mobile-web-app-status-bar-style,
      manifest không có "display". iOS 26+ mở web app tràn kín màn hình: nội dung vẽ cả dưới thanh trạng thái lẫn vùng home indicator.
-     Meta đọc LÚC CÀI: bản đã cài trước đó giữ thanh "black" cho tới khi xoá app khỏi Home Screen rồi Add lại (xem html.sb-legacy). -->
+     Meta đọc LÚC CÀI: bản đã cài trước đó giữ thanh "black" cho tới khi xoá app khỏi Home Screen rồi Add lại (xem html.sb-legacy).
+     v2.4.2: trong Safari (Liquid Glass) màu vùng dưới thanh trạng thái / thanh công cụ KHÔNG lấy từ theme-color nữa mà từ hai dải
+     position:fixed .wkedge ở mép trên / mép dưới (app.css .wkedge · app.js syncTheme). -->
 <meta name="viewport" content="width=device-width,height=device-height,initial-scale=1,maximum-scale=1,user-scalable=no,shrink-to-fit=no,viewport-fit=cover">
 <meta name="color-scheme" content="dark">
 <meta name="mobile-web-app-capable" content="yes">
@@ -71,8 +73,14 @@
 <div class="busy" id="busy"><i></i></div>
 <div class="ptr" id="ptr"><svg viewBox="0 0 28 28"><circle class="bg" cx="14" cy="14" r="11"/><circle class="fg" cx="14" cy="14" r="11"/></svg></div>
 
-<!-- pill thông báo: đẩy từ đỉnh, vuốt lên để tắt -->
-<div class="pill" id="pill" role="status" aria-live="polite"></div>
+<!-- pill thông báo: đẩy từ đỉnh, vuốt lên để tắt · hidden (display:none) khi ẩn hẳn — pill ẩn bằng opacity/transform vẫn nằm đúng
+     điểm lấy mẫu màu thanh của Safari 26 (giữa mép trên, 4px) và che mất dải .wkedge -->
+<div class="pill" id="pill" role="status" aria-live="polite" hidden></div>
+<!-- Safari 26+: hai dải fixed 12px ở mép trên / mép dưới là nguồn màu WebKit dùng tô vùng dưới thanh trạng thái và thanh công cụ
+     (app.css .wkedge · app.js syncTheme). .wkkick: element fixed ngoài màn hình, bật/tắt để WebKit tính lại màu mép. -->
+<div class="wkedge t" id="wk-t" aria-hidden="true"></div>
+<div class="wkedge b" id="wk-b" aria-hidden="true"></div>
+<i class="wkkick" id="wk-k" hidden aria-hidden="true"></i>
 
 <!-- ================= 0 · PIN ================= -->
 <section class="page g12" id="p-pin">
