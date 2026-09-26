@@ -49,12 +49,11 @@ body::after{content:'';position:fixed;left:0;right:0;top:-140px;bottom:-240px;ba
 /* Bản cài cũ (html.sb-legacy: vùng web nằm DƯỚI thanh trạng thái, inset 0, --top 2px): không có vùng nào để tô → tắt dải, nếu không dải
    12px che dấu tiếng Việt của khối đỉnh và vạch .busy (sự cố v2.4.2). Safari và bản cài black-translucent (inset 59) dùng dải. */
 html.sb-legacy .wkedge{display:none}
-/* Bản cài black-translucent (iOS 26/27 trên máy chủ studio, WebKit 301108): iOS bố trí trang đủ 852 nhưng KHÔNG VẼ 59 điểm cuối (đúng bằng
-   thanh trạng thái, --sat) và phủ lớp kính Liquid Glass lên thanh + ~35 điểm dưới thanh. Không tắt được, chỉ né: khối đỉnh, pill, vạch
-   bận đặt dưới dải kính (--sat + 36); nav, chân cửa sổ, chân loop đặt trên vùng không vẽ (--sat + 28). Safari và bản cài cũ giữ 56/28 theo Figma. */
-html.standalone:not(.sb-legacy){--top:calc(var(--sat) + 36px);--bot:calc(var(--sat) + 28px)}
+/* Bản cài black-translucent (iOS 26/27 trên máy chủ studio, WebKit 301108): trang chỉ cao 793 (màn hình trừ thanh trạng thái), 59 điểm
+   cuối màn hình nằm ngoài trang và hiện màu --bg; iOS phủ lớp kính Liquid Glass lên thanh + ~35 điểm dưới thanh. Không tắt được, chỉ né:
+   khối đỉnh, pill, vạch bận đặt dưới dải kính (--sat + 36). Đáy giữ 28 theo Figma vì cả 793 điểm của trang đều được vẽ (ảnh 27/09). */
+html.standalone:not(.sb-legacy){--top:calc(var(--sat) + 36px)}
 html.standalone:not(.sb-legacy) .pill{top:calc(var(--sat) + 40px)}
-html.standalone:not(.sb-legacy) .sheet{padding-bottom:calc(28px + var(--sat))}
 /* element fixed 4px ngoài màn hình; syncTheme() bật/tắt display mỗi lần đổi màu → WebKit bật cờ tính lại màu mép ở lần commit kế
    (RenderLayerModelObject::styleDidChange → addViewportConstrainedObject → didAddOrRemoveViewportConstrainedObjects) */
 .wkkick{position:fixed;left:-8px;top:-8px;width:4px;height:4px;pointer-events:none}
