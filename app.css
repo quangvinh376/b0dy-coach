@@ -49,6 +49,9 @@ body::after{content:'';position:fixed;left:0;right:0;top:-140px;bottom:-240px;ba
 /* Bản cài cũ (html.sb-legacy: vùng web nằm DƯỚI thanh trạng thái, inset 0, --top 2px): không có vùng nào để tô → tắt dải, nếu không dải
    12px che dấu tiếng Việt của khối đỉnh và vạch .busy (sự cố v2.4.2). Safari và bản cài black-translucent (inset 59) dùng dải. */
 html.sb-legacy .wkedge{display:none}
+/* Bản cài black-translucent: trang ngắn 59 điểm (WebKit 301108) → đệm đáy 0 để nav còn cách mép màn hình 59 thay vì 87 (chủ studio chọn, 26/09).
+   Safari và bản cài cũ giữ 28 theo Figma. */
+html.standalone:not(.sb-legacy){--bot:0px}
 /* element fixed 4px ngoài màn hình; syncTheme() bật/tắt display mỗi lần đổi màu → WebKit bật cờ tính lại màu mép ở lần commit kế
    (RenderLayerModelObject::styleDidChange → addViewportConstrainedObject → didAddOrRemoveViewportConstrainedObjects) */
 .wkkick{position:fixed;left:-8px;top:-8px;width:4px;height:4px;pointer-events:none}

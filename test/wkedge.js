@@ -134,14 +134,14 @@ function wkEdgesInPage(){
     var pillHidden=await ev(function(){ return document.getElementById('pill').hidden; }); check(pillHidden, 'pill ẩn hẳn (hidden) lúc khởi động');
     /* bản cài cũ (standalone + sb-legacy, vùng web dưới thanh, --top 2px): dải tắt, khối đỉnh và vạch .busy không bị che (sự cố v2.4.2);
        bản cài black-translucent (standalone, inset 59): dải bật, --top 56, vạch .busy nằm ngay dưới thanh (59) */
-    var bt=await ev(function(){ var d=document.documentElement; d.classList.add('standalone'); d.style.setProperty('--sat','59px'); var r={dt:getComputedStyle(document.getElementById('wk-t')).display, top:getComputedStyle(document.getElementById('p-pin')).paddingTop, busy:getComputedStyle(document.getElementById('busy')).top}; d.classList.remove('standalone'); d.style.removeProperty('--sat'); return r; });
-    check(bt.dt==='block' && bt.top==='56px' && bt.busy==='59px', 'bản cài black-translucent (inset 59): dải bật, --top 56, .busy ở 59 — '+JSON.stringify(bt));
+    var bt=await ev(function(){ var d=document.documentElement; d.classList.add('standalone'); d.style.setProperty('--sat','59px'); var r={dt:getComputedStyle(document.getElementById('wk-t')).display, top:getComputedStyle(document.getElementById('p-pin')).paddingTop, bot:getComputedStyle(document.getElementById('p-pin')).paddingBottom, busy:getComputedStyle(document.getElementById('busy')).top}; d.classList.remove('standalone'); d.style.removeProperty('--sat'); return r; });
+    check(bt.dt==='block' && bt.top==='56px' && bt.bot==='0px' && bt.busy==='59px', 'bản cài black-translucent (inset 59): dải bật, --top 56, đệm đáy 0, .busy ở 59 — '+JSON.stringify(bt));
     var sa=await ev(function(){ var d=document.documentElement; d.classList.add('standalone','sb-legacy'); var t=document.getElementById('wk-t'), b=document.getElementById('wk-b');
-      var r={dt:getComputedStyle(t).display, db:getComputedStyle(b).display, top:getComputedStyle(d).getPropertyValue('--top').trim(), busyTop:Math.round(document.getElementById('busy').getBoundingClientRect().top)};
+      var r={dt:getComputedStyle(t).display, db:getComputedStyle(b).display, top:getComputedStyle(d).getPropertyValue('--top').trim(), bot:getComputedStyle(document.getElementById('p-pin')).paddingBottom, busyTop:Math.round(document.getElementById('busy').getBoundingClientRect().top)};
       var st=document.createElement('style'); st.textContent='*{pointer-events:auto!important}'; document.head.appendChild(st); var e=document.elementFromPoint(196,4); st.remove(); r.hit=e&&(e.id||e.className||e.tagName);
       d.classList.remove('standalone','sb-legacy'); return r; });
     check(sa.dt==='none' && sa.db==='none', 'app cài (inset 0): hai dải display:none — '+JSON.stringify(sa));
-    check(sa.top==='2px' && sa.busyTop===0 && !/wk-/.test(sa.hit||''), 'bản cài cũ: --top 2px, .busy ở y=0, điểm (196,4) không còn là dải: '+JSON.stringify(sa));
+    check(sa.top==='2px' && sa.bot==='28px' && sa.busyTop===0 && !/wk-/.test(sa.hit||''), 'bản cài cũ: --top 2px, đệm đáy 28, .busy ở y=0, điểm (196,4) không còn là dải: '+JSON.stringify(sa));
   });
   await run('W1', 'PIN · trang chủ · khách hàng (cuộn 40): dải là container ở cả hai mép, màu Ink, pixel mép tối', async function(){
     await expectEdges('PIN', INK, INK, {darkOnly:true});
