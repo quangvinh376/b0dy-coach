@@ -96,6 +96,19 @@ Cài đặt (Apps Script **B0DY Discord KPI**):
 | `adm_stats` | trang chủ Admin: buổi "Đã tập" cả phòng theo ngày, `perClient` mọi khách, `rev` = Doanh thu (dòng "Tổng" tab COM, cột C), `hist` từ mọi sheet coach | |
 | `iplist` / `addip` / `delip` | đọc / thêm IP của thiết bị đang gọi / xoá theo giá trị trên `STUDIO_IP` (danh sách dấu phẩy) | tối đa 2 · **không bao giờ để rỗng** (rỗng = tắt khoá IP) → không xoá được IP cuối |
 
+### 7.1 v2.4.1 — tốc độ vào Admin (26/09/2026)
+
+Đo trên trang **Executions** (Version 21): `adm_data` ~15 s, `adm_stats` ~12 s; app v2.4.0 gọi nối đuôi Worker `coach` → `admin` → `adm_data` → `adm_stats` ≈ 30 s mới có đủ trang chủ.
+
+**Nguyên nhân:** công thức trong file BA được kéo sẵn tới cuối bảng nên `getLastRow()` của MEMBERS ≈ 1.000 (dữ liệu thật ~65 dòng) và của SESSION LOG = 5.000 (dữ liệu thật ~850 dòng). v2.4.0 đọc nguyên các vùng đó mỗi lượt.
+
+**Sửa:**
+- `Admin.gs` đọc **một cột** để tìm dòng dữ liệu thật cuối cùng, rồi chỉ đọc phần có dữ liệu. `test/gas_perf.js` dựng bảng đúng cỡ thật và so v2.4.0 ↔ v2.4.1: kết quả giống hệt, số ô đọc giảm 60–84%.
+- App: bỏ lượt hỏi `admin` riêng (`adm_data` tự kiểm PIN), gọi `adm_data` ∥ `adm_stats` song song, nhớ **mọi** tài khoản đã đăng nhập trên máy (`lb_acc`, chỉ hash PIN) → đổi qua lại coach ⇄ Admin vào ngay từ cache rồi làm mới ngầm.
+- `ADM_PERF = true`: mỗi lệnh admin ghi thời gian từng bước ra Executions (chỉ số mili-giây, không có dữ liệu khách hay PIN).
+
+**Cập nhật:** thay toàn bộ nội dung file `Admin` trong Apps Script bằng `backend/Admin.gs` ▸ Save ▸ Deploy ▸ Manage deployments ▸ ✏️ (Coach API v1) ▸ **New version**. `Code.gs` không đổi.
+
 ⚠️ **IP phòng nằm ở HAI chỗ.** Tab Cài đặt chỉ sửa `STUDIO_IP` (Apps Script). Worker Cloudflare gác bằng biến `ALLOW_IP` riêng:
 - **Thêm** IP ở app → coach check-in từ IP đó vẫn được (Worker từ chối → app tự lui về Apps Script, chậm hơn vài giây). Muốn nhanh: thêm IP đó vào `ALLOW_IP`.
 - **Xoá** IP ở app **không** rút quyền phía Worker. Muốn chặn hẳn một IP: xoá cả trong `ALLOW_IP` (Cloudflare → Workers & Pages → `b0dy-kiosk-api` → Settings → Variables and secrets).
