@@ -2,18 +2,14 @@
 <html lang="vi">
 <head>
 <meta charset="UTF-8">
-<!-- v2.4.7 (26/09) · APP CÀI TRÊN HOME SCREEN: black-translucent + viewport-fit=cover là cách DUY NHẤT để iOS 26/27 vẽ trang dưới thanh
-     trạng thái. Trên iOS của máy chủ studio còn lỗi WebKit 301108: trang vẽ từ mép trên nhưng viewport bị tính ngắn đúng bằng thanh (59)
-     → đáy màn hình có một dải KHÔNG vẽ tới được; dải đó hiện màu nền html/body (--bg). Chủ studio chấp nhận (26/09): app.js giữ --bg
-     luôn bằng màu mép dưới của app (Acid màn nghỉ, Ink, Tile khi mở cửa sổ) nên dải hoà vào trang. Vùng thanh trạng thái: iOS tô bằng
-     màu lấy từ dải .wkedge (cùng cơ chế fixedContainerEdges như Safari). Không dùng height=device-height (lỗi 301108 nêu đích danh).
-     Meta đọc LÚC CÀI: bản cài trước (thanh đen đặc, vùng web nằm dưới thanh, inset 0) nhận ra bằng html.sb-legacy (--top 2px, tắt dải).
-     v2.4.2: trong Safari màu vùng dưới thanh trạng thái / thanh công cụ không lấy từ theme-color mà từ hai dải .wkedge. -->
-<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,shrink-to-fit=no,viewport-fit=cover">
+<!-- v2.4.11 (27/09) · APP CÀI TRÊN HOME SCREEN: KHÔNG có meta apple-mobile-web-app-status-bar-style (cấu hình v2.4.4/v2.4.6). Vùng web nằm
+     DƯỚI thanh trạng thái, iOS tô thanh đen đặc; trên iOS của máy chủ studio không CSS nào đổi được. Đã thử black-translucent (v2.4.5–v2.4.10):
+     trang chỉ cao 793 (WebKit 301108) và iOS phủ lớp kính lên thanh + ~35 điểm dưới thanh làm mờ khối đỉnh; chủ studio quyết định lùi (27/09).
+     Mọi bản cài (inset 0) được nhận ra bằng html.sb-legacy (--top 2px, tắt dải .wkedge). Các luật html.standalone:not(.sb-legacy) trong app.css
+     giữ lại cho ngày black-translucent dùng được. v2.4.2: trong Safari màu vùng dưới thanh không lấy từ theme-color mà từ hai dải .wkedge. -->
+<meta name="viewport" content="width=device-width,height=device-height,initial-scale=1,maximum-scale=1,user-scalable=no,shrink-to-fit=no,viewport-fit=cover">
 <meta name="color-scheme" content="dark">
 <meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="B0DY">
 <script>
 /* App cài: html.standalone. Bản cài CŨ (thanh đen đặc): vùng web nằm DƯỚI thanh nên env(safe-area-inset-top) = 0 → html.sb-legacy
