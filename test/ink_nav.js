@@ -1,8 +1,9 @@
-/* v2.4.2 · MỰC INK DÂNG QUA NAV ĐÁY: nav KHÔNG được đổi tông theo mốc thời gian, chỉ đổi đúng phần mực đã phủ.
-   Lỗi cũ (v2.4.0 và trước): class .inkd bật khi còn < 50% giờ nghỉ → cả cụm nút đáy đổi sang tông Ink (CTA Acid trên nền Acid = mất nút)
-   trong khi mép mực mới ở giữa màn. Kiểm bằng ĐIỂM ẢNH trên ảnh chụp (không chỉ class): trên mép mực = tông Ink, dưới mép = tông Acid.
+/* v2.5 · NAV ĐÁY MÀN NGHỈ "HẠT" (nền Ink xuyên suốt — thay cơ chế mực Ink dâng qua nav của v2.4.2).
+   Luật mới (Figma 561:225): màn nghỉ luôn Ink; pill chính Paper chữ Ink ("Bắt đầu nghỉ" → "Nghỉ xong · kế tiếp"), nút tròn viền hairline,
+   icon Paper (↩ khi đặt giờ, ⌃ khi đang nghỉ). Nav KHÔNG đổi tông theo thời gian: đầu buổi nghỉ, giữa, 10 giây cuối (con số Acid),
+   0:00 — kiểm bằng ĐIỂM ẢNH trên ảnh chụp, không chỉ class. 1:2: nút nổi giữa section khi chạm (.ovl), ẩn cả cụm khi đóng.
    Chạy: NODE_PATH=/opt/node22/lib/node_modules node test/ink_nav.js   (BASE=<thư mục bản khác> để chạy trên bản cũ)
-   GIF=1 → quay test/out_ink/ink-nav-<nhãn>.gif (mực chảy qua nav, 1:1). */
+   GIF=1 → quay test/out_ink/rest-nav-<nhãn>.gif (10 giây cuối → 0:00, 1:1). */
 var {chromium}=require('playwright'); var path=require('path'); var fs=require('fs'); var cp=require('child_process');
 var BASE=process.env.BASE||path.resolve(__dirname,'..'), serve=require(path.join(BASE,'test','serve'));
 var CHROME='/opt/pw-browsers/chromium-1194/chrome-linux/chrome', PORT=+process.env.PORT||19361, OUT=path.join(__dirname,'out_ink'), TAG=process.env.TAG||'moi';
@@ -17,13 +18,13 @@ function px(file, pts){
   var py='import json,sys\nfrom PIL import Image\nim=Image.open(sys.argv[1]).convert("RGB")\npts=json.loads(sys.argv[2])\nprint(json.dumps([im.getpixel((int(round(x*2)),int(round(y*2)))) for x,y in pts]))';
   return JSON.parse(cp.execFileSync('python3',['-c',py,file,JSON.stringify(pts)]).toString());
 }
-/* độ sáng nhỏ nhất trong một hình chữ nhật (CSS px) — tìm nét icon/viền tối */
-function minLum(file, r){
-  var py='import json,sys\nfrom PIL import Image\nim=Image.open(sys.argv[1]).convert("L")\nx,y,w,h=json.loads(sys.argv[2])\nbox=im.crop((int(x*2),int(y*2),int((x+w)*2),int((y+h)*2)))\nprint(box.getextrema()[0])';
+/* độ sáng lớn nhất trong một hình chữ nhật (CSS px) — tìm nét icon sáng */
+function maxLum(file, r){
+  var py='import json,sys\nfrom PIL import Image\nim=Image.open(sys.argv[1]).convert("L")\nx,y,w,h=json.loads(sys.argv[2])\nbox=im.crop((int(x*2),int(y*2),int((x+w)*2),int((y+h)*2)))\nprint(box.getextrema()[1])';
   return +cp.execFileSync('python3',['-c',py,file,JSON.stringify([r.x,r.y,r.w,r.h])]).toString();
 }
 function isInk(c){ return c[0]<40 && c[1]<40 && c[2]<40; }
-function isAcid(c){ return c[0]>180 && c[1]>225 && c[2]<80; }
+function isPaper(c){ return c[0]>235 && c[1]>235 && c[2]>235; }
 function hex(c){ return '#'+c.map(function(v){ return ('0'+v.toString(16)).slice(-2); }).join(''); }
 
 (async function(){
@@ -36,7 +37,7 @@ function hex(c){ return '#'+c.map(function(v){ return ('0'+v.toString(16)).slice
     var page=await ctx.newPage(); page.on('pageerror', function(e){ PAGEERR.push(String(e)); });
     return {ctx:ctx, page:page};
   }
-  async function toRest(page, names, ex, half){
+  async function toRestSetup(page, names, ex, half){
     var w=function(ms){ return page.waitForTimeout(ms); }, scr=function(id){ return page.waitForFunction(function(id){ return state.screen===id && document.getElementById(id).classList.contains('on'); }, id, {timeout:8000}); };
     await page.goto('http://localhost:'+PORT+'/?demo'); await scr('p-pin'); await w(400);
     for(var k of ['1','2','3','4']) await page.click('#pin-pad button:has-text("'+k+'")');
@@ -51,92 +52,76 @@ function hex(c){ return '#'+c.map(function(v){ return ('0'+v.toString(16)).slice
     if(half) await page.evaluate(function(){ setFocus(0); });
     await page.click(L+'.c1'); await w(500);
     if(half) await page.evaluate(function(){ setFocus(0); });
-    await page.click(L+'.j1'); await w(1000);
-    if(half) await page.evaluate(function(){ setFocus(0); });
-    await page.click(L+'.c1'); await w(600);                     /* Bắt đầu nghỉ */
+    await page.click(L+'.j1'); await w(1100);
+    await page.waitForFunction(function(){ return document.getElementById('pill').hidden; }, null, {timeout:6000}).catch(function(){});
     return L;
   }
-  /* đặt mực ở mức còn lại fl (0..1) và giữ gần như đứng yên (tổng 2.000 s → 0,05%/s) */
-  async function setFrac(page, fl){ await page.evaluate(function(fl){ var p=state.session.people[0]; p.restTotal=2000; p.restStart=Date.now()-(1-fl)*2000*1000; }, fl); await page.waitForTimeout(160); }
   function geo(page, L){ return page.evaluate(function(L){
     function r(s){ var e=document.querySelector(s); if(!e) return null; var q=e.getBoundingClientRect(); return {x:q.left,y:q.top,w:q.width,h:q.height,b:q.bottom,r:q.right}; }
-    var root=document.querySelector(L.trim()), rr=root.getBoundingClientRect();
-    var t=(document.querySelector(L+'.ink').style.transform.match(/-?([\d.]+)%/)||[0,'100'])[1];
-    return {root:{y:rr.top,h:rr.height}, fl:+t/100, c1:r(L+'> .lp .c1'), g1:r(L+'> .lp .g1'), ic:r(L+'.ink .nav .cta'), ig:r(L+'.ink .nav .ghost'),
-      c1bg:getComputedStyle(document.querySelector(L+'> .lp .c1')).backgroundColor, g1c:getComputedStyle(document.querySelector(L+'> .lp .g1')).color,
-      inkd:!!document.querySelector('.loop.inkd'), zNav:getComputedStyle(document.querySelector(L+'> .lp .nav')).zIndex, zInk:getComputedStyle(document.querySelector(L+'.ink')).zIndex,
-      inkNavOp:getComputedStyle(document.querySelector(L+'.ink .nav')).opacity, inkNavDisp:getComputedStyle(document.querySelector(L+'.ink .nav')).display}; }, L); }
+    var root=document.querySelector(L.trim()), c1=document.querySelector(L+'> .lp .c1');
+    return {root:r(L.trim()), c1:r(L+'> .lp .c1'), g1:r(L+'> .lp .g1'), c1bg:getComputedStyle(c1).backgroundColor, c1c:getComputedStyle(c1).color, g1c:getComputedStyle(document.querySelector(L+'> .lp .g1')).color,
+      icon:document.querySelector(L+'> .lp .g1 use').getAttribute('href'), txt:c1.textContent, loopBg:getComputedStyle(root).backgroundColor, ink:!!root.querySelector('.ink'), acid:root.classList.contains('acid')||root.classList.contains('bga'),
+      navOp:getComputedStyle(document.querySelector(L+'> .lp .nav')).opacity}; }, L); }
+  /* kiểm một khoảnh khắc: pill Paper chữ Ink, nền quanh nav Ink, icon nút tròn sáng */
+  async function navOk(page, L, label, expIcon, expTxt){
+    var g=await geo(page, L), f=path.join(OUT, label.replace(/[^a-z0-9]+/gi,'-')+'-'+TAG+'.png'); await page.screenshot({path:f});
+    check(!g.ink && !g.acid && g.loopBg==='rgb(10, 10, 10)', label+' · nền loop Ink, không lớp mực/Acid: '+g.loopBg+' ink='+g.ink+' acid='+g.acid);
+    check(g.c1bg==='rgb(250, 250, 250)' && g.c1c==='rgb(10, 10, 10)', label+' · pill Paper chữ Ink: '+g.c1bg+' / '+g.c1c);
+    check(g.txt===expTxt, label+' · chữ pill: '+g.txt);
+    var s=px(f, [[g.c1.x+10, g.c1.y+g.c1.h/2], [g.c1.x-12, g.c1.y+g.c1.h/2], [g.g1.x+2, g.g1.y+g.g1.h/2]]);
+    check(isPaper(s[0]), label+' · điểm ảnh trong pill = Paper: '+hex(s[0]));
+    check(isInk(s[1]), label+' · nền quanh nav = Ink: '+hex(s[1]));
+    check(g.icon===expIcon && g.g1c==='rgb(250, 250, 250)', label+' · icon '+g.icon+' màu '+g.g1c);
+    var ml=maxLum(f, {x:g.g1.x+g.g1.w*.25, y:g.g1.y+g.g1.h*.25, w:g.g1.w*.5, h:g.g1.h*.5});
+    check(ml>200, label+' · nút tròn có nét icon sáng trên Ink · độ sáng lớn nhất '+ml);
+    return g;
+  }
 
   /* ================= 1:1 ================= */
-  var A=await mk(false), page=A.page, L=await toRest(page, ['Thành Công'], [1], false);
-  await run('N1', '1:1 · mực mới tới 73% màn (ảnh chủ studio 0:05/0:15): nav đáy GIỮ tông Acid, đọc rõ', async function(){
-    check((await page.evaluate(function(){ return state.session.people[0].phase; }))==='rest', 'đang nghỉ');
-    await setFrac(page, 0.27);
-    var g=await geo(page, L), edge=g.root.y+(1-g.fl)*g.root.h, f=path.join(OUT,'n1-'+TAG+'.png'); await page.screenshot({path:f});
-    check(edge < g.c1.y-20, 'mép mực ('+edge.toFixed(0)+') còn trên nav ('+g.c1.y.toFixed(0)+')');
-    check(!g.inkd, 'không còn class .inkd');
-    check(g.c1bg==='rgb(10, 10, 10)', 'CTA nền gốc vẫn pill Ink: '+g.c1bg);
-    var s=px(f, [[g.c1.x+10, g.c1.y+g.c1.h/2], [g.c1.x-12, g.c1.y+g.c1.h/2]]);
-    check(isInk(s[0]), 'điểm ảnh trong CTA = pill Ink: '+hex(s[0]));
-    check(isAcid(s[1]), 'nền quanh nav = Acid: '+hex(s[1]));
-    check(g.g1c==='rgb(10, 10, 10)', 'icon nút tròn màu Ink: '+g.g1c);
-    var ml=minLum(f, {x:g.g1.x+g.g1.w*.2, y:g.g1.y+g.g1.h*.2, w:g.g1.w*.6, h:g.g1.h*.6});
-    check(ml<90, 'nút tròn có nét icon tối trên Acid (không phải icon Paper mờ) · độ sáng nhỏ nhất '+ml);
+  var A=await mk(false), page=A.page, L=await toRestSetup(page, ['Thành Công'], [1], false);
+  await run('N1', '1:1 · đặt giờ nghỉ: pill Paper "Bắt đầu nghỉ", nút ↩, nền Ink', async function(){
+    check((await page.evaluate(function(){ return state.session.people[0].phase; }))==='rest-setup', 'đang đặt giờ');
+    await navOk(page, L, 'n1 dat gio', '#i-undo', 'Bắt đầu nghỉ');
   });
-  await run('N2', '1:1 · mép mực cắt ngang CTA: trên mép = tông Ink (pill Acid trên nền Ink), dưới mép = tông Acid (pill Ink trên nền Acid)', async function(){
-    var g=await geo(page, L), mid=g.c1.y+g.c1.h/2, fl=1-(mid-g.root.y)/g.root.h;
-    await setFrac(page, fl);
-    g=await geo(page, L); var edge=g.root.y+(1-g.fl)*g.root.h, f=path.join(OUT,'n2-'+TAG+'.png'); await page.screenshot({path:f});
-    check(Math.abs(edge-mid)<3, 'mép mực ở giữa CTA: '+edge.toFixed(1)+' vs '+mid.toFixed(1));
-    var x=g.c1.x+14, s=px(f, [[x, edge-6], [x, edge+6], [g.c1.x-12, edge-6], [g.c1.x-12, edge+6]]);
-    check(isAcid(s[0]), 'CTA phía trên mép = pill Acid (bản sao trong lớp mực): '+hex(s[0]));
-    check(isInk(s[1]), 'CTA phía dưới mép = pill Ink (nav gốc): '+hex(s[1]));
-    check(isInk(s[2]) && isAcid(s[3]), 'nền: trên mép Ink '+hex(s[2])+' · dưới mép Acid '+hex(s[3]));
-    check(g.ic && Math.abs(g.ic.x-g.c1.x)<0.6 && Math.abs(g.ic.y-g.c1.y)<0.6 && Math.abs(g.ic.w-g.c1.w)<0.6, 'CTA 2 lớp trùng khít: '+JSON.stringify([g.c1,g.ic]));
-    check(g.ig && Math.abs(g.ig.x-g.g1.x)<0.6 && Math.abs(g.ig.y-g.g1.y)<0.6, 'nút tròn 2 lớp trùng khít');
-  });
-  await run('N3', '1:1 · mực phủ kín: nav tông Ink hoàn toàn (pill Acid, nền Ink)', async function(){
-    await setFrac(page, 0.0005);
-    var g=await geo(page, L), f=path.join(OUT,'n3-'+TAG+'.png'); await page.screenshot({path:f});
-    var s=px(f, [[g.c1.x+10, g.c1.y+g.c1.h/2], [g.c1.x-12, g.c1.y+g.c1.h/2]]);
-    check(isAcid(s[0]) && isInk(s[1]), 'CTA Acid trên nền Ink: '+hex(s[0])+' / '+hex(s[1]));
+  await run('N2', '1:1 · đang nghỉ: pill "Nghỉ xong · kế tiếp", nút ⌃ — đầu / giữa / 10 giây cuối / 0:00 nav KHÔNG đổi tông', async function(){
+    await page.evaluate(function(){ state.session.people[0].restTotal=14; }); await page.click(L+'.c1'); await page.waitForTimeout(900);
+    await navOk(page, L, 'n2 dau nghi', '#i-up', 'Nghỉ xong · kế tiếp');
+    await page.waitForTimeout(4500); await navOk(page, L, 'n2 giua', '#i-up', 'Nghỉ xong · kế tiếp');
+    await page.waitForTimeout(3500);
+    var dig=await page.evaluate(function(){ return getComputedStyle(document.querySelector('#loop-host .clock .line')).color; });
+    check(dig==='rgb(212, 255, 0)', '10 giây cuối: con số Acid (luật 19/09): '+dig);
+    await navOk(page, L, 'n2 10 giay cuoi', '#i-up', 'Nghỉ xong · kế tiếp');
+    await page.waitForTimeout(5600);
+    check((await page.textContent(L+'.lp .head .sub'))==='Hết giờ nghỉ', 'Hết giờ nghỉ');
+    await navOk(page, L, 'n2 het gio', '#i-up', 'Nghỉ xong · kế tiếp');
   });
   await A.ctx.close();
 
   /* ================= 1:2 ================= */
-  var B=await mk(false); page=B.page; L=await toRest(page, ['Doãn Quang','Quang Vinh'], [1,2], true);
-  await run('N4', '1:2 · nút nổi giữa section: mép mực cắt ngang CTA → trên Ink / dưới Acid; nav gốc dưới lớp mực (z 3 < 4)', async function(){
-    await page.evaluate(function(){ setFocus(0); }); await page.waitForTimeout(400);
-    var g=await geo(page, L), mid=g.c1.y+g.c1.h/2, fl=1-(mid-g.root.y)/g.root.h;
-    await setFrac(page, fl);
-    g=await geo(page, L); var edge=g.root.y+(1-g.fl)*g.root.h, f=path.join(OUT,'n4-'+TAG+'.png'); await page.screenshot({path:f});
-    check(+g.zNav<+g.zInk, 'z nav gốc '+g.zNav+' < z lớp mực '+g.zInk);
-    check(g.inkNavDisp!=='none' && g.inkNavOp==='1', 'bản sao nav trong lớp mực hiện cùng .ovl: '+g.inkNavDisp+' / '+g.inkNavOp);
-    var x=g.c1.x+14, s=px(f, [[x, edge-5], [x, edge+5]]);
-    check(isAcid(s[0]) && isInk(s[1]), 'CTA: trên mép Acid '+hex(s[0])+' · dưới mép Ink '+hex(s[1]));
-    check(g.ic && Math.abs(g.ic.x-g.c1.x)<0.6 && Math.abs(g.ic.y-g.c1.y)<0.6, 'CTA 2 lớp trùng khít: '+JSON.stringify([g.c1,g.ic]));
-    /* bấm vẫn tới nav gốc (lớp mực không ăn chạm) */
-    var hit=await page.evaluate(function(p){ var e=document.elementFromPoint(p.x,p.y); return e && e.closest('.c1') ? 'c1' : (e && e.className) || ''; }, {x:g.c1.x+g.c1.w/2, y:g.c1.y+4});
-    check(hit==='c1', 'chạm phần CTA đã bị mực phủ vẫn tới nút gốc: '+hit);
+  var B=await mk(false); page=B.page; L=await toRestSetup(page, ['Doãn Quang','Quang Vinh'], [1,2], true);
+  await run('N4', '1:2 · nút nổi giữa section khi chạm: pill Paper trên nền Ink (section mờ), bấm tới đúng nút', async function(){
+    await page.evaluate(function(){ setFocus(0); }); await page.waitForTimeout(450);
+    var g=await geo(page, L), f=path.join(OUT,'n4-'+TAG+'.png'); await page.screenshot({path:f});
+    check(g.navOp==='1' && g.c1bg==='rgb(250, 250, 250)', 'nav nổi hiện, pill Paper: '+g.navOp+' / '+g.c1bg);
+    var s=px(f, [[g.c1.x+10, g.c1.y+g.c1.h/2]]); check(isPaper(s[0]), 'điểm ảnh pill Paper: '+hex(s[0]));
+    var hit=await page.evaluate(function(p){ var e=document.elementFromPoint(p.x,p.y); return e && e.closest('.c1') ? 'c1' : (e && e.className) || ''; }, {x:g.c1.x+g.c1.w/2, y:g.c1.y+g.c1.h/2});
+    check(hit==='c1', 'chạm giữa pill tới nút: '+hit);
   });
-  await run('N5', '1:2 · đóng .ovl: cả hai bản nav cùng ẩn (không sót nút tông Ink trên lớp mực)', async function(){
+  await run('N5', '1:2 · đóng .ovl: cụm nút ẩn (opacity 0)', async function(){
     await page.evaluate(function(){ setFocus(-1); }); await page.waitForTimeout(450);
-    var g=await geo(page, L);
-    check(g.inkNavOp==='0', 'bản sao trong lớp mực ẩn: '+g.inkNavOp);
-    check((await page.evaluate(function(L){ return getComputedStyle(document.querySelector(L+'> .lp .nav')).opacity; }, L))==='0', 'nav gốc ẩn');
+    check((await page.evaluate(function(L){ return getComputedStyle(document.querySelector(L+'> .lp .nav')).opacity; }, L))==='0', 'nav ẩn');
   });
   await B.ctx.close();
 
-  /* ================= GIF: mực chảy qua nav (1:1) ================= */
+  /* ================= GIF: 10 giây cuối → 0:00 (1:1) ================= */
   if(process.env.GIF){
-    var V=await mk(true); page=V.page; L=await toRest(page, ['Thành Công'], [1], false);
-    await page.evaluate(function(){ var p=state.session.people[0]; p.restTotal=24; p.restStart=Date.now()-19*1000; });   /* mép mực từ ~79% → hết */
-    await page.waitForTimeout(5600);
+    var V=await mk(true); page=V.page; L=await toRestSetup(page, ['Thành Công'], [1], false);
+    await page.evaluate(function(){ state.session.people[0].restTotal=12; }); await page.click(L+'.c1');
+    await page.waitForTimeout(13500);
     var vp=await page.video().path(); await V.ctx.close();
-    var gif=path.join(OUT,'ink-nav-'+TAG+'.gif'), webm=path.join(OUT,'ink-nav-'+TAG+'.webm');
+    var gif=path.join(OUT,'rest-nav-'+TAG+'.gif'), webm=path.join(OUT,'rest-nav-'+TAG+'.webm');
     try{ fs.renameSync(vp, webm); }catch(e){ webm=vp; }
-    /* chỉ lấy 6 giây cuối: mép mực đi từ ~80% màn qua nav tới hết giờ */
-    try{ cp.execFileSync('ffmpeg',['-y','-loglevel','error','-sseof','-6','-i',webm,'-vf','fps=14,scale=300:-1:flags=lanczos,split[a][b];[a]palettegen[p];[b][p]paletteuse',gif]); console.log('GIF '+gif); }catch(e){ console.log('GIF lỗi '+e.message); }
+    try{ cp.execFileSync('ffmpeg',['-y','-loglevel','error','-sseof','-12','-i',webm,'-vf','fps=14,scale=300:-1:flags=lanczos,split[a][b];[a]palettegen[p];[b][p]paletteuse',gif]); console.log('GIF '+gif); }catch(e){ console.log('GIF lỗi '+e.message); }
   }
 
   await browser.close(); srv.close();

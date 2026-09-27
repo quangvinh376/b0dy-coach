@@ -5,15 +5,15 @@
    Chromium không có cơ chế này → test GIẢ LẬP đúng thuật toán WebKit (điểm lấy mẫu, phân loại container, ngưỡng 0,9 / 10px / opacity 0,1)
    và đối chiếu màu dải với PIXEL THẬT ở mép khi tạm ẩn dải (oracle: dải phải đúng màu app đang hiện ở mép đó).
    W0 tắt dải → WebKit tìm thấy body "viewport-sized" (bẫy v2.4.0–2.4.1); app cài (standalone/sb-legacy) dải display:none, không che khối đỉnh · W1 PIN / trang chủ / khách hàng (kể cả cuộn): dải là container, Ink
-   W2 cửa sổ khách + thư viện: mép dưới Tile khi mở, về Ink sau khi đóng · W3 loop 1:1: setup Ink → rest-setup Acid/Acid → nghỉ: trên Ink, dưới Acid
-   → mực phủ kín Ink/Ink · W4 pill: đang hiện không che điểm lấy mẫu, ẩn hẳn (display:none) sau khi tắt · W5 màng .film: tối trên Ink = Ink,
-   Acid 93 % trên Ink = #C6EE01, trên Acid = Acid · W6 rời loop → Ink · W7 loop 1:2: nửa trên Acid, nửa dưới Ink rồi cả hai Acid
+   W2 cửa sổ khách + thư viện: mép dưới Tile khi mở, về Ink sau khi đóng · W3 loop 1:1 v2.5 (màn nghỉ "Hạt"): mọi pha Ink/Ink
+   · W4 pill: đang hiện không che điểm lấy mẫu, ẩn hẳn (display:none) sau khi tắt · W5 màng .film luôn Ink 93 % → Ink/Ink
+   · W6 rời loop → Ink · W7 loop 1:2: nửa trên nghỉ rồi cả hai nghỉ — Ink/Ink
    W8 theme-color theo mép trên, --bg theo mép dưới, kicker #wk-k đổi trạng thái mỗi lần syncTheme.
    Chạy: NODE_PATH=/opt/node22/lib/node_modules node test/wkedge.js */
 var {chromium}=require('playwright'); var serve=require('./serve'); var path=require('path'); var fs=require('fs'); var zlib=require('zlib');
 var CHROME='/opt/pw-browsers/chromium-1194/chrome-linux/chrome', PORT=+process.env.PORT||19351, OUT=path.join(__dirname,'out_wkedge');
 fs.rmSync(OUT,{recursive:true,force:true}); fs.mkdirSync(OUT,{recursive:true});
-var INK=[10,10,10], ACID=[212,255,0], TILE=[34,34,34], FILM_INK=[198,238,1];
+var INK=[10,10,10], TILE=[34,34,34];
 var RES=[], CUR=null, PAGEERR=[];
 function check(c, msg){ if(!c) CUR.fails.push(msg); return !!c; }
 function near(a,b,t){ t=t==null?2:t; return !!a && !!b && Math.abs(a[0]-b[0])<=t && Math.abs(a[1]-b[1])<=t && Math.abs(a[2]-b[2])<=t; }
@@ -110,10 +110,10 @@ function wkEdgesInPage(){
     check(e.t.container==='wk-t' && e.t.kind==='IsCandidate', label+' · mép trên: WebKit phải tìm thấy #wk-t (IsCandidate), thấy '+e.t.container+'/'+e.t.kind+' hit='+e.t.hit+' chuỗi='+e.t.chain.join('>'));
     check(e.b.container==='wk-b' && e.b.kind==='IsCandidate', label+' · mép dưới: WebKit phải tìm thấy #wk-b (IsCandidate), thấy '+e.b.container+'/'+e.b.kind+' hit='+e.b.hit+' chuỗi='+e.b.chain.join('>'));
     check(near(e.t.color, expT, 1) && near(e.b.color, expB, 1), label+' · màu WebKit lấy: trên '+JSON.stringify(e.t.color)+' dưới '+JSON.stringify(e.b.color)+' (mong '+hex(expT)+' / '+hex(expB)+')');
-    var v=await ev(function(){ var cs=getComputedStyle(document.documentElement); var m=document.querySelector('meta[name=theme-color]'); var acidTop=(state.screen==='p-loop' && LOOPS[0] && LOOPS[0].root.classList.contains('acid'));
-      return {t:cs.getPropertyValue('--edge-t').trim(), b:cs.getPropertyValue('--edge-b').trim(), bg:cs.getPropertyValue('--bg').trim(), theme:m&&m.getAttribute('content'), acidTop:!!acidTop, k:document.getElementById('wk-k').hidden}; });
+    var v=await ev(function(){ var cs=getComputedStyle(document.documentElement); var m=document.querySelector('meta[name=theme-color]');
+      return {t:cs.getPropertyValue('--edge-t').trim(), b:cs.getPropertyValue('--edge-b').trim(), bg:cs.getPropertyValue('--bg').trim(), theme:m&&m.getAttribute('content'), k:document.getElementById('wk-k').hidden}; });
     check(v.t.toUpperCase()===hex(expT) && v.b.toUpperCase()===hex(expB), label+' · --edge-t/--edge-b: '+v.t+' / '+v.b);
-    check((v.theme||'').toUpperCase()===(v.acidTop?'#D4FF00':'#0A0A0A'), label+' · theme-color (iOS ≤ 18, luật cũ: Acid khi nửa trên nghỉ): '+v.theme+' acidTop='+v.acidTop);
+    check((v.theme||'').toUpperCase()==='#0A0A0A', label+' · theme-color (iOS ≤ 18) luôn Ink từ v2.5: '+v.theme);
     check(v.bg.toUpperCase()===hex(expB), label+' · --bg = màu mép dưới (dải đáy WebKit 301108 trên bản cài): '+v.bg);
     var on=await pix(false), off=await pix(true);
     /* trang có lớp mép blur (.edge): backdrop-filter ở sát mép màn hình lấy mẫu ra ngoài khung → tối hơn Ink 2–3 mức; dải Ink đặc phủ 12px → chênh ≤ 4/255 (mắt không thấy).
@@ -163,60 +163,55 @@ function wkEdgesInPage(){
     await page.click('#lib-list .row:nth-of-type(1)'); await page.click('#lib-go'); await w(700); await expectEdges('thư viện đóng', INK, INK, {darkOnly:true, edge:true});
   });
   var L='#loop-host .loop:nth-child(1) ';
-  await run('W3', 'Loop 1:1: thiết lập Ink/Ink → Đạt → rest-setup Acid/Acid → nghỉ: trên Ink (mực dâng), dưới Acid → mực phủ kín Ink/Ink', async function(){
+  await run('W3', 'Loop 1:1 v2.5 (màn nghỉ "Hạt", nền Ink): thiết lập · trong set · đặt giờ · đang nghỉ · hết giờ — dải Ink/Ink ở mọi pha, pixel mép tối', async function(){
     await page.click('#pl-go'); await screen('p-loop'); await w(1300); await expectEdges('thiết lập set', INK, INK, {darkOnly:true});
     await page.click(L+'.c1'); await w(600); await expectEdges('đang tập', INK, INK, {darkOnly:true});
     await page.click(L+'.j1'); await w(300);
-    /* vòng loang từ nút Đạt (sát đáy): mép dưới phủ kín sau ~100ms → dải dưới Acid; mép trên chỉ khi vòng tới (~520ms) → dải trên còn Ink;
-       syncTheme() gọi chen ngang (ví dụ pill) không được kéo dải dưới về Ink */
+    /* v2.4 có vòng loang Acid ở đây; v2.5 vành nhịp thở ra thành vành hạt trên nền Ink — syncTheme chen ngang vẫn Ink/Ink */
     var mid=await ev(function(){ syncTheme(); var cs=getComputedStyle(document.documentElement); return cs.getPropertyValue('--edge-t').trim()+'/'+cs.getPropertyValue('--edge-b').trim(); });
-    check(/#0A0A0A\/#D4FF00/i.test(mid), 'vòng loang 300ms: dải trên Ink, dải dưới Acid (theo mép vòng đã chạm), syncTheme không ghi đè: '+mid);
-    await w(900); await pillGone(); await expectEdges('rest-setup (màn Acid)', ACID, ACID); await shot('rest-setup-acid');
+    check(/#0A0A0A\/#0A0A0A/i.test(mid), 'giữa lúc vành thở ra (300ms): dải Ink/Ink: '+mid);
+    await w(900); await pillGone(); await expectEdges('đặt giờ nghỉ (vành hạt)', INK, INK, {darkOnly:true}); await shot('rest-setup-hat');
     await ev(function(){ state.session.people[0].restTotal=3; saveSession(); });
-    await page.click(L+'.c1'); await w(400); await expectEdges('đang nghỉ 400ms (mực dâng từ trên)', INK, ACID); await shot('rest-ink-rising');
-    await page.waitForFunction(function(){ var l=document.querySelector('#loop-host .loop'); return l && l.classList.contains('inkfull'); }, null, {timeout:9000});
-    await w(250); await expectEdges('mực phủ kín', INK, INK, {darkOnly:true});
+    await page.click(L+'.c1'); await w(400); await expectEdges('đang nghỉ 400ms (sóng Acid trên vành)', INK, INK, {darkOnly:true}); await shot('rest-hat');
+    await w(3300); await expectEdges('hết giờ (0:00, bóng số 0)', INK, INK, {darkOnly:true});
   });
-  await run('W4', 'Pill: đang hiện (y ≥ 10) không che điểm lấy mẫu; sau khi tắt → hidden (display:none) và tính lại màu', async function(){
-    /* quay lại màn Acid: Bước khác → màng (tối) → chạm bài đang tập = vào set mới → Ink → Bắt đầu set → Đạt → Acid */
+  await run('W4', 'Pill trên màn nghỉ: đang hiện (y ≥ 10) không che điểm lấy mẫu; sau khi tắt → hidden (display:none) và tính lại màu; bấm dồn (Đạt → Hoàn tác 380ms) không kẹt', async function(){
     await page.click(L+'.g1'); await w(500); await page.click(L+'.film .exl button:first-child'); await w(900);
-    await page.click(L+'.c1'); await w(500); await page.click(L+'.j1'); await w(1200); await pillGone(); await expectEdges('rest-setup lần 2', ACID, ACID);
-    await ev(function(){ notify('Kiểm tra pill trên Acid'); }); await w(500);
+    await page.click(L+'.c1'); await w(500); await page.click(L+'.j1'); await w(1200); await pillGone(); await expectEdges('đặt giờ nghỉ lần 2', INK, INK, {darkOnly:true});
+    await ev(function(){ notify('Kiểm tra pill trên màn nghỉ'); }); await w(500);
     var st=await ev(function(){ var p=document.getElementById('pill'), r=p.getBoundingClientRect(); return {on:p.classList.contains('on'), hidden:p.hidden, top:Math.round(r.top), pe:getComputedStyle(p).pointerEvents}; });
     check(st.on && !st.hidden && st.top>=10, 'pill hiện ở y='+st.top+' (điểm lấy mẫu y=4 nằm ngoài pill)');
-    await expectEdges('pill đang hiện (bóng pill phủ nhẹ mép trên → tol 8)', ACID, ACID, {tol:8}); await shot('pill-on-acid');
+    await expectEdges('pill đang hiện (bóng pill phủ nhẹ mép trên → tol 8)', INK, INK, {tol:8, darkOnly:true}); await shot('pill-on-rest');
     await ev(function(){ hidePill(); }); await w(120);
     var e1=await edges(); check(e1.t.container!=='wk-t' || e1.t.kind==='IsCandidate', 'đang mờ đi: '+e1.t.chain.join('>'));
     await w(400);
     var st2=await ev(function(){ var p=document.getElementById('pill'); return {on:p.classList.contains('on'), hidden:p.hidden, disp:getComputedStyle(p).display}; });
     check(!st2.on && st2.hidden && st2.disp==='none', 'pill ẩn hẳn sau 240ms: '+JSON.stringify(st2));
-    await expectEdges('pill đã ẩn', ACID, ACID);
-    /* hai vòng loang chồng nhau (QA v2.4.3): Hoàn tác 380ms sau Đạt → vòng Ink chạm mép dưới trước khi vòng Acid kết thúc;
-       khi vòng Acid kết thúc (540ms) không được kéo mép dưới về Acid, và nền chỉ về Ink khi vòng Ink phủ kín */
-    await page.click(L+'.g1'); await w(900);                                   /* Hoàn tác → thiết lập (Ink) */
+    await expectEdges('pill đã ẩn', INK, INK, {darkOnly:true});
+    await page.click(L+'.g1'); await w(900);                                   /* Hoàn tác → thiết lập */
     await page.click(L+'.c1'); await w(500); await page.click(L+'.j1'); await w(380); await page.click(L+'.g1'); await w(240);
-    var ov=await ev(function(){ var cs=getComputedStyle(document.documentElement), l=document.querySelector('#loop-host .loop'); return {b:cs.getPropertyValue('--edge-b').trim(), bga:l.classList.contains('bga')}; });
-    check(/#0A0A0A/i.test(ov.b), 'vòng Ink đã chạm mép dưới, vòng Acid kết thúc không ghi đè: '+JSON.stringify(ov));
+    var ov=await ev(function(){ var cs=getComputedStyle(document.documentElement); return {t:cs.getPropertyValue('--edge-t').trim(), b:cs.getPropertyValue('--edge-b').trim()}; });
+    check(/#0A0A0A/i.test(ov.t) && /#0A0A0A/i.test(ov.b), 'bấm dồn: dải vẫn Ink: '+JSON.stringify(ov));
     await w(700); await pillGone();
-    var ov2=await ev(function(){ var l=document.querySelector('#loop-host .loop'); return {ph:state.session.people[0].phase, bga:l.classList.contains('bga')}; });
-    check(ov2.ph==='setup' && !ov2.bga, 'sau hai vòng: thiết lập, nền Ink: '+JSON.stringify(ov2)); await expectEdges('sau hai vòng chồng nhau', INK, INK, {darkOnly:true});
-    await page.click(L+'.c1'); await w(500); await page.click(L+'.j1'); await w(1200); await pillGone(); await expectEdges('rest-setup lần 3', ACID, ACID);
+    var ov2=await ev(function(){ var s=LOOPS[0].state(); return {ph:state.session.people[0].phase, slices:s.slices, chase:s.chase}; });
+    check(ov2.ph==='setup' && ov2.slices===0 && ov2.chase, 'sau Đạt → Hoàn tác: thiết lập, vành nhịp, không sót hạt: '+JSON.stringify(ov2)); await expectEdges('sau bấm dồn', INK, INK, {darkOnly:true});
+    await page.click(L+'.c1'); await w(500); await page.click(L+'.j1'); await w(1200); await pillGone(); await expectEdges('đặt giờ nghỉ lần 3', INK, INK, {darkOnly:true});
   });
-  await run('W5', 'Màng .film: Acid 93 % trên nửa Ink = #C6EE01, trên Acid = Acid; đóng màng → về màu nền', async function(){
+  await run('W5', 'Màng .film v2.5: luôn Ink 93 % (không còn biến thể Acid) → mép Ink/Ink khi mở; vào set mới → Ink', async function(){
     await ev(function(){ state.session.people[0].restTotal=60; saveSession(); });
-    await page.click(L+'.c1'); await w(400); await expectEdges('nghỉ dài, mực mới dâng', INK, ACID);
+    await page.click(L+'.c1'); await w(400); await expectEdges('nghỉ dài', INK, INK, {darkOnly:true});
     await page.click(L+'.g1'); await w(600);
-    var f=await ev(function(){ var f=document.querySelector('#loop-host .loop .film'); return {on:f.classList.contains('on'), dark:f.classList.contains('dark'), op:getComputedStyle(f).opacity}; });
-    check(f.on && !f.dark && f.op==='1', 'màng Acid mở: '+JSON.stringify(f));
-    await expectEdges('màng Acid', FILM_INK, ACID, {tol:3}); await shot('film-acid');
-    await page.click(L+'.film .exl button:first-child'); await w(1000); await expectEdges('vào set mới (Ink)', INK, INK, {darkOnly:true});
+    var f=await ev(function(){ var f=document.querySelector('#loop-host .loop .film'); return {on:f.classList.contains('on'), dark:f.classList.contains('dark'), op:getComputedStyle(f).opacity, bg:getComputedStyle(f).backgroundColor}; });
+    check(f.on && f.dark && f.op==='1' && f.bg==='rgba(10, 10, 10, 0.93)', 'màng Ink mở: '+JSON.stringify(f));
+    await expectEdges('màng Ink', INK, INK, {darkOnly:true}); await shot('film-ink');
+    await page.click(L+'.film .exl button:first-child'); await w(1000); await expectEdges('vào set mới', INK, INK, {darkOnly:true});
   });
   await run('W6', 'Rời loop (Bước khác → Kết thúc buổi tập) → tổng kết Ink/Ink', async function(){
-    await page.click(L+'.c1'); await w(500); await page.click(L+'.j1'); await w(1200); await pillGone(); await expectEdges('Acid trước khi rời', ACID, ACID);
+    await page.click(L+'.c1'); await w(500); await page.click(L+'.j1'); await w(1200); await pillGone(); await expectEdges('đặt giờ trước khi rời', INK, INK, {darkOnly:true});
     await page.click(L+'.c1'); await w(400); await page.click(L+'.g1'); await w(500); await page.click(L+'.film .fend'); await screen('p-summary'); await w(800);
     await expectEdges('tổng kết', INK, INK, {darkOnly:true});
   });
-  await run('W7', 'Loop 1:2: nửa trên Acid → dải trên Acid, dải dưới Ink; nửa dưới Acid → cả hai Acid', async function(){
+  await run('W7', 'Loop 1:2 v2.5: nửa trên nghỉ, rồi cả hai nghỉ — dải Ink/Ink (không còn nửa Acid)', async function(){
     await C.ctx.close(); C=await mk(); page=C.page; await screen('p-pin'); await w(500); await pin('1234'); await screen('p-home'); await w(1500);
     await page.click('#h-go'); await screen('p-pick'); await w(600);
     await page.click('#pk-list .row:has-text("Doãn Quang")'); await page.click('#pk-list .row:has-text("Quang Vinh")'); await page.click('#pk-go'); await screen('p-confirm'); await w(1500);
@@ -227,10 +222,10 @@ function wkEdgesInPage(){
     await expectEdges('1:2 thiết lập', INK, INK, {darkOnly:true});
     await ev(function(){ setFocus(0); }); await w(400); await page.click('#loop-host .loop:nth-child(1) .c1'); await w(500);
     await ev(function(){ setFocus(0); }); await w(400); await page.click('#loop-host .loop:nth-child(1) .j1'); await w(1200);
-    await pillGone(); await expectEdges('1:2 nửa trên Acid', ACID, INK); await shot('two-top-acid');
+    await pillGone(); await expectEdges('1:2 nửa trên đặt giờ nghỉ', INK, INK, {darkOnly:true}); await shot('two-top-rest');
     await ev(function(){ setFocus(1); }); await w(400); await page.click('#loop-host .loop:nth-child(2) .c1'); await w(500);
     await ev(function(){ setFocus(1); }); await w(400); await page.click('#loop-host .loop:nth-child(2) .j1'); await w(1200);
-    await pillGone(); await expectEdges('1:2 cả hai Acid', ACID, ACID); await shot('two-both-acid');
+    await pillGone(); await expectEdges('1:2 cả hai đặt giờ nghỉ', INK, INK, {darkOnly:true}); await shot('two-both-rest');
   });
   await run('W8', 'Không lỗi JS', async function(){ check(!PAGEERR.length, 'PAGEERR: '+PAGEERR.join(' | ')); });
 

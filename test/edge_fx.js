@@ -2,7 +2,7 @@
    E1 dải chuyển --r theo vị trí cuộn (đỉnh 0→32, đáy 48→0) · E2 lớp mép phủ đúng vùng, blur 3 tầng, không opacity < 1 ở tổ tiên
    E3 thứ tự lớp + chạm: nav/đỉnh/ô tìm nằm trên danh sách; lớp mép không ăn chạm · E4 sheet thư viện
    E5 --top: trình duyệt 56 · bản cài cũ (standalone, inset 0) → sb-legacy 2px · inset 47/59/62 → 56/56/59
-   E6 màn nghỉ Acid: --bg = Acid (html/body cùng màu), mực phủ kín → về Ink · E7 fog cũ vẫn chạy ở vùng cuộn không .ex
+   E6 loop v2.5 (màn nghỉ "Hạt"): nền Ink ở mọi pha, không còn Acid tràn màn · E7 fog cũ vẫn chạy ở vùng cuộn không .ex
    Chạy: NODE_PATH=/opt/node22/lib/node_modules node test/edge_fx.js */
 var {chromium}=require('playwright'); var serve=require('./serve'); var path=require('path'); var fs=require('fs');
 var CHROME='/opt/pw-browsers/chromium-1194/chrome-linux/chrome', PORT=+process.env.PORT||19331, OUT=path.join(__dirname,'out_edge');
@@ -99,25 +99,23 @@ async function run(id, name, fn){ CUR={id:id,name:name,fails:[]}; RES.push(CUR);
     await page.click('#lib-list .row:nth-of-type(1)'); await page.click('#lib-go'); await w(600);
   });
 
-  await run('E6', 'Màn nghỉ Acid: --bg = Acid (html + body), mực phủ kín → về Ink; rời loop → Ink', async function(){
+  await run('E6', 'Loop v2.5 (màn nghỉ "Hạt"): --bg / html / body / nền loop Ink ở MỌI pha (thiết lập · trong set · đặt giờ · đang nghỉ · hết giờ); rời loop → Ink', async function(){
     await page.click('#pl-go'); await screen('p-loop'); await w(1300);
     var L='#loop-host .loop:nth-child(1) ';
-    var bg0=await ev(function(){ return getComputedStyle(document.documentElement).getPropertyValue('--bg').trim(); }); check(/#0A0A0A/i.test(bg0), 'setup: Ink '+bg0);
-    await page.click(L+'.c1'); await w(600); await page.click(L+'.j1'); await w(1100);
-    var r=await ev(function(){ var l=document.querySelector('#loop-host .loop'), q=l.getBoundingClientRect(); return {bg:getComputedStyle(document.documentElement).getPropertyValue('--bg').trim(), html:getComputedStyle(document.documentElement).backgroundColor, body:getComputedStyle(document.body).backgroundColor, bga:l.classList.contains('bga'), t:q.top, b:q.bottom, H:innerHeight}; });
-    check(r.bga && /#D4FF00/i.test(r.bg) && r.html==='rgb(212, 255, 0)' && r.body==='rgb(212, 255, 0)', 'Acid phủ nền gốc: '+JSON.stringify(r));
-    check(r.t===0 && r.b===r.H, 'loop phủ kín khung: '+r.t+'..'+r.b);
-    await page.screenshot({path:path.join(OUT,'e6-acid.png')});
+    async function ink(label){
+      var r=await ev(function(){ var l=document.querySelector('#loop-host .loop'), q=l.getBoundingClientRect(); return {bg:getComputedStyle(document.documentElement).getPropertyValue('--bg').trim(), html:getComputedStyle(document.documentElement).backgroundColor, body:getComputedStyle(document.body).backgroundColor, loop:getComputedStyle(l).backgroundColor, acid:l.classList.contains('acid')||l.classList.contains('bga'), t:q.top, b:q.bottom, H:innerHeight}; });
+      check(/#0A0A0A/i.test(r.bg) && r.html==='rgb(10, 10, 10)' && r.body==='rgb(10, 10, 10)' && r.loop==='rgb(10, 10, 10)' && !r.acid, label+': Ink '+JSON.stringify(r)); return r; }
+    await ink('thiết lập');
+    await page.click(L+'.c1'); await w(600); await ink('trong set');
+    await page.click(L+'.j1'); await w(1100);
+    var r=await ink('đặt giờ nghỉ'); check(r.t===0 && r.b===r.H, 'loop phủ kín khung: '+r.t+'..'+r.b);
+    await page.screenshot({path:path.join(OUT,'e6-rest-setup.png')});
     await ev(function(){ state.session.people[0].restTotal=3; saveSession(); });
-    await page.click(L+'.c1'); await w(400);
-    var mid=await ev(function(){ return getComputedStyle(document.documentElement).getPropertyValue('--bg').trim(); });
-    check(/#D4FF00/i.test(mid), 'đầu lúc nghỉ (mực chưa phủ kín) nền gốc vẫn Acid: '+mid);
-    await page.waitForFunction(function(){ var l=document.querySelector('#loop-host .loop'); return l && l.classList.contains('inkfull'); }, null, {timeout:9000}).catch(function(){});
-    await w(200);
-    var r2=await ev(function(){ var l=document.querySelector('#loop-host .loop'); return {inkfull:l.classList.contains('inkfull'), bg:getComputedStyle(document.documentElement).getPropertyValue('--bg').trim(), html:getComputedStyle(document.documentElement).backgroundColor}; });
-    check(r2.inkfull && /#0A0A0A/i.test(r2.bg) && r2.html==='rgb(10, 10, 10)', 'mực phủ kín → nền gốc Ink: '+JSON.stringify(r2));
-    await page.screenshot({path:path.join(OUT,'e6-inkfull.png')});
-    await page.click(L+'.g1'); await w(500); await page.click(L+'.fend'); await screen('p-summary'); await w(700);
+    await page.click(L+'.c1'); await w(400); await ink('đang nghỉ');
+    await w(3400); await ink('hết giờ (0:00)');
+    await page.screenshot({path:path.join(OUT,'e6-zero.png')});
+    await page.click(L+'.g1'); await w(500); await ink('menu bước tiếp mở');
+    await page.click(L+'.fend'); await screen('p-summary'); await w(700);
     var bg2=await ev(function(){ return getComputedStyle(document.documentElement).getPropertyValue('--bg').trim(); }); check(/#0A0A0A/i.test(bg2), 'rời loop → Ink: '+bg2);
   });
 
