@@ -106,6 +106,10 @@ svg{display:block}
 .page.leave-fwd>*:not(.nav):not(.split):not(.sfoot),.page.leave-fwd>.sfoot>*:not(.nav){animation:outF .2s ease both}
 .page.leave-back>*:not(.nav):not(.split):not(.sfoot),.page.leave-back>.sfoot>*:not(.nav){animation:outB .2s ease both}
 .page.enter-fwd>.split,.page.enter-back>.split{animation:fadein .32s ease both}
+/* v2.5 · tên bay dẫn đầu (FX.heroFly gắn .hlead lên màn đích): nội dung dưới đường bay hiện SAU khi tên đã bay qua → không chữ đè chữ.
+   Hồ sơ: tên ở .head → trễ cả .body. Xác nhận: tên nằm trong #cf-body (khối đã canh chỗ hạ cánh) → chỉ trễ thẻ + dòng dưới tên. */
+.page.enter-fwd.hlead>.body:not(#cf-body){animation-delay:.2s}
+.page.enter-fwd.hlead #cf-body>div:not(.still)>:not(.head){animation:fadein .32s var(--eo) .24s both}   /* .still = dựng lại nền (cardsStill): không chạy lại */
 .page.leave-fwd>.split,.page.leave-back>.split{animation:fadeout .2s ease both}
 @keyframes inF{from{opacity:0;transform:translateX(24px)}to{opacity:1;transform:none}}
 @keyframes inB{from{opacity:0;transform:translateX(-24px)}to{opacity:1;transform:none}}
@@ -129,8 +133,10 @@ svg{display:block}
 .st>*:nth-child(4){animation-delay:.36s}
 .st>*:nth-child(5){animation-delay:.44s}
 .st>*:nth-child(6){animation-delay:.52s}
-.rowin{opacity:0;animation:rise .5s cubic-bezier(.2,.75,.2,1) forwards}
-.key.keyin{opacity:0;animation:rise .38s cubic-bezier(.2,.75,.2,1) forwards}
+/* v2.5: fill "backwards" (không "forwards"): hết animation thì trả transform về cho :active — bản cũ giữ transform:none mãi
+   nên nén bấm của dòng danh sách và phím số không bao giờ chạy (animation thắng khai báo thường trong cascade) */
+.rowin{animation:rise .5s cubic-bezier(.2,.75,.2,1) backwards}
+.key.keyin{animation:rise .38s cubic-bezier(.2,.75,.2,1) backwards}
 /* vạch tự vẽ từ trái khi màn hiện */
 .draw{position:relative}
 .draw::after{content:'';position:absolute;left:0;right:0;bottom:-1px;height:1px;background:var(--hair);transform:scaleX(0);transform-origin:left}
@@ -217,7 +223,6 @@ svg{display:block}
       opacity:0;pointer-events:none;touch-action:none;transform:translate(-50%,-16px) scale(.96);transition:transform .2s var(--eio),opacity .16s linear}
 .pill.on{opacity:1;pointer-events:auto;transform:translate(-50%,0) scale(1);transition:transform .38s cubic-bezier(.2,.9,.25,1.12),opacity .2s linear}
 .pill.drag{transition:none}
-.pill.onacid{border-color:rgba(10,10,10,.18);box-shadow:0 10px 28px rgba(0,0,0,.18)}
 .pill .ic{width:18px;height:18px;color:var(--acid);flex:none}
 .pill.err .ic{color:var(--red)}
 .pill .spin{width:16px;height:16px;border-radius:50%;border:2px solid var(--hair);border-top-color:var(--acid);animation:ptrspin .9s linear infinite;flex:none}
@@ -248,6 +253,11 @@ svg{display:block}
 @keyframes ptrspin{to{transform:rotate(360deg)}}
 @keyframes ptrdash{0%{stroke-dashoffset:60}50%{stroke-dashoffset:18}100%{stroke-dashoffset:60}}
 .page.ptr-anim{transition:transform .32s var(--eo)}
+
+/* lớp hiệu ứng xuyên màn (app.js FX): tên bay giữa hai màn + hạt mừng. Tuyệt đối trong body, KHÔNG fixed (Safari 26 lấy màu thanh
+   từ element fixed); z 45: trên trang/sheet, dưới vạch bận (50), dải mép (59), pill (70) */
+.fxc{position:absolute;left:0;top:0;width:100%;height:100%;z-index:45;pointer-events:none}
+.herofly{position:absolute;z-index:46;white-space:nowrap;pointer-events:none;transform-origin:0 0;will-change:transform,opacity}
 
 /* ============ TÌM KIẾM 48 ============ */
 .search{flex:none;display:flex;align-items:center;gap:12px;height:48px;border-bottom:1px solid var(--hair);color:var(--paper);margin-top:32px}
@@ -321,10 +331,12 @@ svg{display:block}
 .bars.scrub i.hit{opacity:1;background:var(--acid)}
 .bars.in i{transform:scaleY(1)}
 .range{display:flex;justify-content:center;gap:16px;margin-top:24px}
-.range button{width:50px;padding:3px 0;border-radius:12px;display:flex;justify-content:center;font-family:var(--mono);font-size:11px;line-height:13px;letter-spacing:.88px;color:var(--gray)}
+.range button{width:50px;padding:3px 0;border-radius:12px;display:flex;justify-content:center;font-family:var(--mono);font-size:11px;line-height:13px;letter-spacing:.88px;color:var(--gray);transition:transform .12s var(--eo)}
+.range button:active{transform:scale(.92)}
 .range button.on{background:var(--paper);color:var(--ink)}
 .tiles{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);grid-auto-rows:minmax(0,1fr);gap:4px;margin-top:32px;flex:1;min-height:0}
-.tile{background:var(--tile);border-radius:4px;padding:12px;display:flex;flex-direction:column;justify-content:space-between;min-height:0;overflow:hidden;color:var(--paper)}
+.tile{background:var(--tile);border-radius:4px;padding:12px;display:flex;flex-direction:column;justify-content:space-between;min-height:0;overflow:hidden;color:var(--paper);transition:transform .12s var(--eo)}
+.tile:active{transform:scale(.97)}
 .tile.acid{background:var(--acid);color:var(--ink)}
 .tile .tl{font-size:18px;line-height:21px;letter-spacing:-.18px;color:var(--gray);white-space:nowrap}
 .tile.acid .tl{color:var(--ink55)}
@@ -416,7 +428,8 @@ svg{display:block}
 .mcard .l2{font-size:22px;line-height:26px;letter-spacing:-.44px;color:var(--acid);display:inline-flex;align-items:center;gap:6px}
 .mcard .l2 .ic{width:20px;height:20px}
 .mtabs{display:flex;justify-content:center;gap:16px}
-.mtabs button{width:40px;padding:3px 0;border-radius:12px;display:flex;align-items:center;justify-content:center;color:var(--gray)}
+.mtabs button{width:40px;padding:3px 0;border-radius:12px;display:flex;align-items:center;justify-content:center;color:var(--gray);transition:transform .12s var(--eo)}
+.mtabs button:active{transform:scale(.92)}
 .mtabs button.on{background:var(--paper);color:var(--ink)}
 .mtabs .ic{width:13px;height:13px;stroke-width:.8125}
 .next{display:flex;flex-direction:column;gap:12px}
@@ -427,7 +440,8 @@ svg{display:block}
 #ms-count{margin-top:32px}
 #ms-list{--lmt:12px}
 .mgrid{flex:1;min-height:0;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);grid-auto-rows:minmax(0,1fr);gap:4px;padding:32px 0}
-.mt{border-radius:4px;background:var(--tile);padding:11px;display:flex;flex-direction:column;justify-content:space-between;border:1px solid transparent;transition:border-color .12s linear;min-height:0;overflow:hidden}
+.mt{border-radius:4px;background:var(--tile);padding:11px;display:flex;flex-direction:column;justify-content:space-between;border:1px solid transparent;transition:border-color .12s linear,transform .12s var(--eo);min-height:0;overflow:hidden}
+.mt:active{transform:scale(.97)}
 .mt.on{border-color:var(--acid)}
 .mt .h{display:flex;justify-content:space-between;align-items:center;font-size:16px;line-height:19px;letter-spacing:-.16px;color:var(--gray)}
 .mt .h .ic{width:19px;height:19px;color:var(--gray);stroke-width:.8125}
@@ -516,39 +530,38 @@ svg{display:block}
 .sheet .foot{flex:none;height:48px;display:flex;justify-content:center;align-items:center}
 /* window khách từ ô trang chủ (#csheet): dùng chung .dimmer/.sheet · khách tập chậm = icon xu hướng 13px sau meta, không thêm chữ */
 
-/* ============ VÒNG LẶP SET ============ */
+/* ============ VÒNG LẶP SET ============
+   v2.5 · màn nghỉ "Hạt": nền Ink xuyên suốt (bỏ Acid tràn màn + lớp mực Ink dâng của v2.4). Vành hạt trên canvas là đồng hồ.
+   Mọi chuyển động của màn này (hai dòng đầu, nút, bộ đếm, cụm số, số bay, hạt) chạy theo đồng hồ MT trong app.js —
+   CSS ở đây chỉ giữ bố cục + trạng thái tĩnh; phần tử nào JS điều khiển opacity/transform thì KHÔNG có transition CSS. */
 .loop{position:absolute;inset:0;overflow:hidden;overflow:clip;background:var(--ink);color:var(--paper);display:flex;flex-direction:column}
-.loop.acid{color:var(--ink)}          /* màu chữ đổi lúc vòng loang phủ nửa màn */
-.loop.bga{background:var(--acid)}     /* nền đổi khi vòng loang phủ kín */
 .loop canvas{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
 .lp{position:absolute;inset:0;display:flex;flex-direction:column;padding:var(--top) var(--rail) var(--bot);pointer-events:none}
 .lp .head,.lp .foot{pointer-events:auto}
 .lp .head{position:relative;z-index:2}
 .lp .head .who{color:var(--paper)}
-.loop.acid>.lp .head .who{color:var(--ink55)}
-.loop.acid>.lp .head .sub{color:var(--ink)}
-.loop.acid>.lp .head .t1.dimt{color:var(--ink55)}
-.ink .head .who{color:var(--paper55)}
-.ink .head .t1{color:var(--paper55)}
-.ink .head .sub{color:var(--paper)}
+/* hai dòng đầu: dòng cũ trượt lên + mờ, dòng mới trượt vào (app.js line()) — xếp chồng cùng một ô lưới nên bố cục không nhảy.
+   Ngữ cảnh (tên bài) Paper · việc hiện tại Acid · màn nghỉ: việc vừa xong Paper 55 % / việc hiện tại Paper (Figma 561:225) */
+.lp .head .sw{display:grid;grid-template-columns:minmax(0,1fr)}   /* thắng .head .t1/.sub{display:block} của trang */
+.lp .head .sw>span{grid-area:1/1;display:block;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding-bottom:.16em;margin-bottom:-.16em;will-change:transform,opacity}
+.lp .head .t1>span{color:var(--paper)}
+.lp .head .t1>span.d55{color:var(--paper55)}
+.lp .head .sub>span{color:var(--paper)}
+.lp .head .sub>span.ac{color:var(--acid)}
 .lp .mid{flex:1;min-height:0}
 .lp .foot{position:relative;z-index:3;display:flex;flex-direction:column;gap:28px}
 .lp .nav{margin-top:0}
-.loop.acid .ghost{border-color:var(--inkline);color:var(--ink)}
-.loop.acid .ink .ghost{border-color:var(--hair);color:var(--paper)}
-.loop.acid .ink .wheel .hint{color:var(--slate)}
-/* thiết lập set: reps 112 · × 72 · kg 112 — khối giữa, tâm lệch xuống 13 */
-.setup{position:absolute;left:var(--rail);right:var(--rail);top:calc(50% + 16px);transform:translateY(-50%);display:flex;flex-direction:column;align-items:center;gap:32px;z-index:1;
-       transition:opacity .24s var(--eio),transform .24s var(--eio)}
-.setup.gone{opacity:0;transform:translateY(-50%) scale(.97)}
-.loop .clock{transition:opacity .24s var(--eio),transform .24s var(--eio)}
-.loop .clock.gone{opacity:0;transform:translateY(calc(-50% + 8px))}
-.two .loop .clock.gone{transform:translateY(8px)}
-.nums,.judge,.c1{transition:opacity .2s var(--eio)}
-.nums.gone,.judge.gone,.c1.gone{opacity:0}
-.c1.tx0{opacity:0;transition:opacity .11s linear}
+/* nút chính: MỘT pill đổi chữ + màu theo pha; bề rộng do JS nở theo chữ (ngoại lệ width đã duyệt) */
+.loop .c1{overflow:hidden}
+.loop .c1 .ct{display:block;white-space:nowrap}
+.loop .ctam{position:absolute;left:-9999px;top:0;visibility:hidden;pointer-events:none;width:auto}
+.loop .j0{transition:transform .12s var(--eo),background-color .2s linear,color .2s linear}
+/* thiết lập set: reps 112 · × 72 · kg 112 — khối giữa, tâm lệch xuống 16 */
+.setup{position:absolute;left:var(--rail);right:var(--rail);top:calc(50% + 16px);transform:translateY(-50%);display:flex;flex-direction:column;align-items:center;gap:32px;z-index:1}
 .setup .wheel{height:126px}
 .setup .x{font-family:var(--mono);font-size:72px;line-height:68px;letter-spacing:-2.16px;color:rgba(250,250,250,.9);text-align:center}
+/* số bay (FLIP) giữa bộ đếm lớn và cụm số đáy — bản sao Mono, chỉ transform */
+.fly{position:absolute;z-index:4;white-space:nowrap;pointer-events:none;transform-origin:0 0;color:var(--paper);will-change:transform}
 /* số nhỏ ở đáy khi đang tập: 40/38 · nhãn 11 + icon 13 · cột 108 / 136 */
 .nums{display:flex;justify-content:space-between;align-items:flex-start;height:57px}
 .fld{position:relative;height:57px;touch-action:none;cursor:grab}
@@ -565,31 +578,16 @@ svg{display:block}
 .fld .hint{position:absolute;top:44px;display:flex;align-items:center;gap:6px;font-family:var(--mono);font-size:11px;line-height:13px;letter-spacing:.88px;text-transform:uppercase;color:var(--slate);transition:opacity .16s linear;white-space:nowrap}
 .fld.reps .hint{left:0}
 .fld.kg .hint{right:0}
-.fld .unit{display:none}
 .fld.open .hint{opacity:0}
-/* lớp mực: số kg có đơn vị "KG" 12px cách 10 */
-.ink .fld.kg .v{right:73px}
-.ink .fld.kg .unit{display:block;position:absolute;right:0;top:22px;font-family:var(--mono);font-size:12px;line-height:14px;letter-spacing:.48px;color:var(--slate)}
-/* nút chấm set */
-.judge{display:flex;gap:8px}
-/* bộ đếm nghỉ: y=386 */
-.loop .clock{position:absolute;left:var(--rail);right:var(--rail);top:calc(50% - 40px);display:flex;justify-content:center;z-index:1}
-.loop.acid .wheel .hint{color:var(--ink55)}
-/* lớp mực Ink dâng (bản sao theme Ink của màn nghỉ) */
-.ink{position:absolute;inset:0;background:var(--ink);color:var(--paper);transform:translateY(-100%);pointer-events:none;z-index:4;overflow:hidden;will-change:transform}
-.ink>.inkc{position:absolute;inset:0;transform:translateY(100%);will-change:transform}
-.ink *{pointer-events:none!important}
-.ink .wheel .hint{color:var(--slate)}
-.ink .cta{background:var(--acid);color:var(--ink)}
-.ink .ghost{border-color:var(--hair);color:var(--paper)}
-.nxt{display:flex;flex-direction:column}
-/* màng menu 93% + blur 20 · danh sách bước tiếp căn phải, đáy 40 */
-.film{position:absolute;inset:0;z-index:6;background:rgba(212,255,0,.93);-webkit-backdrop-filter:blur(20px);backdrop-filter:blur(20px);color:var(--ink);
+/* bộ đếm nghỉ: y=386 · nở/co quanh tâm con số (app.js presence: scale .3 → 1) */
+.loop .clock{position:absolute;left:var(--rail);right:var(--rail);top:calc(50% - 40px);display:flex;justify-content:center;z-index:1;transform-origin:50% 52.5px}
+.loop .clock .line{color:var(--paper)}
+/* màng menu bước tiếp: Ink 93 % + blur 20 · danh sách bước tiếp căn phải, đáy 40 */
+.film{position:absolute;inset:0;z-index:6;background:rgba(10,10,10,.93);-webkit-backdrop-filter:blur(20px);backdrop-filter:blur(20px);color:var(--paper);
       opacity:0;pointer-events:none;transition:opacity .28s var(--eo)}
-.film.notr{transition:none}
 .film.alldone .exl,.film.alldone hr,.film.alldone .fdone{display:none}
-.film.dark{background:rgba(10,10,10,.93);color:var(--paper)}
 .film.on{opacity:1;pointer-events:auto}
+.film.fast{transition:opacity .16s linear}   /* đã chọn một bước: màng tan nhanh để thấy hạt hút về tâm */
 .film:not(.on) *{pointer-events:none!important}
 .film .inner{position:absolute;left:var(--rail);right:var(--rail);bottom:40px;display:flex;flex-direction:column;align-items:flex-end;gap:24px}
 .film .inner>*,.film .exl>button{will-change:transform,opacity}
@@ -599,8 +597,7 @@ svg{display:block}
 .film .exl button .nmx{font-size:22px;line-height:26px;letter-spacing:-.33px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
 .film .exl button .sn{font-size:22px;line-height:26px;letter-spacing:-.33px;opacity:.55;white-space:nowrap;flex:none}
 .film .exl button.done .nmx{text-decoration:line-through;opacity:.55}
-.film hr{width:100%;border:0;border-top:1px solid rgba(10,10,10,.14)}
-.film.dark hr{border-top-color:var(--hair)}
+.film hr{width:100%;border:0;border-top:1px solid var(--hair)}
 .film .act{font-size:22px;line-height:26px;letter-spacing:-.33px;color:inherit;text-align:right;max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 /* 1:2 — hai nửa 426 */
 .split{position:absolute;inset:0;display:flex;flex-direction:column}
@@ -620,17 +617,15 @@ svg{display:block}
 .two .setup .wheel .v{font-size:60px;letter-spacing:-1.8px;height:56px;line-height:56px}
 .two .setup .wheel .hint{top:64px}
 .two .setup .x{font-size:40px;line-height:38px;letter-spacing:-1.2px}
-/* vạch ngăn hai nửa (đổi màu theo nền nửa dưới) */
+/* vạch ngăn hai nửa */
 .two .loop+.loop::before{content:'';position:absolute;left:0;right:0;top:0;height:1px;background:var(--hair);z-index:8;pointer-events:none}
-.two .loop.acid+.loop::before,.two .loop+.loop.acid::before{background:var(--inkline)}
-.two .loop .clock{top:auto}
+.two .loop .clock{top:auto;transform-origin:50% 34px}
 .two .wheel{height:89px}
 .two .clock .wheel{width:345px}
 .two .clock .wheel .v{font-size:72px;letter-spacing:-2.16px;height:68px;line-height:68px}
 .two .clock .wheel .hint{top:76px}
 .two .lp .foot{gap:0}
 .two .lp .foot .nav{margin-top:0}
-.two .nxt{margin-bottom:0}
 .two .film .inner{gap:20px}
 .two .film .exl{gap:20px}
 .two .film .exl button .nmx,.two .film .exl button .sn,.two .film .act{font-size:16px;line-height:19px;letter-spacing:-.16px}
@@ -639,17 +634,10 @@ svg{display:block}
 .two .loop>.lp .nav{position:absolute;left:var(--rail);right:var(--rail);top:50%;transform:translateY(-50%) scale(.96);justify-content:center;gap:12px;z-index:3;
                     opacity:0;pointer-events:none;transition:opacity .22s linear,transform .3s var(--eo)}
 .two .loop>.lp .nav .sp{display:none}
+.two .loop>.lp .nav .j0{margin-right:-4px}   /* Chưa đạt ↔ Đạt cách 8 như cụm chấm set cũ (nav nổi 1:2 dùng gap 12) */
 .two .loop.ovl>.lp .nav{opacity:1;transform:translateY(-50%);pointer-events:auto}
-.two .loop .dimable:not(.nav),.two .loop .ink .head,.two .loop .ink .clock{transition:filter .32s var(--eio),opacity .32s var(--eio)}
-.two .loop.ovl .dimable:not(.nav),.two .loop.ovl .ink .head,.two .loop.ovl .ink .clock{filter:blur(40px);opacity:.45;pointer-events:none}
-/* v2.4.2 · nav KHÔNG tự đổi tông theo mốc thời gian (bản cũ: .inkd khi còn < 50% giờ nghỉ → cả cụm nút đổi màu dù mực chưa tới).
-   Nav gốc (tông Acid) nằm DƯỚI lớp mực (z 3 < 4); lớp mực mang bản sao nav tông Ink ở đúng chỗ → mực chảy tới đâu, tông Ink lộ ra tới đó.
-   1:2: bản sao nav trong lớp mực là nút nổi giữa section, hiện/ẩn cùng .ovl, cùng nhịp chuyển. */
-.two .loop .ink .lp .foot{position:static}
-.two .loop .ink .nav{position:absolute;left:var(--rail);right:var(--rail);top:50%;transform:translateY(-50%) scale(.96);justify-content:center;gap:12px;
-                     opacity:0;transition:opacity .22s linear,transform .3s var(--eo)}
-.two .loop .ink .nav .sp{display:none}
-.two .loop.ovl .ink .nav{opacity:1;transform:translateY(-50%)}
+.two .loop .dimable:not(.nav),.two .loop .clock .wheel{transition:filter .32s var(--eio),opacity .32s var(--eio)}
+.two .loop.ovl .dimable:not(.nav),.two .loop.ovl .clock .wheel{filter:blur(40px);opacity:.45;pointer-events:none}
 
 /* ============ TỔNG KẾT (rail 12, nội dung 24) ============ */
 #sm-scroll{padding:32px 12px 0}
@@ -690,7 +678,8 @@ body.adm .tab-adm{display:flex}
 @media (prefers-reduced-motion:reduce){
   .page.enter-fwd,.page.enter-back{animation:fadein .2s linear both}
   .page.leave-fwd,.page.leave-back{animation:fadeout .2s linear both}
-  .enter-fwd .st>*,.enter-back .st>*,.rowin,.key.keyin{animation:fadein .2s linear forwards}
+  .enter-fwd .st>*,.enter-back .st>*{animation:fadein .2s linear forwards}
+  .rowin,.key.keyin{animation:fadein .2s linear backwards}
   @keyframes fadein{from{opacity:0}to{opacity:1}}
   @keyframes fadeout{to{opacity:0}}
   .bars i,.meter2 i,.card .fill{transition:none;transform:none}
