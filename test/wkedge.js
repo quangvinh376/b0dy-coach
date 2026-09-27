@@ -5,7 +5,7 @@
    Chromium không có cơ chế này → test GIẢ LẬP đúng thuật toán WebKit (điểm lấy mẫu, phân loại container, ngưỡng 0,9 / 10px / opacity 0,1)
    và đối chiếu màu dải với PIXEL THẬT ở mép khi tạm ẩn dải (oracle: dải phải đúng màu app đang hiện ở mép đó).
    W0 tắt dải → WebKit tìm thấy body "viewport-sized" (bẫy v2.4.0–2.4.1); app cài (standalone/sb-legacy) dải display:none, không che khối đỉnh · W1 PIN / trang chủ / khách hàng (kể cả cuộn): dải là container, Ink
-   W2 cửa sổ khách + thư viện: mép dưới Tile khi mở, về Ink sau khi đóng · W3 loop 1:1 v2.5 (màn nghỉ "Hạt"): mọi pha Ink/Ink
+   W2 cửa sổ khách + thư viện (v2.5.1 nền Ink): mép Ink/Ink khi mở, lúc trượt xuống và sau khi đóng · W3 loop 1:1 v2.5 (màn nghỉ "Hạt"): mọi pha Ink/Ink
    · W4 pill: đang hiện không che điểm lấy mẫu, ẩn hẳn (display:none) sau khi tắt · W5 màng .film luôn Ink 93 % → Ink/Ink
    · W6 rời loop → Ink · W7 loop 1:2: nửa trên nghỉ rồi cả hai nghỉ — Ink/Ink
    W8 theme-color theo mép trên, --bg theo mép dưới, kicker #wk-k đổi trạng thái mỗi lần syncTheme.
@@ -13,7 +13,7 @@
 var {chromium}=require('playwright'); var serve=require('./serve'); var path=require('path'); var fs=require('fs'); var zlib=require('zlib');
 var CHROME='/opt/pw-browsers/chromium-1194/chrome-linux/chrome', PORT=+process.env.PORT||19351, OUT=path.join(__dirname,'out_wkedge');
 fs.rmSync(OUT,{recursive:true,force:true}); fs.mkdirSync(OUT,{recursive:true});
-var INK=[10,10,10], TILE=[34,34,34];
+var INK=[10,10,10];
 var RES=[], CUR=null, PAGEERR=[];
 function check(c, msg){ if(!c) CUR.fails.push(msg); return !!c; }
 function near(a,b,t){ t=t==null?2:t; return !!a && !!b && Math.abs(a[0]-b[0])<=t && Math.abs(a[1]-b[1])<=t && Math.abs(a[2]-b[2])<=t; }
@@ -117,7 +117,7 @@ function wkEdgesInPage(){
     check(v.bg.toUpperCase()===hex(expB), label+' · --bg = màu mép dưới (dải đáy WebKit 301108 trên bản cài): '+v.bg);
     var on=await pix(false), off=await pix(true);
     /* trang có lớp mép blur (.edge): backdrop-filter ở sát mép màn hình lấy mẫu ra ngoài khung → tối hơn Ink 2–3 mức; dải Ink đặc phủ 12px → chênh ≤ 4/255 (mắt không thấy).
-       sheet mở (dim): --bg = Tile (dải đáy WebKit 301108) nên trang nền trong lộ Tile dưới dimmer 75 % Ink → mép trên 8–16 tuỳ trang; dải Ink chênh ≤ 8/255 */
+       sheet mở (dim): dimmer 75 % Ink + blur 20 trên trang nền → mép trên lệch Ink vài mức tuỳ trang; dải Ink chênh ≤ 8/255 (v2.5.1: sheet và --bg đều Ink) */
     var invis=o.dim?8:(o.edge?4:1); if(o.dim) o.tol=8; check(near(on.t, off.t, invis) && near(on.b, off.b, invis), label+' · dải phải vô hình (pixel dải hiện == dải ẩn, ±'+invis+'): '+JSON.stringify(on)+' vs '+JSON.stringify(off));
     if(o.darkOnly) check(off.t.every(function(x){return x<=40;}) && off.b.every(function(x){return x<=40;}), label+' · pixel app thật ở mép (dải ẩn) phải tối: '+JSON.stringify(off));
     else check(near(off.t, expT, o.tol||3) && near(off.b, expB, o.tol||3), label+' · pixel app thật ở mép (dải ẩn) phải đúng màu dải: '+JSON.stringify(off)+' mong '+hex(expT)+' / '+hex(expB));
@@ -151,15 +151,15 @@ function wkEdgesInPage(){
     await ev(function(){ document.getElementById('cl-list').scrollTop=0; }); await w(100);
     await page.click('#p-clients .nav .ghost:nth-child(1)'); await screen('p-home'); await w(800);
   });
-  await run('W2', 'Cửa sổ khách (trang chủ) + thư viện (bài tập hôm nay): mép dưới Tile khi mở, về Ink 380ms sau khi đóng', async function(){
-    await ev(function(){ openClientSheet('today'); }); await w(600); await expectEdges('cửa sổ khách mở', INK, TILE, {dim:true}); await shot('csheet');
+  await run('W2', 'Cửa sổ khách (trang chủ) + thư viện (bài tập hôm nay) nền Ink (v2.5.1): mép Ink/Ink khi mở, lúc trượt xuống và sau khi đóng', async function(){
+    await ev(function(){ openClientSheet('today'); }); await w(600); await expectEdges('cửa sổ khách mở', INK, INK, {dim:true}); await shot('csheet');
     await ev(function(){ closeClientSheet(); }); await w(150); var mid=await ev(function(){ return getComputedStyle(document.documentElement).getPropertyValue('--edge-b').trim(); });
-    check(/#222222/i.test(mid), 'đang trượt xuống (150ms) mép dưới vẫn Tile: '+mid);
+    check(/#0A0A0A/i.test(mid), 'đang trượt xuống (150ms) mép dưới vẫn Ink: '+mid);
     await w(500); await expectEdges('cửa sổ khách đóng', INK, INK, {darkOnly:true});
     await page.click('#h-go'); await screen('p-pick'); await w(600);
     await page.click('#pk-list .row:has-text("Thành Công")'); await screen('p-confirm'); await w(1300);
     await page.click('#cf-go'); await screen('p-plan'); await page.waitForSelector('#lib.on'); await w(900);
-    await expectEdges('thư viện mở', INK, TILE, {dim:true});
+    await expectEdges('thư viện mở', INK, INK, {dim:true});
     await page.click('#lib-list .row:nth-of-type(1)'); await page.click('#lib-go'); await w(700); await expectEdges('thư viện đóng', INK, INK, {darkOnly:true, edge:true});
   });
   var L='#loop-host .loop:nth-child(1) ';

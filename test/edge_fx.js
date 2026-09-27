@@ -94,7 +94,18 @@ async function run(id, name, fn){ CUR={id:id,name:name,fails:[]}; RES.push(CUR);
     check(near(s.tt+s.tz, sr), 'mép vùng trên = đáy ô tìm: '+(s.tt+s.tz)+' vs '+sr);
     await scrollTo('#lib-list', 200); s=await egState('#lib-list'); check(s.rt==='32px' && s.rb==='48px', 'cuộn 200: '+s.rt+' / '+s.rb);
     await page.screenshot({path:path.join(OUT,'e4-lib-200.png')});
-    var bg=await ev(function(){ return getComputedStyle(document.getElementById('lib')).getPropertyValue('--eg-rgb').trim(); }); check(bg==='34,34,34', 'sheet dùng màu nền sheet cho lớp tối: '+bg);
+    var bg=await ev(function(){ return getComputedStyle(document.getElementById('lib')).getPropertyValue('--eg-rgb').trim(); }); check(bg==='10,10,10', 'sheet (nền Ink từ v2.5.1) dùng Ink cho lớp tối: '+bg);
+    /* v2.5.1 (chủ studio 27/09): mọi cửa sổ nền Ink, CHỈ viền trên Paper 14 %, bo 4px hai góc trên; viền ăn vào đệm trên → nội dung không dời */
+    var st=await ev(function(){ return ['lib','csheet'].map(function(id){ var cs=getComputedStyle(document.getElementById(id));
+      return {id:id, bg:cs.backgroundColor, bt:cs.borderTopWidth+' '+cs.borderTopStyle+' '+cs.borderTopColor, bl:cs.borderLeftWidth, br:cs.borderRightWidth, bb:cs.borderBottomWidth,
+        r:[cs.borderTopLeftRadius, cs.borderTopRightRadius, cs.borderBottomRightRadius, cs.borderBottomLeftRadius].join(' '), pt:cs.paddingTop}; }); });
+    st.forEach(function(o){
+      check(o.bg==='rgb(10, 10, 10)', o.id+' nền Ink: '+o.bg);
+      check(o.bt==='1px solid rgba(250, 250, 250, 0.14)' && o.bl==='0px' && o.br==='0px' && o.bb==='0px', o.id+' chỉ viền trên 1px Paper 14 %: '+o.bt+' · trái '+o.bl+' phải '+o.br+' dưới '+o.bb);
+      check(o.r==='4px 4px 0px 0px', o.id+' bo 4px chỉ hai góc trên: '+o.r);
+      check(o.pt==='7px', o.id+' đệm trên 7 (+ viền 1 = 8 như cũ): '+o.pt); });
+    var hy=await ev(function(){ var l=document.getElementById('lib'); return Math.round(document.getElementById('lib-handle').getBoundingClientRect().top-l.getBoundingClientRect().top); });
+    check(hy===8, 'tay nắm cách mép sheet 8 như trước khi có viền: '+hy);
     await scrollTo('#lib-list', 0);
     await page.click('#lib-list .row:nth-of-type(1)'); await page.click('#lib-go'); await w(600);
   });
