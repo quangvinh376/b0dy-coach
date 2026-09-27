@@ -7,7 +7,7 @@
    ===================================================================== */
 'use strict';
 var $=function(id){ return document.getElementById(id); };
-var APP_VER='v2.5.0';
+var APP_VER='v2.5.1';
 
 /* ---------------- tiện ích ---------------- */
 function isoToday(d){ d=d||new Date(); return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2); }
@@ -1909,13 +1909,13 @@ var LOOPS=[], LOOP_ON=false, FOCUS=-1;
 /* ---- Màu vùng dưới thanh trạng thái / thanh công cụ Safari (iOS 26+, Liquid Glass) — v2.4.2 → v2.5 ----
    Safari 26 bỏ theme-color; vùng dưới hai thanh lấy màu của element fixed/sticky đầu tiên ở tâm mỗi mép (LocalFrameView::fixedContainerEdges).
    body{position:fixed} phủ kín viewport nên WebKit giữ màu lấy lần đầu → hai dải .wkedge (#wk-t / #wk-b, fixed, cao 12px) mang màu mép
-   hiện hành và được đọc lại mỗi lần đổi. v2.5: màn nghỉ không còn Acid tràn màn → mọi màn đều Ink ở hai mép; chỉ sheet (Tile) phủ
-   mép dưới. --bg (nền html/body) = màu mép dưới: màu dự phòng của Safari và dải đáy của bản cài black-translucent (WebKit 301108). */
-var EDGE_INK='#0A0A0A', EDGE_TILE='#222222';
+   hiện hành và được đọc lại mỗi lần đổi. v2.5: màn nghỉ không còn Acid tràn màn → mọi màn đều Ink ở hai mép; v2.5.1: sheet cũng Ink
+   (trước là Tile phủ mép dưới). --bg (nền html/body) = màu mép dưới: màu dự phòng của Safari và dải đáy của bản cài black-translucent (WebKit 301108). */
+var EDGE_INK='#0A0A0A';
 var EDGE_CUR={t:'', b:'', bg:''};
 function setEdge(side, c){ if(EDGE_CUR[side]===c) return; EDGE_CUR[side]=c; document.documentElement.style.setProperty('--edge-'+side, c); }
 function syncTheme(){
-  var cb=document.querySelector('.sheet.on') ? EDGE_TILE : EDGE_INK;   /* sheet chỉ mở trên trang Ink; mép trên giữ Ink */
+  var cb=EDGE_INK;   /* v2.5.1: cửa sổ (sheet) cũng nền Ink → hai mép luôn Ink, kể cả khi sheet đang mở */
   setEdge('t', EDGE_INK); setEdge('b', cb);
   if(EDGE_CUR.bg!==cb){ EDGE_CUR.bg=cb; document.documentElement.style.setProperty('--bg', cb); }
   var m=document.querySelector('meta[name=theme-color]'); if(m && m.getAttribute('content')!==EDGE_INK) m.setAttribute('content', EDGE_INK);

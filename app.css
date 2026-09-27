@@ -157,7 +157,7 @@ svg{display:block}
    Khung .edge (trang hoặc sheet) có một danh sách .ex. Danh sách không còn dừng ở ô tìm / trên nav nữa mà TRÀN tới mép
    trên và mép dưới của khung (tức mép màn hình); khối đỉnh (tiêu đề, ô tìm, nhãn) và thanh đáy (nav / foot) nổi lên trên.
    Hai lớp mép nằm giữa: .eg.t phủ từ mép màn hình tới chỗ danh sách bắt đầu, .eg.b phủ từ nav tới mép dưới màn hình.
-   Mỗi lớp = làm tối (Ink, hoặc Tile trong sheet) + blur tăng dần (3 tầng backdrop-filter 1,5 → 4 → 10px, mỗi tầng hiện
+   Mỗi lớp = làm tối (Ink — cả trong sheet từ v2.5.1) + blur tăng dần (3 tầng backdrop-filter 1,5 → 4 → 10px, mỗi tầng hiện
    từ một đoạn sâu hơn). Nội dung đi vào lớp thì tối dần và nhoè dần như app iOS; chữ và nút phía trên vẫn đủ tương phản.
    Dải chuyển --r (chỗ nội dung bắt đầu tối/nhoè, nằm NGOÀI khối đỉnh / nav) dài theo vị trí cuộn như luật fog cũ:
    ở đầu danh sách → 0 (không làm mờ gì), cuộn quá 32px → đủ dải; gần cuối → dải đáy thu về 0. JS: edgeScroll().
@@ -191,7 +191,6 @@ svg{display:block}
 .edge>.body>:not(.ex):not(.eg):not(.eg-m):not(.dropzone),.sheet.edge>.handle,.sheet.edge>.search{position:relative;z-index:2}
 .edge>.body>.dropzone{z-index:2}
 .page.edge>.head,.page.edge>.nav,.sheet.edge>.foot{position:relative;z-index:3}
-.sheet.edge{--eg-rgb:34,34,34}
 /* trang lưới (rail 12): tiêu đề & nav lùi vào 12 */
 .g12{padding-left:12px;padding-right:12px}
 .g12>.head,.g12>.nav,.g12 .in12{padding-left:12px;padding-right:12px}
@@ -516,11 +515,13 @@ svg{display:block}
   .dropzone.hot{transform:none}
 }
 
-/* window thư viện bài: lớp làm mờ 75% + blur 20 · window #222 từ y=126 */
+/* window thư viện bài: lớp làm mờ 75% + blur 20 · window từ y=126.
+   v2.5.1 (chủ studio 27/09): mọi cửa sổ nền Ink, CHỈ viền trên hairline Paper 14 %, bo 4px hai góc trên.
+   Viền 1px ăn vào đệm trên (8 → 7) để tay nắm / ô tìm / danh sách giữ nguyên toạ độ. */
 .dimmer{position:absolute;inset:0;background:rgba(10,10,10,.75);-webkit-backdrop-filter:blur(20px);backdrop-filter:blur(20px);z-index:30;opacity:0;pointer-events:none;transition:opacity .28s linear}
 .dimmer.on{opacity:1;pointer-events:auto}
-.sheet{position:absolute;left:0;right:0;bottom:0;top:calc(var(--top) + 70px);background:var(--tile);border-radius:4px 4px 0 0;z-index:31;
-       display:flex;flex-direction:column;padding:8px 12px 28px;transform:translateY(104%);transition:transform .36s var(--eo)}
+.sheet{position:absolute;left:0;right:0;bottom:0;top:calc(var(--top) + 70px);background:var(--ink);border-top:1px solid var(--hair);border-radius:4px 4px 0 0;z-index:31;
+       display:flex;flex-direction:column;padding:7px 12px 28px;transform:translateY(104%);transition:transform .36s var(--eo)}
 .sheet.on{transform:none}
 .sheet .handle{padding-bottom:12px;display:flex;align-items:center;justify-content:center;flex:none}
 .sheet .handle i{width:75px;height:6px;border-radius:100px;background:rgba(250,250,250,.35)}
