@@ -7,7 +7,7 @@
    ===================================================================== */
 'use strict';
 var $=function(id){ return document.getElementById(id); };
-var APP_VER='v2.5.2';
+var APP_VER='v2.6.0';
 
 /* ---------------- tiện ích ---------------- */
 function isoToday(d){ d=d||new Date(); return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2); }
@@ -315,7 +315,8 @@ function logout(msg){ state.pin=''; setAdmin(false); hidePill(); SES('lb_pin',nu
 function pinGone(ep){ if(ep!=null && ep!==AUTH_EP) return; accDrop(curPin()); logout('MÃ PIN KHÔNG CÒN HIỆU LỰC'); }
 
 /* ---- hàng đợi ghi (outbox): UI cập nhật ngay, nền gửi theo lô, id chống trùng ----
-   ev.hold=1: sự kiện "đang giữ" (set vừa ghi, còn hoàn tác được) → chưa gửi cho tới khi release(). */
+   ev.hold=1: sự kiện "đang giữ" (set vừa ghi, còn hoàn tác được) → chưa gửi cho tới khi release().
+   v2.6: set giữ suốt vòng nghỉ (đặt giờ + đang nghỉ) và chỉ nhả khi coach đi tiếp (vào set mới · đổi bài · xong bài · kết thúc). */
 var OUT={q:[], busy:false, timer:0};
 try{ OUT.q=JSON.parse(ST('lb_outbox')||'[]'); if(!Array.isArray(OUT.q)) OUT.q=[]; }catch(e){ OUT.q=[]; }
 OUT.q.forEach(function(e){ delete e.hold; });               /* mở lại app: set đã ghi thì đứng, không giữ nữa */
@@ -329,6 +330,8 @@ function enqueue(ev, hold){
 }
 function release(id){ var ch=false; OUT.q.forEach(function(e){ if((!id||e.id===id) && e.hold){ delete e.hold; ch=true; } }); if(ch){ outSave(); clearTimeout(OUT.timer); OUT.timer=setTimeout(function(){ flush(); }, 1500); } }
 function unqueue(id){ var n=OUT.q.length; OUT.q=OUT.q.filter(function(e){ return e.id!==id; }); if(OUT.q.length!==n){ outSave(); return true; } return false; }
+/* sự kiện còn đang giữ (chưa từng rời máy) → xoá được mà không để lại bản ghi ma trên máy chủ */
+function held(id){ return OUT.q.some(function(e){ return e.id===id && e.hold; }); }
 /* sự kiện gửi được bằng phiên hiện tại: phiên Admin chỉ gửi sự kiện ghi trong chế độ Admin, phiên coach không gửi sự kiện của Admin
    (máy dùng chung: không để dữ liệu của người này đi dưới PIN của người kia — chờ đúng người đăng nhập lại) */
 function mine(e){ return state.admin ? e.coach==='Admin' : e.coach!=='Admin'; }
@@ -850,7 +853,7 @@ function Field(cv, src){
   var cP=Math.cos(HAT.PITCH), sP=Math.sin(HAT.PITCH), cyw=Math.cos(RING.YAW), syw=Math.sin(RING.YAW), cpt=Math.cos(RING.PITCH), spt=Math.sin(RING.PITCH);
   var F={cx:196.5, cy:442, h:324, cyp:441.5, s:1, sx:1,   /* s: tỷ lệ vành hạt theo chiều dọc · sx: chiều ngang (≥ s: luôn chừa chỗ cho con số) */
          CH:{on:false, alpha:0, scale:1, calm:1, dot:0, oy:0},
-         CR:{slices:[], exit:[], N:90, Nan:90, Nv:0, acid:false, ignT0:-99, merge:0, hbT:-99, echoT:-99, ghostOn:false},
+         CR:{slices:[], exit:[], N:90, Nan:90, Nv:0, acid:false, ignT0:-99, dsT0:-99, dsPhi:0, merge:0, hbT:-99, echoT:-99, ghostOn:false},
          parts:[], inh:[]};
   var CH=F.CH, CR=F.CR;
   function dot(x,y,r,a,c,z){ if(PN>=CAP || r<0.2 || a<0.012) return; PX[PN]=x; PY[PN]=y; PR[PN]=r; PA[PN]=a>1?1:a; PC[PN]=c; PZ[PN]=z; IDX[PN]=PN; PN++; }
@@ -875,7 +878,10 @@ function Field(cv, src){
   function env(){
     var R=rm(), w0=TAU/Math.max(1,CR.Nan); E.w=lerp(w0, Math.max(w0,0.06), CR.merge);
     E.roll=R?0:0.30*MT;
-    if(CR.acid){ var p=clamp((MT-CR.ignT0)/0.56,0,1); E.phi=R?TAU+1:TAU*EO(p); E.swFade=R?0:1-clamp((MT-CR.ignT0-0.56)/0.25,0,1); }
+    if(CR.acid && CR.dsT0>CR.ignT0){   /* hoàn tác bắt đầu nghỉ: sóng Acid rút ngược từ đầu cung còn lại về 12 giờ */
+      var q=clamp((MT-CR.dsT0)/0.42,0,1); E.phi=CR.dsPhi*(1-EO(q)); E.swFade=1-q; if(q>=1){ CR.acid=false; E.phi=-1; E.swFade=0; }
+    }
+    else if(CR.acid){ var p=clamp((MT-CR.ignT0)/0.56,0,1); E.phi=R?TAU+1:TAU*EO(p); E.swFade=R?0:1-clamp((MT-CR.ignT0-0.56)/0.25,0,1); }
     else { E.phi=-1; E.swFade=0; }
     E.rest=src.rest(); E.lt=src.lastTen(); E.head=-1; E.L=0;
     if(E.rest && !R){ var L=src.left(); if(L>0){ var Rr=Math.ceil(L-1e-9), q=1-(L-(Rr-1)); E.head=Rr-1; E.L=q*q; } }
@@ -997,7 +1003,16 @@ function Field(cv, src){
     env(); var pending=CR.slices.length-R;
     while(CR.slices.length>R){ var silent=pending>3 && CR.slices.length>R+2; releaseHead(silent); if(E.lt || src.left()<=10) CR.hbT=MT; }
   };
-  F.ignite=function(instant){ CR.acid=true; CR.ignT0=instant?MT-2:MT; CR.ghostOn=true; };
+  F.ignite=function(instant){ CR.acid=true; CR.ignT0=instant?MT-2:MT; CR.dsT0=-99; CR.ghostOn=true; };
+  /* hoàn tác "bắt đầu nghỉ" (tua ngược ignite): sóng Acid rút ngược từ đầu cung còn lại về 12 giờ (420 ms --eo, env()),
+     bóng số 0 tắt tại chỗ, hạt gom 10 giây cuối tản lại, vòng vọng 0:00 dừng. Hạt đã rụng về lại vành: setCount (nơi gọi) */
+  F.douse=function(){
+    env(); CR.echoT=-99; F.merge(false);
+    if(CR.ghostOn){ var thR=CR.slices.length*E.w; for(var i=0;i<HAT_GH.length;i+=2){ var g=HAT_GH[i]; if(g.th>=thR) F.inh.push({x:mx(g.x),y:my(g.y),tx:mx(g.x),ty:my(g.y),r:.85*F.s,a:.18,c:0,t0:MT,dur:.2}); } CR.ghostOn=false; }
+    if(!CR.acid) return;
+    if(rm()){ CR.acid=false; return; }
+    CR.dsT0=MT; CR.dsPhi=Math.min(TAU, CR.slices.length*E.w);   /* hạt đổ lại (ngoài cung còn lại) vào vành đã là Paper */
+  };
   F.merge=function(on, instant){
     if(instant){ twKill(K+'mg'); CR.merge=on?1:0; return; }
     tw({key:K+'mg', from:CR.merge, to:on?1:0, dur:.42, ease:EIO, set:function(v){ CR.merge=v; }});
@@ -1014,20 +1029,22 @@ function Field(cv, src){
     }
     CR.slices=[]; CR.ghostOn=false; CR.acid=false; twKill(K+'mg'); CR.merge=0; CR.echoT=-99;
   };
-  /* hoàn tác: vành hạt QUAY NGƯỢC thành vành nhịp — mỗi chấm bay về đúng chỗ, cỡ, độ sáng của một chấm Chase lúc lặng
-     (thiết lập: chấm Chase đứng yên nên đích chính xác), so le ngược chiều thở ra; vành nhịp hiện lên đúng lúc chấm hạ cánh.
-     Khác "vào set" (hút về tâm): hoàn tác là tua lại, không phải bước tiếp. Giảm chuyển động → tắt tại chỗ. */
-  F.rewind=function(){
+  /* bỏ kết quả vừa chấm (tua ngược exhale): vành hạt QUAY NGƯỢC thành vành nhịp — mỗi chấm bay về đúng chỗ, cỡ, độ sáng, màu của
+     một chấm Chase ở trạng thái đích `to` (mặc định lúc lặng), tính tại lúc hạ cánh (vành đang thức vẫn trôi); so le ngược chiều
+     thở ra; vành nhịp hiện lên đúng lúc chấm hạ cánh (nơi gọi). Khác "vào set" (hút về tâm): đây là tua lại, không phải bước tiếp.
+     Giảm chuyển động → tắt tại chỗ, trả false. */
+  F.rewind=function(to){
     if(rm()){ F.inhale(); return false; }
-    var i, k, s, d, n=CR.slices.length, keep={alpha:CH.alpha, scale:CH.scale, calm:CH.calm, dot:CH.dot, oy:CH.oy}, tg=[];
-    CH.calm=1; CH.dot=0; CH.scale=1; CH.oy=0; CH.alpha=1;
-    for(i=0;i<RING.N;i++){ chaseDot(i); tg.push({x:CO.x, y:CO.y, r:CO.r, a:CO.a*chA(), z:CO.z}); }
+    to=to||{calm:1, dot:0};
+    var i, k, s, d, n=CR.slices.length, keep={alpha:CH.alpha, scale:CH.scale, calm:CH.calm, dot:CH.dot, oy:CH.oy}, tg=[], land=MT+0.47;
+    CH.calm=to.calm; CH.dot=to.dot; CH.scale=1; CH.oy=0; CH.alpha=1;
+    for(i=0;i<RING.N;i++){ chaseDot(i, land); tg.push({x:CO.x, y:CO.y, r:CO.r, a:CO.a*chA(), c:CO.c, z:CO.z}); }
     for(var kk in keep) CH[kk]=keep[kk];
     env(); CR.exit=[]; F.parts=[];
     for(i=0;i<n;i++){
       s=CR.slices[i]; var ang=(i+0.5)/Math.max(1,n);
       for(k=0;k<s.dots.length;k++){ d=s.dots[k]; evalDot(s,d); var t=tg[(i*HAT.KD+k)*37%RING.N];
-        F.inh.push({x:O.x, y:O.y, tx:t.x, ty:t.y, r:O.r, r1:t.r, a:O.a, a1:t.a, c:O.c, c1:0, z:t.z, t0:MT+(1-ang)*0.10, dur:.42}); }
+        F.inh.push({x:O.x, y:O.y, tx:t.x, ty:t.y, r:O.r, r1:t.r, a:O.a, a1:t.a, c:O.c, c1:t.c, z:t.z, t0:MT+(1-ang)*0.10, dur:.42}); }
     }
     if(CR.ghostOn){ var thR=n*E.w; for(i=0;i<HAT_GH.length;i+=2){ var g=HAT_GH[i]; if(g.th>=thR) F.inh.push({x:mx(g.x),y:my(g.y),tx:mx(g.x),ty:my(g.y),r:.85*F.s,a:.18,c:0,t0:MT,dur:.2}); } }
     CR.slices=[]; CR.ghostOn=false; CR.acid=false; twKill(K+'mg'); CR.merge=0; CR.echoT=-99;
@@ -1051,8 +1068,8 @@ function Field(cv, src){
   /* ---- vành nhịp (Chase) ---- */
   var CO={x:0,y:0,r:0,a:0,c:0,z:0};
   function chA(){ return CH.alpha*(1-0.25*CH.calm); }
-  function chaseDot(i){
-    var SC=F.h/(2*(RING.RY+RING.TUBE))*CH.scale, t=MT, calm=CH.calm, chasePh=ringPhase(t*0.30*RING.SPEED)*2, breath=ringPhase(t*RING.G_RATE*RING.SPEED);
+  function chaseDot(i, at){   /* at: thời điểm MT cần tính (mặc định bây giờ) — rewind tính đích ở lúc hạ cánh */
+    var SC=F.h/(2*(RING.RY+RING.TUBE))*CH.scale, t=at==null?MT:at, calm=CH.calm, chasePh=ringPhase(t*0.30*RING.SPEED)*2, breath=ringPhase(t*RING.G_RATE*RING.SPEED);
     var d=RING_DOTS[i], k=ringGather(breath+d.s1*RING.G_SPREAD)*(1-calm), pull=1-RING.G_DEPTH*k*(0.45+0.55*d.s2), a=d.a+RING.G_SWIRL*k*(0.55+0.45*d.s1);
     var tt=RING.TUBE*d.tr, cb=Math.cos(d.b), sb=Math.sin(d.b);
     var x0=Math.cos(a)*(RING.RX+tt*cb)*pull, y0=Math.sin(a)*(RING.RY+tt*cb)*pull, z0=tt*sb*pull;
@@ -1897,15 +1914,29 @@ function primePerson(p){
 /* =====================================================================
    5–9 — VÒNG LẶP SET (một Loop cho mỗi khách; 1:2 = hai nửa)
    v2.5 · màn nghỉ "Hạt" — nền Ink xuyên suốt, thiết lập → trong set → đặt giờ nghỉ → đang nghỉ → set mới là MỘT không gian:
-   · Bắt đầu set: số reps/kg BAY từ bộ đếm lớn xuống cụm số đáy (FLIP), vành nhịp thức dậy (lõi sóng hoá Acid, chấm tâm nở),
+   · Bắt đầu set: số reps/kg BAY từ bộ đếm lớn vào cụm số (FLIP), vành nhịp thức dậy (lõi sóng hoá Acid, chấm tâm nở),
      pill Acid co thành "Đạt" và "Chưa đạt" trượt ra từ sau nó. Quay lại: số bay ngược lên, vành lặng đi.
    · Chấm set: vành nhịp THỞ RA thành vành hạt, bộ đếm nở từ tâm, pill thành "Bắt đầu nghỉ" (Paper).
    · Bắt đầu nghỉ: sóng Acid chạy một vòng; mỗi giây một hạt rụng đúng lúc số nhảy; kéo ▲▼ lúc đang đếm = đổi thời gian CÒN LẠI.
-   · Vào set mới / hoàn tác / đổi bài: hạt hút về tâm, bộ đếm co lại, vành nhịp nở ra từ tâm, bộ đếm lớn hiện lại.
+   · Vào set mới / đổi bài: hạt hút về tâm, bộ đếm co lại, vành nhịp nở ra từ tâm, bộ đếm lớn hiện lại.
    · Hai dòng đầu đổi bằng trượt 7px + mờ (240 ms); chữ nút mờ ra/vào 110 + 110 ms, bề rộng pill nở theo chữ 260 ms --eo.
+   v2.6 (28/09) · nút trái là chuỗi LÙI TỪNG BƯỚC — mỗi bước lùi đúng một trạng thái, chuyển động là bước tới tua ngược:
+     đang nghỉ ↩ → đặt giờ nghỉ (sóng Acid rút ngược, hạt đã rụng về lại vành) · đặt giờ nghỉ ← → đang tập (bỏ kết quả vừa chấm,
+     hạt tua ngược thành vành nhịp đang thức) · đang tập ↩ → thiết lập · thiết lập ← → danh sách bài.
+     Set vừa chấm GIỮ (hold) trong hàng đợi tới khi coach đi tiếp (vào set mới · đổi bài · xong bài · kết thúc) → lùi lúc nào cũng không để lại set ma trên máy chủ.
+   · 1:2: mỗi nửa luôn có nav rút gọn ở đáy (nút tròn 48, icon 24, cách đáy nửa màn 28) — nút ở nửa nào tác động nửa đó.
    Mọi thứ chạy theo đồng hồ MT (motFrame) nên khớp từng khung với hạt; giờ nghỉ thật vẫn là Date.now() − restStart.
    ===================================================================== */
-var LOOPS=[], LOOP_ON=false, FOCUS=-1;
+var LOOPS=[], LOOP_ON=false;
+/* nút theo pha — trái: ← quay lại / ↩ hoàn tác (chuỗi lùi ở trên) · phải: chữ (1:1) hoặc icon (1:2 rút gọn); nền Paper chỉ lúc đặt giờ nghỉ */
+var LOOP_NAV={
+  'setup':      {g:'i-back', gl:'Quay lại', t:'Bắt đầu set',         i:'i-play'},
+  'active':     {g:'i-undo', gl:'Hoàn tác', t:'Đạt',                 i:'i-check'},
+  'rest-setup': {g:'i-back', gl:'Quay lại', t:'Bắt đầu nghỉ',        i:'i-play', paper:true},
+  'rest':       {g:'i-undo', gl:'Hoàn tác', t:'Nghỉ xong · kế tiếp', i:'i-check'}
+};
+/* menu bước tiếp đang mở: nút chính nằm dưới màng kính, mang nghĩa "vào set mới" — Paper để kính Ink không pha Acid thành ô liu */
+var LOOP_FILM_CTA={t:'Vào set mới', i:'i-play', paper:true};
 /* ---- Màu vùng dưới thanh trạng thái / thanh công cụ Safari (iOS 26+, Liquid Glass) — v2.4.2 → v2.5 ----
    Safari 26 bỏ theme-color; vùng dưới hai thanh lấy màu của element fixed/sticky đầu tiên ở tâm mỗi mép (LocalFrameView::fixedContainerEdges).
    body{position:fixed} phủ kín viewport nên WebKit giữ màu lấy lần đầu → hai dải .wkedge (#wk-t / #wk-b, fixed, cao 12px) mang màu mép
@@ -1922,11 +1953,9 @@ function syncTheme(){
   /* thêm/bớt một element fixed → WebKit tính lại màu mép ở lần commit kế (didAddOrRemoveViewportConstrainedObjects) */
   var k=$('wk-k'); if(k) k.hidden=!k.hidden;
 }
-/* 1:2 — chỉ một nửa được chọn: nửa đó hiện nút chức năng, nửa kia ẩn. Chạm lại nửa đang chọn (ngoài bánh xe/nút) → ẩn. */
-function setFocus(i){ FOCUS=i; LOOPS.forEach(function(l){ l.root.classList.toggle('ovl', l.idx===i); }); }
 HOOK['p-loop']=function(){ buildLoops(); };
 function buildLoops(){
-  var host=$('loop-host'), s=state.session; host.innerHTML=''; LOOPS=[]; host.className='split'+(s&&s.people.length>1?' two':''); FOCUS=-1;
+  var host=$('loop-host'), s=state.session; host.innerHTML=''; LOOPS=[]; host.className='split'+(s&&s.people.length>1?' two':'');
   MTW=MTW.filter(function(o){ return !/^L\d:/.test(o.key||''); }); MTT=MTT.filter(function(t){ return !/^L\d:/.test(t.key||''); });   /* tween của loop cũ: bỏ */
   if(!s){ go('p-home','back'); return; }
   s.people.forEach(function(p,i){ primePerson(p); LOOPS.push(Loop(host, p, {half:s.people.length>1, idx:i})); });
@@ -1944,7 +1973,13 @@ document.addEventListener('visibilitychange', function(){ if(state.screen!=='p-l
 
 function Loop(host, p, o){
   var s=state.session, root=document.createElement('div'), K='L'+o.idx+':'; root.className='loop';
+  var compact=!!o.half;   /* 1:2: nav rút gọn — nút tròn 48 chỉ có icon, luôn hiện ở đáy nửa màn */
   var who='<span class="who"'+(o.half?'':' hidden')+'>'+esc(firstName(p.name))+'</span>';
+  /* cụm số reps/kg lúc đang tập: 1:1 ở đáy ngay trên nav · 1:2 ngay dưới khối đỉnh (cách 28) vì nav rút gọn chiếm đáy nửa màn */
+  var numsHTML='<div class="nums" hidden><div class="fld reps dimable"><div class="line"></div><div class="hint">'+UD13+'<span>REPS</span></div></div><div class="fld kg dimable"><div class="line"></div><div class="hint"><span>KG</span>'+UD13+'</div></div></div>';
+  var navHTML='<div class="nav dimable"><button class="ghost g1" aria-label="Quay lại"><svg class="ic s24"><use href="#i-back"/></svg></button><span class="sp"></span>'+
+    (compact ? '<button class="cta line j0" aria-label="Chưa đạt" hidden><svg class="ic s24"><use href="#i-x"/></svg></button><button class="cta c1"><svg class="ic s24"><use href="#i-play"/></svg></button>'
+             : '<button class="cta line j0" hidden>Chưa đạt</button><button class="cta c1"><span class="ct"></span></button>')+'</div>';
   root.innerHTML=
    '<canvas class="dimable" aria-hidden="true"></canvas>'+
    /* thiết lập set: reps 112 · × 72 · kg 112 (Figma 449:827) */
@@ -1953,18 +1988,16 @@ function Loop(host, p, o){
    '<div class="clock" hidden><div class="wheel w-rest" role="slider" aria-label="Thời gian nghỉ" aria-valuemin="15" aria-valuemax="600"><div class="line"></div><div class="hint"><span class="rh">ĐẶT THỜI GIAN NGHỈ</span>'+UD+'</div></div></div>'+
    '<div class="lp">'+
      '<div class="head dimable">'+who+'<span class="t1 sw"></span><span class="sub sw"></span></div>'+
+     (compact?numsHTML:'')+
      '<div class="mid"></div>'+
-     '<div class="foot">'+
-       '<div class="nums" hidden><div class="fld reps dimable"><div class="line"></div><div class="hint">'+UD13+'<span>REPS</span></div></div><div class="fld kg dimable"><div class="line"></div><div class="hint"><span>KG</span>'+UD13+'</div></div></div>'+
-       '<div class="nav dimable"><button class="ghost g1" aria-label="Quay lại"><svg class="ic s24"><use href="#i-back"/></svg></button><span class="sp"></span><button class="cta line j0" hidden>Chưa đạt</button><button class="cta c1"><span class="ct"></span></button></div>'+
-     '</div>'+
+     '<div class="foot">'+(compact?'':numsHTML)+navHTML+'</div>'+
    '</div>'+
-   /* màng menu bước tiếp (Ink 93 % + blur): mở từ "Nghỉ xong · kế tiếp" hoặc ⌃. Chạm ngoài danh sách để đóng. */
+   /* màng menu bước tiếp (kính Ink 80→90 % + blur 11px): mở từ nút chính lúc đang nghỉ. Chạm ngoài danh sách để đóng. */
    '<div class="film dark"><div class="inner"><div class="exl"></div><hr><button class="act fdone"></button><button class="act fend">Kết thúc buổi tập</button></div></div>';
   host.appendChild(root);
   var q=function(sel){ return root.querySelector(sel); };
   var cv=q('canvas'), head=q('.lp .head'), t1=q('.t1'), sub=q('.sub'), setup=q('.setup'), clock=q('.clock'), wrest=q('.w-rest'), cline=q('.clock .line'), chint=q('.clock .hint'), rh=q('.rh'),
-      nums=q('.foot .nums'), nav=q('.foot .nav'), j0=q('.j0'), c1=q('.c1'), ct=q('.c1 .ct'), g1=q('.g1'), film=q('.film');
+      nums=q('.lp .nums'), j0=q('.j0'), c1=q('.c1'), ct=q('.c1 .ct'), g1=q('.g1'), film=q('.film');
   var lastTen=false, zeroed=false, lastSec=-1, guardT=0, SWN=0, entered=false, frozen=null;
   var F=Field(cv, {key:K+'F', seed:o.idx, rest:function(){ return p.phase==='rest'; }, left:function(){ return restLeft(); }, lastTen:function(){ return lastTen; }});
   var L={p:p, root:root, field:F, ring:F, idx:o.idx};
@@ -2006,31 +2039,43 @@ function Loop(host, p, o){
     var from=el.style.opacity===''?1:+el.style.opacity; el.style.transition='none';
     tw({key:key, from:from, to:0, dur:.11*Math.max(from,.2), ease:LIN, set:function(v){ el.style.opacity=v; }, done:function(){ apply(); tw({key:key, from:0, to:1, dur:.11, ease:LIN, set:function(v){ el.style.opacity=v; }, done:function(){ el.style.opacity=''; el.style.transition=''; }}); }});
   }
-  /* ---- nút chính: MỘT pill đổi chữ + màu theo pha, bề rộng nở theo chữ (260 ms --eo, ngoại lệ width đã duyệt) ---- */
-  var ctaM=null, CTA={t:'', paper:false, w:0};
-  /* đo bề rộng chữ bằng một pill ẩn đặt thẳng trong .loop (nav 1:2 có scale(.96) lúc ẩn → đo trong nav sẽ hụt 4 %) */
-  function ctaWidth(text){ if(!ctaM){ ctaM=document.createElement('span'); ctaM.className='cta ctam'; ctaM.setAttribute('aria-hidden','true'); root.appendChild(ctaM); } ctaM.textContent=text; return ctaM.getBoundingClientRect().width; }
-  function ctaTo(text, paper, instant){
-    if(CTA.t===text && CTA.paper===!!paper && CTA.w) return;
-    var textChanged=CTA.t!==text; CTA.t=text; CTA.paper=!!paper;
-    var w=ctaWidth(text);
-    if(!w){ twKill(K+'cw'); c1.classList.toggle('paper', !!paper); c1.style.width=''; CTA.w=0; ct.textContent=text; return; }   /* trang chưa hiện: đo lại ở layout() */
-    if(instant || !CTA.w){ twKill(K+'cw'); twKill(K+'ct'); c1.classList.toggle('paper', !!paper); CTA.w=w; c1.style.width=w.toFixed(2)+'px'; ct.textContent=text; ct.style.opacity=''; return; }
-    tw({key:K+'cw', from:CTA.w, to:w, dur:.26, ease:EO, set:function(v){ CTA.w=v; c1.style.width=v.toFixed(2)+'px'; }});
-    /* màu pill đổi đúng lúc chữ cũ vừa tắt → không bao giờ thấy chữ cũ trên màu mới */
-    if(textChanged) fadeSwap(ct, function(){ ct.textContent=CTA.t; c1.classList.toggle('paper', CTA.paper); }, K+'ct');
-    else c1.classList.toggle('paper', !!paper);
-  }
-  function ctaFit(){ var w=ctaWidth(CTA.t); if(!w || twHas(K+'cw')) return; CTA.w=w; c1.style.width=w.toFixed(2)+'px'; if(!twHas(K+'ct')) ct.textContent=CTA.t; }
-  /* ---- icon nút trái: co .8 + mờ ra, đổi hình, nở lại (100 + 180 ms) ---- */
-  function gIcon(name, label, instant){
-    if(g1._i===name) return; g1._i=name; g1.setAttribute('aria-label', label);
-    var svg=g1.querySelector('svg'), use=svg.querySelector('use');
+  /* ---- icon trong nút: co .8 + mờ ra, đổi hình, nở lại (100 + 180 ms). mid(): việc làm đúng lúc icon cũ vừa tắt (đổi màu nút) ---- */
+  function swapIcon(btn, name, key, instant, mid){
+    var svg=btn.querySelector('svg'), use=svg.querySelector('use'); btn._mid=mid||null;
     function fx(v){ svg._k=v; svg.style.opacity=v; svg.style.transform='scale('+(0.8+0.2*v).toFixed(3)+')'; }
-    if(instant || rm()){ twKill(K+'gi'); use.setAttribute('href','#'+name); svg.style.opacity=''; svg.style.transform=''; svg._k=1; return; }
+    function swap(){ use.setAttribute('href','#'+btn._i); if(btn._mid) btn._mid(); }
+    if(btn._i===name){ if(btn._mid) btn._mid(); return; }
+    btn._i=name;
+    if(instant || rm()){ twKill(key); swap(); svg.style.opacity=''; svg.style.transform=''; svg._k=1; return; }
     var k0=svg._k==null?1:svg._k;
-    tw({key:K+'gi', from:k0, to:0, dur:.1*Math.max(k0,.2), ease:LIN, set:fx, done:function(){ use.setAttribute('href','#'+g1._i); tw({key:K+'gi', from:0, to:1, dur:.18, ease:EO, set:fx, done:function(){ svg.style.opacity=''; svg.style.transform=''; svg._k=1; }}); }});
+    tw({key:key, from:k0, to:0, dur:.1*Math.max(k0,.2), ease:LIN, set:fx, done:function(){ swap(); tw({key:key, from:0, to:1, dur:.18, ease:EO, set:fx, done:function(){ svg.style.opacity=''; svg.style.transform=''; svg._k=1; }}); }});
   }
+  /* ---- nút chính: MỘT nút đổi theo pha (LOOP_NAV). 1:1 = pill đổi chữ, bề rộng nở theo chữ (260 ms --eo, ngoại lệ width đã duyệt);
+     1:2 rút gọn = nút tròn 48 đổi icon. Màu nút đổi đúng lúc chữ / icon cũ vừa tắt → không bao giờ thấy cái cũ trên màu mới ---- */
+  var ctaM=null, CTA={t:'', i:'', paper:false, w:0};
+  /* đo bề rộng chữ bằng một pill ẩn đặt thẳng trong .loop (đo chính nút lúc đang nén :active sẽ hụt) */
+  function ctaWidth(text){ if(!ctaM){ ctaM=document.createElement('span'); ctaM.className='cta ctam'; ctaM.setAttribute('aria-hidden','true'); root.appendChild(ctaM); } ctaM.textContent=text; return ctaM.getBoundingClientRect().width; }
+  function ctaTo(n, instant){
+    var text=n.t, paper=!!n.paper;
+    if(compact){
+      c1.setAttribute('aria-label', text); CTA.t=text;
+      if(CTA.i===n.i && CTA.paper===paper) return;
+      CTA.i=n.i; CTA.paper=paper;
+      swapIcon(c1, n.i, K+'ci', instant, function(){ c1.classList.toggle('paper', CTA.paper); });
+      return;
+    }
+    if(CTA.t===text && CTA.paper===paper && CTA.w) return;
+    var textChanged=CTA.t!==text; CTA.t=text; CTA.paper=paper;
+    var w=ctaWidth(text);
+    if(!w){ twKill(K+'cw'); c1.classList.toggle('paper', paper); c1.style.width=''; CTA.w=0; ct.textContent=text; return; }   /* trang chưa hiện: đo lại ở layout() */
+    if(instant || !CTA.w){ twKill(K+'cw'); twKill(K+'ct'); c1.classList.toggle('paper', paper); CTA.w=w; c1.style.width=w.toFixed(2)+'px'; ct.textContent=text; ct.style.opacity=''; return; }
+    tw({key:K+'cw', from:CTA.w, to:w, dur:.26, ease:EO, set:function(v){ CTA.w=v; c1.style.width=v.toFixed(2)+'px'; }});
+    if(textChanged) fadeSwap(ct, function(){ ct.textContent=CTA.t; c1.classList.toggle('paper', CTA.paper); }, K+'ct');
+    else c1.classList.toggle('paper', paper);
+  }
+  function ctaFit(){ if(compact) return; var w=ctaWidth(CTA.t); if(!w || twHas(K+'cw')) return; CTA.w=w; c1.style.width=w.toFixed(2)+'px'; if(!twHas(K+'ct')) ct.textContent=CTA.t; }
+  function ctaNow(){ return (p.phase==='rest' && filmOn()) ? LOOP_FILM_CTA : LOOP_NAV[p.phase]; }
+  function gIcon(name, label, instant){ g1.setAttribute('aria-label', label); swapIcon(g1, name, K+'gi', instant); }
   function hintTo(text, instant){ if(rh.textContent===text && !twHas(K+'hint')) return; if(instant){ twKill(K+'hint'); rh.textContent=text; chint.style.opacity=''; return; } fadeSwap(chint, function(){ rh.textContent=text; }, K+'hint'); }
   /* ---- hiện / ẩn theo MT: k 0 → 1 (vào, --eo) hoặc 1 → 0 (ra, --eio); ra xong thì hidden (không chặn chạm, không tốn vẽ) ---- */
   var PFX={
@@ -2038,7 +2083,8 @@ function Loop(host, p, o){
     setupFade:function(el,k){ el.style.opacity=k; el.style.transform='translateY(-50%)'; },
     clock:function(el,k,R){ el.style.opacity=k; el.style.transform=R?'':'scale('+(0.3+0.7*k).toFixed(4)+')'; },
     nums:function(el,k,R){ el.style.opacity=k; el.style.transform=R?'':'translateY('+((1-k)*6).toFixed(2)+'px)'; },
-    j0:function(el,k,R){ el.style.opacity=k; el.style.transform=R?'':'translateX('+((1-k)*28).toFixed(2)+'px) scale('+(0.96+0.04*k).toFixed(4)+')'; }
+    /* "Chưa đạt" trượt ra từ sau nút chính: pill 1:1 lệch 28 · nút tròn 1:2 lệch đúng một nút + khe (48 + 8) */
+    j0:function(el,k,R){ el.style.opacity=k; el.style.transform=R?'':'translateX('+((1-k)*(compact?56:28)).toFixed(2)+'px) scale('+(0.96+0.04*k).toFixed(4)+')'; }
   };
   function presence(el, fx, on, op){
     op=op||{}; var key=K+'pr'+(el._pk||(el._pk=++SWN)), R=rm();
@@ -2057,7 +2103,7 @@ function Loop(host, p, o){
     twKill(K+'dig'); if(instant){ fx(on?1:0); return; }
     tw({key:K+'dig', from:digK, to:on?1:0, dur:.18, ease:LIN, keepRM:true, set:fx});
   }
-  /* ---- SỐ BAY (FLIP): mặt số đang hiện ở bộ đếm lớn ↔ cụm số đáy. Bản sao Mono giữ nguyên chữ, co/giãn bằng scale
+  /* ---- SỐ BAY (FLIP): mặt số đang hiện ở bộ đếm lớn ↔ cụm số reps/kg (1:1 ở đáy · 1:2 dưới khối đỉnh). Bản sao Mono giữ nguyên chữ, co/giãn bằng scale
      (cỡ đích / cỡ nguồn), x đi trước y một chút nên đường bay hơi cong. Mặt số thật ở hai đầu ẩn trong lúc bay. ---- */
   var flying=[], EX1=bez(.4,0,.2,1), EY1=bez(.6,0,.3,1);
   function flyStop(){ flying.forEach(function(f){ twKill(f.key); if(f.el.parentNode) f.el.remove(); f.restore(); }); flying=[]; }
@@ -2079,13 +2125,13 @@ function Loop(host, p, o){
   }
   function bigV(w){ return q('.setup .w-'+w+' .line .v:nth-child(5)'); }
   function smallV(w){ return q('.fld.'+w+' .line .v:nth-child(5)'); }
-  function numsToBottom(){   /* thiết lập → trong set */
+  function flyToNums(){     /* thiết lập → trong set */
     if(rm() || setup.hidden) return;
     nums.hidden=false; nums._pv=0; PFX.nums(nums,0,false);
     flyNum(bigV('reps'), smallV('reps'), q('.setup .w-reps .line'), q('.fld.reps .line'), 0);
     flyNum(bigV('kg'), smallV('kg'), q('.setup .w-kg .line'), q('.fld.kg .line'), .03);
   }
-  function numsToTop(){      /* trong set → thiết lập */
+  function flyToSetup(){    /* trong set → thiết lập */
     if(rm() || nums.hidden) return;
     setup.hidden=false; setup._pv=0; PFX.setupFade(setup,0);
     flyNum(smallV('reps'), bigV('reps'), q('.fld.reps .line'), q('.setup .w-reps .line'), 0);
@@ -2094,13 +2140,13 @@ function Loop(host, p, o){
 
   /* ---- trạng thái chữ/nút theo pha (dir: 1 tiến, −1 lùi) ---- */
   function render(dir, instant){
-    var ph=p.phase, rest=(ph==='rest-setup'||ph==='rest');
+    var ph=p.phase, rest=(ph==='rest-setup'||ph==='rest'), n=LOOP_NAV[ph];
     line(t1, rest?setLabel():exShort(ex()), rest?'d55':'', dir, instant, true);
     line(sub, ph==='setup'?'Thiết lập set '+p.setNo : ph==='active'?'Đang tập set '+p.setNo : ph==='rest-setup'?'Bắt đầu nghỉ' : restSub(), rest?'':'ac', dir, instant);
-    ctaTo(ph==='setup'?'Bắt đầu set' : ph==='active'?'Đạt' : ph==='rest-setup'?'Bắt đầu nghỉ' : filmOn()?'Vào set mới':'Nghỉ xong · kế tiếp', rest, instant);
+    ctaTo(ctaNow(), instant);
     c1.classList.toggle('j1', ph==='active');
     presence(j0, PFX.j0, ph==='active', {din:.26, delay:.05, dout:.14, instant:instant});
-    gIcon(ph==='rest-setup'?'i-undo':ph==='rest'?'i-up':'i-back', ph==='rest-setup'?'Hoàn tác set':ph==='rest'?'Bước khác':'Quay lại', instant);
+    gIcon(n.g, n.gl, instant);
     hintTo(ph==='rest-setup'?'ĐẶT THỜI GIAN NGHỈ':'', instant);
     repsW.set(p.reps); kgW.set(p.kg); fReps.set(p.reps); fKg.set(p.kg);
     if(ph==='rest-setup') restW.set(p.restTotal);
@@ -2119,40 +2165,35 @@ function Loop(host, p, o){
     });
     q('.fdone').textContent='Đã xong '+exShort(ex());
   }
-  /* rời màn nghỉ về thiết lập (vào set mới · hoàn tác · đổi bài): hạt hút về tâm, bộ đếm co (giữ số đang hiện tới hết lúc co),
+  /* rời màn nghỉ về thiết lập (vào set mới · đổi bài): hạt hút về tâm, bộ đếm co (giữ số đang hiện tới hết lúc co),
      vành nhịp nở ra từ tâm con số, bộ đếm lớn hiện lại */
-  function restToSetup(dir, rewind){
+  function restToSetup(dir){
     flyStop(); if(openWheel) openWheel.close();
     presence(clock, PFX.clock, false, {dout:.18});
     after(.2, function(){ frozen=null; digitsAcid(false,true); restW.render(); }, K+'unfreeze');
-    if(rewind && F.rewind()){   /* hoàn tác: hạt quay về thành vành nhịp, vành hiện lên lúc chấm hạ cánh */
-      F.chaseSet({calm:1, dot:0, scale:1, oy:0, alpha:0});
-      tw({key:K+'Fcha', from:0, to:1, dur:.16, delay:.36, pre:false, ease:EO, set:function(v){ F.CH.alpha=v; }});
-    } else { F.inhale(); F.chaseBloom({calm:1, dot:0, delay:.08, oy:F.cyp-F.cy}); }
+    F.inhale(); F.chaseBloom({calm:1, dot:0, delay:.08, oy:F.cyp-F.cy});
     presence(nums, PFX.nums, false, {instant:true});
     presence(setup, PFX.setup, true, {din:.24, delay:.16});
     lastTen=false; zeroed=false; lastSec=-1;
     render(dir);
-    if(o.half) setFocus(-1);
   }
   /* ---- hành động ---- */
   function begin(){
     p.phase='active'; p.setNo=E().sets.length+1; saveSession(); guard();
     render(1);
-    numsToBottom();
+    flyToNums();
     presence(setup, rm()?PFX.setup:PFX.setupFade, false, {dout:.12});
     presence(nums, PFX.nums, true, {din:.22, delay:rm()?0:.1});
     F.chaseTo({calm:0, dot:1}, .42);
-    if(o.half) setFocus(-1);
   }
+  /* ↩ lúc đang tập: về thiết lập (số bay ngược về bộ đếm lớn, vành lặng đi) */
   function cancelSet(){
     p.phase='setup'; saveSession(); guard();
     render(-1);
-    numsToTop();
+    flyToSetup();
     presence(setup, rm()?PFX.setup:PFX.setupFade, true, {din:.2, delay:rm()?0:.1});
     presence(nums, PFX.nums, false, {dout:.14});
     F.chaseTo({calm:1, dot:0}, .36);
-    if(o.half) setFocus(-1);
   }
   function judgeSet(ok){
     if(p.phase!=='active') return;
@@ -2168,25 +2209,47 @@ function Loop(host, p, o){
     presence(clock, PFX.clock, true, {din:.24, delay:.16});
     render(1);
     notify((ok?'Đã ghi set ':'Chưa đạt set ')+p.setNo, {ms:1800});
-    if(o.half) setFocus(-1);
     if(navigator.vibrate) navigator.vibrate(ok?12:[10,40,10]);
   }
-  function undo(){
-    var e=E(), st=e.sets.pop(); if(st && st[3]) unqueue(st[3]);
-    frozen=shownRest();
-    p.setNo=e.sets.length+1; p.phase='setup'; saveSession(); guard();
-    restToSetup(-1, true);
+  /* ← lúc đặt giờ nghỉ: bỏ kết quả vừa chấm, về lại đúng set đang tập để chấm lại — tua ngược lúc chấm set: hạt bay về thành
+     vành nhịp đang thức, bộ đếm co, cụm số reps/kg hiện lại. Chỉ lùi khi set còn GIỮ trong hàng đợi: set đã gửi (mở lại app giữa
+     chừng thì hàng đợi nhả hết lúc khởi động) không xoá được trên máy chủ → giữ nguyên, báo lỗi */
+  function reopenSet(){
+    var e=E(), st=last(e.sets);
+    if(!st || !held(st[3])){ notify('Set đã gửi, không hoàn tác được', {err:true}); return; }
+    e.sets.pop(); unqueue(st[3]);
+    p.setNo=e.sets.length+1; p.phase='active'; saveSession(); guard();
+    flyStop(); if(openWheel) openWheel.close();
+    presence(clock, PFX.clock, false, {dout:.18});
+    if(F.rewind({calm:0, dot:1})){   /* vành nhịp hiện lên đúng lúc chấm hạ cánh */
+      F.chaseSet({calm:0, dot:1, scale:1, oy:0, alpha:0});
+      tw({key:K+'Fcha', from:0, to:1, dur:.16, delay:.36, pre:false, ease:EO, set:function(v){ F.CH.alpha=v; }});
+    } else { F.inhale(); F.chaseBloom({calm:0, dot:1, delay:.08, oy:F.cyp-F.cy}); }
+    presence(nums, PFX.nums, true, {din:.22, delay:.16});
+    render(-1);
     notify('Đã hoàn tác');
   }
+  /* set vừa chấm vẫn GIỮ trong hàng đợi lúc đang nghỉ (↩ về đặt giờ rồi ← về đang tập vẫn xoá được); restPlan = giờ đã đặt để ↩ trả lại đúng */
   function startRest(){
     if(p.phase!=='rest-setup') return;
-    var st=last(E().sets); if(st) release(st[3]);
     if(openWheel) openWheel.close();
-    p.phase='rest'; p.restStart=Date.now(); saveSession(); guard();
+    p.phase='rest'; p.restStart=Date.now(); p.restPlan=p.restTotal; saveSession(); guard();
     lastTen=false; zeroed=false; lastSec=-1;
     F.setN(p.restTotal); F.ignite();
     render(1);
-    if(o.half) setFocus(-1);
+  }
+  /* ↩ lúc đang nghỉ: về lại màn đặt giờ nghỉ với đúng giờ đã đặt — tua ngược lúc bắt đầu nghỉ: sóng Acid rút về 12 giờ,
+     hạt đã rụng đổ lại từ con số vào vành, con số mờ ra rồi hiện giờ đã đặt (kể cả khi đã kéo đổi giờ lúc đang đếm) */
+  function cancelRest(){
+    if(p.phase!=='rest') return;
+    if(openWheel) openWheel.close();
+    frozen=shownRest();                                  /* giữ số đang hiện tới lúc mờ ra */
+    restW.set(p.restPlan||p.restTotal);                  /* buổi lưu trước v2.6 chưa có restPlan: về nấc gần nhất */
+    p.phase='rest-setup'; p.restStart=0; p.restTotal=restW.value(); saveSession(); guard();
+    lastTen=false; zeroed=false; lastSec=-1; digitsAcid(false);
+    F.setN(p.restTotal); F.douse(); F.setCount(p.restTotal);
+    fadeSwap(cline, function(){ frozen=null; restW.render(); }, K+'cl');
+    render(-1);
   }
   /* kéo ▲▼ khi đặt giờ: tổng mới · khi đang đếm: thời gian CÒN LẠI mới (lean-journey §4) — tổng = số hạt đã rụng + giá trị mới */
   function onRestPick(v){
@@ -2199,7 +2262,9 @@ function Loop(host, p, o){
       if(zeroed){ zeroed=false; line(sub, 'Đang nghỉ', '', 1); }
     }
   }
-  function nextSet(){ closeFilm(true, true); frozen=shownRest(); p.phase='setup'; p.setNo=E().sets.length+1; saveSession(); guard(); restToSetup(1); }
+  /* đi tiếp khỏi vòng nghỉ (vào set mới · đổi bài · xong bài · kết thúc): set vừa chấm hết đường lùi → nhả cho hàng đợi gửi */
+  function commitLast(){ var st=last(E().sets); if(st) release(st[3]); }
+  function nextSet(){ closeFilm(true, true); commitLast(); frozen=shownRest(); p.phase='setup'; p.setNo=E().sets.length+1; saveSession(); guard(); restToSetup(1); }
   /* menu bước tiếp phủ lên nav (Figma 449:1251): chạm dòng bài đang tập = vào set mới · chạm ngoài = đóng.
      Các lựa chọn BAY RA từ nút vừa bấm rồi đứng vào chỗ; đóng thì bay ngược về nút. */
   var filmOrigin=null, filmT=0;
@@ -2219,7 +2284,7 @@ function Loop(host, p, o){
   function openFilm(from){
     if(filmOn()) return; clearTimeout(filmT); filmOrigin=from||c1;
     if(openWheel) openWheel.close();
-    renderFilm(); film.classList.add('on'); root.classList.add('filmon'); ctaTo('Vào set mới', true);
+    renderFilm(); film.classList.add('on'); root.classList.add('filmon'); ctaTo(ctaNow());
     if(!rm()) flyItems(filmOrigin, true);
   }
   /* đóng menu: chạm ngoài = các lựa chọn bay ngược về nút · đã chọn một bước (pick) = màng tan nhanh 160 ms, không bay về —
@@ -2234,46 +2299,40 @@ function Loop(host, p, o){
       filmT=setTimeout(function(){ film.classList.remove('on');
         filmT=setTimeout(function(){ items.forEach(function(el){ el.style.transition=''; el.style.transform=''; el.style.opacity=''; }); }, 300); }, 200);
     }
-    if(!silent && p.phase==='rest') ctaTo('Nghỉ xong · kế tiếp', true);
+    if(!silent && p.phase==='rest') ctaTo(LOOP_NAV.rest);
   }
   function switchEx(i){
     var wasRest=(p.phase==='rest'||p.phase==='rest-setup'); closeFilm(true, true);
     if(i===p.cur){ if(wasRest) nextSet(); return; }
-    var st=last(E().sets); if(st) release(st[3]);
+    commitLast();
     if(wasRest) frozen=shownRest();
     p.cur=i; p.phase='setup'; primePerson(p); saveSession(); guard();
     if(wasRest) restToSetup(1); else render(1);
-    if(o.half) setFocus(-1);
   }
   function doneEx(){
     var e=E(); if(!e.sets.length){ notify('Chưa ghi set nào', {err:true}); return; }
-    var st=last(e.sets); if(st) release(st[3]); e.done=true; saveSession();
+    commitLast(); e.done=true; saveSession();
     var next=-1; for(var k=1;k<=s.plan.length;k++){ var j=(p.cur+k)%s.plan.length, ee=p.ex[s.plan[j]]; if(!ee||!ee.done){ next=j; break; } }
     if(next<0){ closeFilm(true); renderFilm(); notify('Đã xong hết bài'); setTimeout(function(){ openFilm(filmOrigin||c1); }, 900); return; }
     switchEx(next);
   }
-  function endSession(){ closeFilm(true, true); var st=last(E().sets); if(st) release(st[3]); saveSession(); state.sumIdx=0; go('p-summary','fwd'); }
+  function endSession(){ closeFilm(true, true); commitLast(); saveSession(); state.sumIdx=0; go('p-summary','fwd'); }
   /* CTA: thiết lập → bắt đầu set · trong set → Đạt · đặt giờ → bắt đầu nghỉ · đang nghỉ → LUÔN "Nghỉ xong · kế tiếp" mở menu bước tiếp */
   c1.addEventListener('click', function(e){ e.stopPropagation(); if(filmOn() || guarded()) return;
     if(p.phase==='setup') begin(); else if(p.phase==='active') judgeSet(true); else if(p.phase==='rest-setup') startRest(); else if(p.phase==='rest') openFilm(c1); });
   j0.addEventListener('click', function(e){ e.stopPropagation(); if(guarded()) return; judgeSet(false); });
-  /* ghost: CHỈ quay lại (thiết lập → danh sách bài · đang tập → thiết lập) · đặt giờ nghỉ → hoàn tác set · đang nghỉ → bước khác */
-  g1.addEventListener('click', function(e){ e.stopPropagation();
-    if(filmOn()) return;
+  /* nút trái = chuỗi lùi từng bước: thiết lập → danh sách bài · đang tập → thiết lập · đặt giờ nghỉ → đang tập · đang nghỉ → đặt giờ nghỉ.
+     Chặn chạm đúp như nút chính: mỗi bước lùi đổi nghĩa nút ngay dưới ngón tay (chạm đúp = lùi hai bước, có thể xoá set) */
+  g1.addEventListener('click', function(e){ e.stopPropagation(); if(filmOn() || guarded()) return;
     if(p.phase==='setup'){ saveSession(); go('p-plan','back'); }
     else if(p.phase==='active') cancelSet();
-    else if(p.phase==='rest-setup') undo();
-    else openFilm(g1);
+    else if(p.phase==='rest-setup') reopenSet();
+    else if(p.phase==='rest') cancelRest();
   });
   film.addEventListener('click', function(e){ if(e.target===film) closeFilm(); });
   q('.fdone').addEventListener('click', function(e){ e.stopPropagation(); doneEx(); });
   q('.fend').addEventListener('click', function(e){ e.stopPropagation(); endSession(); });
   root.addEventListener('pointerdown', function(e){ if(openWheel && !(e.target.closest && e.target.closest('.wheel,.fld'))) openWheel.close(); }, true);
-  if(o.half){
-    /* 1:2: bánh xe luôn kéo được trực tiếp. Chạm vào phần còn lại của section → section mờ (blur) và nút chức năng hiện ở giữa;
-       chạm lại (ngoài nút) → tắt. Chỉ một section được mở tại một thời điểm. Vùng chạm mở nút KHÔNG trùng vùng bánh xe/số. */
-    root.addEventListener('click', function(e){ if(filmOn()) return; if(e.target.closest('.wheel,.fld,.nav,.film')) return; setFocus(FOCUS===o.idx ? -1 : o.idx); });
-  }
   /* ---- mỗi khung (motFrame): giờ nghỉ thật → rụng hạt, 10 giây cuối, 0:00 ---- */
   L.update=function(dt){
     if((p.phase==='rest'||p.phase==='rest-setup') && entered && F.CR.N!==p.restTotal) F.setN(p.restTotal);   /* tổng giờ đổi từ nơi khác → vành dãn theo */
@@ -2288,19 +2347,19 @@ function Loop(host, p, o){
   };
   L.draw=function(dv){ F.draw(dv); };
   L.layout=function(){
-    F.size(); var W=root.clientWidth, H=root.clientHeight;
+    F.size(); var W=root.clientWidth, H=root.clientHeight, headB=head.offsetTop+head.offsetHeight;
     F.cx=W/2;
     if(o.half){
-      /* nửa màn: mọi thứ (vành, reps×kg, đồng hồ) căn giữa vùng trống giữa khối đỉnh và đáy → đúng tâm ở mọi cỡ máy */
-      var mid=q('.lp .mid'), free=H-28-mid.offsetTop, cy=mid.offsetTop+free/2;
+      /* nửa màn: mọi thứ (vành, reps×kg, đồng hồ) căn giữa vùng trống giữa khối đỉnh và đáy → đúng tâm ở mọi cỡ máy.
+         Tính từ đáy khối đỉnh (không theo .mid): cụm số reps/kg lúc đang tập nằm ngay dưới khối đỉnh nhưng không được đẩy vành */
+      var free=H-28-headB, cy=headB+free/2;
       F.cy=Math.round(cy); F.h=Math.min(162, Math.round(free*.86)); setup.style.top=Math.round(cy)+'px'; root.classList.toggle('tight', free<230);
       var top=Math.round(cy-44.5); clock.style.top=top+'px';
       F.cyp=top+36; F.s=clamp(free*.9/HAT.H, .42, 1);           /* tâm quang học con số 72 · vành hạt co theo vùng trống */
     } else {
       F.cy=Math.round(H/2+16); F.h=324;
       F.cyp=Math.round(H/2-40)+55.5;                               /* đồng hồ top = H/2 − 40 → tâm quang học con số 112 (Figma 561:225: 386 → 441,5) */
-      var headB=head.offsetTop+head.offsetHeight, navT=H-28-48;
-      F.s=clamp((navT-headB-20)/HAT.H, .6, 1);
+      F.s=clamp((H-28-48-headB-20)/HAT.H, .6, 1);                 /* vành hạt vừa khoảng khối đỉnh → nav */
     }
     /* chiều ngang: mép trong vành (RX − ống) phải cách con số "1:30" ≥ 10px — màn thấp thì vành thành elip bẹt hơn chứ không đè số */
     var v=q('.w-rest .line .v'), fs=v?parseFloat(getComputedStyle(v).fontSize)||112:112, ls=v?parseFloat(getComputedStyle(v).letterSpacing)||0:0, hw=2*(0.6*fs+ls);

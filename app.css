@@ -553,7 +553,7 @@ svg{display:block}
 .lp .foot{position:relative;z-index:3;display:flex;flex-direction:column;gap:28px}
 .lp .nav{margin-top:0}
 /* nút chính: MỘT pill đổi chữ + màu theo pha; bề rộng do JS nở theo chữ (ngoại lệ width đã duyệt) */
-.loop .c1{overflow:hidden}
+.loop .c1{overflow:hidden;position:relative;z-index:1}   /* nằm trên "Chưa đạt" (đang trượt = có transform → tự lên lớp trên) để nút đó ra từ SAU nút chính */
 .loop .c1 .ct{display:block;white-space:nowrap}
 .loop .ctam{position:absolute;left:-9999px;top:0;visibility:hidden;pointer-events:none;width:auto}
 .loop .j0{transition:transform .12s var(--eo),background-color .2s linear,color .2s linear}
@@ -637,20 +637,18 @@ svg{display:block}
 .two .clock .wheel{width:345px}
 .two .clock .wheel .v{font-size:72px;letter-spacing:-2.16px;height:68px;line-height:68px}
 .two .clock .wheel .hint{top:76px}
-.two .lp .foot{gap:0}
-.two .lp .foot .nav{margin-top:0}
 .two .film .inner{gap:20px}
 .two .film .exl{gap:20px}
 .two .film .exl button .nmx,.two .film .exl button .sn,.two .film .act{font-size:16px;line-height:19px;letter-spacing:-.16px}
-/* 1:2 — chạm section: toàn bộ section mờ (blur 40) và nút chức năng hiện ở GIỮA section (.ovl); bánh xe/số vẫn kéo được trực tiếp khi chưa mở */
-.two .loop>.lp .foot{position:static}
-.two .loop>.lp .nav{position:absolute;left:var(--rail);right:var(--rail);top:50%;transform:translateY(-50%) scale(.96);justify-content:center;gap:12px;z-index:3;
-                    opacity:0;pointer-events:none;transition:opacity .22s linear,transform .3s var(--eo)}
-.two .loop>.lp .nav .sp{display:none}
-.two .loop>.lp .nav .j0{margin-right:-4px}   /* Chưa đạt ↔ Đạt cách 8 như cụm chấm set cũ (nav nổi 1:2 dùng gap 12) */
-.two .loop.ovl>.lp .nav{opacity:1;transform:translateY(-50%);pointer-events:auto}
-.two .loop .dimable:not(.nav),.two .loop .clock .wheel{transition:filter .32s var(--eio),opacity .32s var(--eio)}
-.two .loop.ovl .dimable:not(.nav),.two .loop.ovl .clock .wheel{filter:blur(40px);opacity:.45;pointer-events:none}
+/* 1:2 — nav rút gọn LUÔN HIỆN ở đáy mỗi nửa (chủ studio 28/09, thay chạm-để-mở .ovl + làm mờ cả nửa): ← / ↩ trái · ▷ / ✓ phải
+   (đang tập: × Chưa đạt trước ✓, khe 8). Nút tròn 48, icon 24, đáy nút cách đáy nửa màn 28 (= đệm --bot của .lp).
+   Nét icon 1,5 như bộ icon Figma — stroke-width tính theo lưới của từng symbol: lưới 20 (i-back, i-check) 1,25 · lưới 16 (i-x) 1 ·
+   lưới 24 (i-undo, i-play) tự mang nét trong symbol */
+.two .lp .nav .cta{width:48px;padding:0}
+.two .lp .nav .ic{stroke-width:1.25}
+.two .lp .nav .j0 .ic{stroke-width:1}
+/* đang tập: cụm số reps/kg ngay dưới khối đỉnh, cách 28 — không đẩy vành (app.js L.layout tính vùng trống từ đáy khối đỉnh) */
+.two .lp>.nums{margin-top:28px;position:relative;z-index:3;pointer-events:auto}
 
 /* ============ TỔNG KẾT (rail 12, nội dung 24) ============ */
 #sm-scroll{padding:32px 12px 0}
