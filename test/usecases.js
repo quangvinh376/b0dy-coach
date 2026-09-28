@@ -473,11 +473,20 @@ var CLIP={hard:[], ell:[]};
     var z0=await h.ev(function(){ return LOOPS[0].state(); }); check(z0.slices===0 && z0.zeroed && z0.ghost && z0.phase==='rest', 'hết hạt, còn bóng số 0, KHÔNG tự vào set: '+JSON.stringify(z0));
     await page.click(L+'.c1'); await h.wait(450);
     check(await h.has(L+'.film','on') && (await h.txt(L+'.c1'))==='Vào set mới', 'menu mở, CTA "Vào set mới": '+(await h.txt(L+'.c1')));
-    check((await h.css(L+'.film','backgroundColor'))==='rgba(10, 10, 10, 0.93)', 'màng menu Ink 93 %: '+(await h.css(L+'.film','backgroundColor')));
+    /* v2.5.2: màng = kính iOS như mép cuộn đáy — Ink 80 → 90 % trên lớp ::before + blur 11px trên chính .film; .film KHÔNG fade opacity (Safari tắt blur khi opacity < 1) */
+    var gl=await h.ev(function(sel){ var f=document.querySelector(sel), cs=getComputedStyle(f), b=getComputedStyle(f,'::before'); return {bf:cs.backdropFilter||cs.webkitBackdropFilter, op:cs.opacity, vis:cs.visibility, bg:cs.backgroundColor, dim:b.backgroundImage, dop:b.opacity}; }, L+'.film');
+    check(gl.bf==='blur(11px)' && gl.op==='1' && gl.vis==='visible' && gl.bg==='rgba(0, 0, 0, 0)' && gl.dim==='linear-gradient(rgba(10, 10, 10, 0.8), rgba(10, 10, 10, 0.9))' && gl.dop==='1', 'màng menu = kính (Ink 80–90 % + blur 11px, không opacity): '+JSON.stringify(gl));
     check((await h.count(L+'.film .exl button'))===2 && (await h.txt(L+'.fdone'))==='Đã xong '+plan[0] && (await h.txt(L+'.fend'))==='Kết thúc buổi tập', 'menu: '+(await h.txt(L+'.fdone')));
     check((await h.txt(L+'.film .exl button:nth-child(1) .sn'))==='Set 2' && (await h.txt(L+'.film .exl button:nth-child(2) .sn'))==='Set 1', 'số set trong menu');
     await h.clip('loop-film');
-    await page.click(L+'.film', {position:{x:30,y:200}}); await h.wait(400); check(!(await h.has(L+'.film','on')) && (await h.txt(L+'.c1'))==='Nghỉ xong · kế tiếp', 'chạm ngoài → đóng menu, CTA phục hồi');
+    await page.click(L+'.film', {position:{x:30,y:200}}); await h.wait(290);
+    /* v2.5.2: các lựa chọn đang bay về nút không được trả về chỗ cũ trước khi chữ tắt (bản cũ trả lúc 200 ms → cả danh sách hiện lại rồi mới mờ) */
+    var cl=await h.ev(function(sel){ var f=document.querySelector(sel); var it=[].slice.call(f.querySelectorAll('.exl>button, .inner>.act')).filter(function(e){ return getComputedStyle(e).display!=='none'; });
+      return {on:f.classList.contains('on'), n:it.length, back:it.filter(function(e){ return !e.style.transform; }).length}; }, L+'.film');
+    check(!cl.on && cl.n>0 && cl.back===0, 'đóng menu: lựa chọn chưa về chỗ khi chữ còn hiện (không nháy lại): '+JSON.stringify(cl));
+    await h.wait(420); check(!(await h.has(L+'.film','on')) && (await h.txt(L+'.c1'))==='Nghỉ xong · kế tiếp', 'chạm ngoài → đóng menu, CTA phục hồi');
+    var gz=await h.ev(function(sel){ var f=document.querySelector(sel), cs=getComputedStyle(f); return {vis:cs.visibility, bf:cs.backdropFilter||cs.webkitBackdropFilter, reset:[].every.call(f.querySelectorAll('.exl>button, .inner>.act'), function(e){ return !e.style.transform && !e.style.opacity; })}; }, L+'.film');
+    check(gz.vis==='hidden' && gz.bf==='blur(0px)' && gz.reset, 'đóng xong: kính ẩn (visibility hidden, blur 0), lựa chọn đã về chỗ cho lần mở sau: '+JSON.stringify(gz));
     await page.click(L+'.c1'); await h.wait(450); await page.click(L+'.film .exl button:nth-child(1)'); await h.wait(800);
     check((await h.txt(L+'.lp .head .sub'))==='Thiết lập set 2', 'chạm bài đang tập → set mới: '+(await h.txt(L+'.lp .head .sub')));
     var sn=await h.ev(function(){ return LOOPS[0].state(); }); check(sn.slices===0 && !sn.acid && sn.chase && sn.calm===1 && sn.alpha===1, 'vào set: hạt hút về tâm, vành nhịp nở lại: '+JSON.stringify(sn));

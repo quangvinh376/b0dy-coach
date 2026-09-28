@@ -6,7 +6,7 @@
    và đối chiếu màu dải với PIXEL THẬT ở mép khi tạm ẩn dải (oracle: dải phải đúng màu app đang hiện ở mép đó).
    W0 tắt dải → WebKit tìm thấy body "viewport-sized" (bẫy v2.4.0–2.4.1); app cài (standalone/sb-legacy) dải display:none, không che khối đỉnh · W1 PIN / trang chủ / khách hàng (kể cả cuộn): dải là container, Ink
    W2 cửa sổ khách + thư viện (v2.5.1 nền Ink): mép Ink/Ink khi mở, lúc trượt xuống và sau khi đóng · W3 loop 1:1 v2.5 (màn nghỉ "Hạt"): mọi pha Ink/Ink
-   · W4 pill: đang hiện không che điểm lấy mẫu, ẩn hẳn (display:none) sau khi tắt · W5 màng .film luôn Ink 93 % → Ink/Ink
+   · W4 pill: đang hiện không che điểm lấy mẫu, ẩn hẳn (display:none) sau khi tắt · W5 màng .film (v2.5.2 kính Ink 80–90 % + blur 11px) → Ink/Ink
    · W6 rời loop → Ink · W7 loop 1:2: nửa trên nghỉ rồi cả hai nghỉ — Ink/Ink
    W8 theme-color theo mép trên, --bg theo mép dưới, kicker #wk-k đổi trạng thái mỗi lần syncTheme.
    Chạy: NODE_PATH=/opt/node22/lib/node_modules node test/wkedge.js */
@@ -197,12 +197,13 @@ function wkEdgesInPage(){
     check(ov2.ph==='setup' && ov2.slices===0 && ov2.chase, 'sau Đạt → Hoàn tác: thiết lập, vành nhịp, không sót hạt: '+JSON.stringify(ov2)); await expectEdges('sau bấm dồn', INK, INK, {darkOnly:true});
     await page.click(L+'.c1'); await w(500); await page.click(L+'.j1'); await w(1200); await pillGone(); await expectEdges('đặt giờ nghỉ lần 3', INK, INK, {darkOnly:true});
   });
-  await run('W5', 'Màng .film v2.5: luôn Ink 93 % (không còn biến thể Acid) → mép Ink/Ink khi mở; vào set mới → Ink', async function(){
+  await run('W5', 'Màng .film v2.5.2: kính Ink 80–90 % + blur 11px (như mép cuộn đáy) → mép Ink/Ink khi mở; vào set mới → Ink', async function(){
     await ev(function(){ state.session.people[0].restTotal=60; saveSession(); });
     await page.click(L+'.c1'); await w(400); await expectEdges('nghỉ dài', INK, INK, {darkOnly:true});
     await page.click(L+'.g1'); await w(600);
-    var f=await ev(function(){ var f=document.querySelector('#loop-host .loop .film'); return {on:f.classList.contains('on'), dark:f.classList.contains('dark'), op:getComputedStyle(f).opacity, bg:getComputedStyle(f).backgroundColor}; });
-    check(f.on && f.dark && f.op==='1' && f.bg==='rgba(10, 10, 10, 0.93)', 'màng Ink mở: '+JSON.stringify(f));
+    var f=await ev(function(){ var f=document.querySelector('#loop-host .loop .film'), cs=getComputedStyle(f); return {on:f.classList.contains('on'), dark:f.classList.contains('dark'), op:cs.opacity, bf:cs.backdropFilter||cs.webkitBackdropFilter, dim:getComputedStyle(f,'::before').backgroundImage}; });
+    /* v2.5.2: màng là kính Ink 80–90 % + blur 11px (như mép cuộn đáy) — mép vẫn Ink vì dưới kính là nền Ink */
+    check(f.on && f.dark && f.op==='1' && f.bf==='blur(11px)' && /0\.8\).*0\.9\)/.test(f.dim), 'màng kính Ink mở: '+JSON.stringify(f));
     await expectEdges('màng Ink', INK, INK, {darkOnly:true}); await shot('film-ink');
     await page.click(L+'.film .exl button:first-child'); await w(1000); await expectEdges('vào set mới', INK, INK, {darkOnly:true});
   });
