@@ -7,7 +7,7 @@
    ===================================================================== */
 'use strict';
 var $=function(id){ return document.getElementById(id); };
-var APP_VER='v2.5.1';
+var APP_VER='v2.5.2';
 
 /* ---------------- tiện ích ---------------- */
 function isoToday(d){ d=d||new Date(); return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2); }
@@ -2229,7 +2229,10 @@ function Loop(host, p, o){
     if(pick || rm()){ film.classList.add('fast'); film.classList.remove('on'); filmT=setTimeout(function(){ film.classList.remove('fast'); }, 220); }
     else {
       var items=flyItems(filmOrigin||c1, false);
-      filmT=setTimeout(function(){ film.classList.remove('on'); items.forEach(function(el){ el.style.transition=''; el.style.transform=''; el.style.opacity=''; }); }, 200);
+      /* v2.5.2: trả các lựa chọn về chỗ SAU khi chữ đã tắt (.inner 160 ms) — trước đây trả ngay lúc màng bắt đầu tan
+         → cả danh sách hiện lại ở chỗ cũ rồi mới mờ đi (nháy ~100 ms) */
+      filmT=setTimeout(function(){ film.classList.remove('on');
+        filmT=setTimeout(function(){ items.forEach(function(el){ el.style.transition=''; el.style.transform=''; el.style.opacity=''; }); }, 300); }, 200);
     }
     if(!silent && p.phase==='rest') ctaTo('Nghỉ xong · kế tiếp', true);
   }
