@@ -1,7 +1,8 @@
 /* v2.5 · NAV ĐÁY MÀN NGHỈ "HẠT" (nền Ink xuyên suốt — thay cơ chế mực Ink dâng qua nav của v2.4.2).
-   Luật mới (Figma 561:225): màn nghỉ luôn Ink; pill chính Paper chữ Ink ("Bắt đầu nghỉ" → "Nghỉ xong · kế tiếp"), nút tròn viền hairline,
-   icon Paper (↩ khi đặt giờ, ⌃ khi đang nghỉ). Nav KHÔNG đổi tông theo thời gian: đầu buổi nghỉ, giữa, 10 giây cuối (con số Acid),
-   0:00 — kiểm bằng ĐIỂM ẢNH trên ảnh chụp, không chỉ class. 1:2: nút nổi giữa section khi chạm (.ovl), ẩn cả cụm khi đóng.
+   Luật (Figma 561:225 + chủ studio 28/09, v2.6): màn nghỉ luôn Ink; đặt giờ: pill Paper chữ Ink "Bắt đầu nghỉ" + nút tròn ← (lùi về đang tập);
+   đang nghỉ: pill ACID chữ Ink "Nghỉ xong · kế tiếp" + nút tròn ↩ (hoàn tác về đặt giờ). Nút tròn viền hairline, icon Paper.
+   Nav KHÔNG đổi tông theo thời gian: đầu buổi nghỉ, giữa, 10 giây cuối (con số Acid), 0:00 — kiểm bằng ĐIỂM ẢNH trên ảnh chụp, không chỉ class.
+   1:2 (v2.6): nav rút gọn luôn hiện ở đáy mỗi nửa — nút tròn 48 chỉ có icon (▷ Paper khi đặt giờ · ✓ Acid khi đang nghỉ), không chạm-để-mở.
    Chạy: NODE_PATH=/opt/node22/lib/node_modules node test/ink_nav.js   (BASE=<thư mục bản khác> để chạy trên bản cũ)
    GIF=1 → quay test/out_ink/rest-nav-<nhãn>.gif (10 giây cuối → 0:00, 1:1). */
 var {chromium}=require('playwright'); var path=require('path'); var fs=require('fs'); var cp=require('child_process');
@@ -25,6 +26,7 @@ function maxLum(file, r){
 }
 function isInk(c){ return c[0]<40 && c[1]<40 && c[2]<40; }
 function isPaper(c){ return c[0]>235 && c[1]>235 && c[2]>235; }
+function isAcid(c){ return c[0]>195 && c[1]>240 && c[2]<40; }
 function hex(c){ return '#'+c.map(function(v){ return ('0'+v.toString(16)).slice(-2); }).join(''); }
 
 (async function(){
@@ -49,9 +51,7 @@ function hex(c){ return '#'+c.map(function(v){ return ('0'+v.toString(16)).slice
     for(var i of ex) await page.click('#lib-list .row:nth-of-type('+i+')');
     await page.click('#lib-go'); await w(400); await page.click('#pl-go'); await scr('p-loop'); await w(1200);
     var L='#loop-host .loop:nth-child(1) ';
-    if(half) await page.evaluate(function(){ setFocus(0); });
     await page.click(L+'.c1'); await w(500);
-    if(half) await page.evaluate(function(){ setFocus(0); });
     await page.click(L+'.j1'); await w(1100);
     await page.waitForFunction(function(){ return document.getElementById('pill').hidden; }, null, {timeout:6000}).catch(function(){});
     return L;
@@ -60,16 +60,18 @@ function hex(c){ return '#'+c.map(function(v){ return ('0'+v.toString(16)).slice
     function r(s){ var e=document.querySelector(s); if(!e) return null; var q=e.getBoundingClientRect(); return {x:q.left,y:q.top,w:q.width,h:q.height,b:q.bottom,r:q.right}; }
     var root=document.querySelector(L.trim()), c1=document.querySelector(L+'> .lp .c1');
     return {root:r(L.trim()), c1:r(L+'> .lp .c1'), g1:r(L+'> .lp .g1'), c1bg:getComputedStyle(c1).backgroundColor, c1c:getComputedStyle(c1).color, g1c:getComputedStyle(document.querySelector(L+'> .lp .g1')).color,
-      icon:document.querySelector(L+'> .lp .g1 use').getAttribute('href'), txt:c1.textContent, loopBg:getComputedStyle(root).backgroundColor, ink:!!root.querySelector('.ink'), acid:root.classList.contains('acid')||root.classList.contains('bga'),
+      icon:document.querySelector(L+'> .lp .g1 use').getAttribute('href'), txt:c1.textContent||c1.getAttribute('aria-label'), c1icon:(c1.querySelector('use')||{getAttribute:function(){ return ''; }}).getAttribute('href'),
+      loopBg:getComputedStyle(root).backgroundColor, ink:!!root.querySelector('.ink'), acid:root.classList.contains('acid')||root.classList.contains('bga'),
       navOp:getComputedStyle(document.querySelector(L+'> .lp .nav')).opacity}; }, L); }
-  /* kiểm một khoảnh khắc: pill Paper chữ Ink, nền quanh nav Ink, icon nút tròn sáng */
-  async function navOk(page, L, label, expIcon, expTxt){
+  /* kiểm một khoảnh khắc: nút chính đúng màu (Paper / Acid) chữ Ink, nền quanh nav Ink, icon nút tròn sáng */
+  async function navOk(page, L, label, expIcon, expTxt, expBg){
     var g=await geo(page, L), f=path.join(OUT, label.replace(/[^a-z0-9]+/gi,'-')+'-'+TAG+'.png'); await page.screenshot({path:f});
+    var acidBg=expBg==='acid';
     check(!g.ink && !g.acid && g.loopBg==='rgb(10, 10, 10)', label+' · nền loop Ink, không lớp mực/Acid: '+g.loopBg+' ink='+g.ink+' acid='+g.acid);
-    check(g.c1bg==='rgb(250, 250, 250)' && g.c1c==='rgb(10, 10, 10)', label+' · pill Paper chữ Ink: '+g.c1bg+' / '+g.c1c);
-    check(g.txt===expTxt, label+' · chữ pill: '+g.txt);
+    check(g.c1bg===(acidBg?'rgb(212, 255, 0)':'rgb(250, 250, 250)') && g.c1c==='rgb(10, 10, 10)', label+' · nút chính '+(acidBg?'Acid':'Paper')+' chữ Ink: '+g.c1bg+' / '+g.c1c);
+    check(g.txt===expTxt, label+' · chữ / nhãn nút chính: '+g.txt);
     var s=px(f, [[g.c1.x+10, g.c1.y+g.c1.h/2], [g.c1.x-12, g.c1.y+g.c1.h/2], [g.g1.x+2, g.g1.y+g.g1.h/2]]);
-    check(isPaper(s[0]), label+' · điểm ảnh trong pill = Paper: '+hex(s[0]));
+    check(acidBg?isAcid(s[0]):isPaper(s[0]), label+' · điểm ảnh trong nút chính = '+(acidBg?'Acid':'Paper')+': '+hex(s[0]));
     check(isInk(s[1]), label+' · nền quanh nav = Ink: '+hex(s[1]));
     check(g.icon===expIcon && g.g1c==='rgb(250, 250, 250)', label+' · icon '+g.icon+' màu '+g.g1c);
     var ml=maxLum(f, {x:g.g1.x+g.g1.w*.25, y:g.g1.y+g.g1.h*.25, w:g.g1.w*.5, h:g.g1.h*.5});
@@ -79,37 +81,39 @@ function hex(c){ return '#'+c.map(function(v){ return ('0'+v.toString(16)).slice
 
   /* ================= 1:1 ================= */
   var A=await mk(false), page=A.page, L=await toRestSetup(page, ['Thành Công'], [1], false);
-  await run('N1', '1:1 · đặt giờ nghỉ: pill Paper "Bắt đầu nghỉ", nút ↩, nền Ink', async function(){
+  await run('N1', '1:1 · đặt giờ nghỉ: pill Paper "Bắt đầu nghỉ", nút ← (v2.6), nền Ink', async function(){
     check((await page.evaluate(function(){ return state.session.people[0].phase; }))==='rest-setup', 'đang đặt giờ');
-    await navOk(page, L, 'n1 dat gio', '#i-undo', 'Bắt đầu nghỉ');
+    await navOk(page, L, 'n1 dat gio', '#i-back', 'Bắt đầu nghỉ', 'paper');
   });
-  await run('N2', '1:1 · đang nghỉ: pill "Nghỉ xong · kế tiếp", nút ⌃ — đầu / giữa / 10 giây cuối / 0:00 nav KHÔNG đổi tông', async function(){
+  await run('N2', '1:1 · đang nghỉ: pill Acid "Nghỉ xong · kế tiếp", nút ↩ (v2.6) — đầu / giữa / 10 giây cuối / 0:00 nav KHÔNG đổi tông', async function(){
     await page.evaluate(function(){ state.session.people[0].restTotal=14; }); await page.click(L+'.c1'); await page.waitForTimeout(900);
-    await navOk(page, L, 'n2 dau nghi', '#i-up', 'Nghỉ xong · kế tiếp');
-    await page.waitForTimeout(4500); await navOk(page, L, 'n2 giua', '#i-up', 'Nghỉ xong · kế tiếp');
+    await navOk(page, L, 'n2 dau nghi', '#i-undo', 'Nghỉ xong · kế tiếp', 'acid');
+    await page.waitForTimeout(4500); await navOk(page, L, 'n2 giua', '#i-undo', 'Nghỉ xong · kế tiếp', 'acid');
     await page.waitForTimeout(3500);
     var dig=await page.evaluate(function(){ return getComputedStyle(document.querySelector('#loop-host .clock .line')).color; });
     check(dig==='rgb(212, 255, 0)', '10 giây cuối: con số Acid (luật 19/09): '+dig);
-    await navOk(page, L, 'n2 10 giay cuoi', '#i-up', 'Nghỉ xong · kế tiếp');
+    await navOk(page, L, 'n2 10 giay cuoi', '#i-undo', 'Nghỉ xong · kế tiếp', 'acid');
     await page.waitForTimeout(5600);
     check((await page.textContent(L+'.lp .head .sub'))==='Hết giờ nghỉ', 'Hết giờ nghỉ');
-    await navOk(page, L, 'n2 het gio', '#i-up', 'Nghỉ xong · kế tiếp');
+    await navOk(page, L, 'n2 het gio', '#i-undo', 'Nghỉ xong · kế tiếp', 'acid');
   });
   await A.ctx.close();
 
   /* ================= 1:2 ================= */
   var B=await mk(false); page=B.page; L=await toRestSetup(page, ['Doãn Quang','Quang Vinh'], [1,2], true);
-  await run('N4', '1:2 · nút nổi giữa section khi chạm: pill Paper trên nền Ink (section mờ), bấm tới đúng nút', async function(){
-    await page.evaluate(function(){ setFocus(0); }); await page.waitForTimeout(450);
+  await run('N4', '1:2 · đặt giờ nghỉ: nav rút gọn luôn hiện — ▷ Paper tròn 48 + ←, không cần chạm mở, bấm tới đúng nút', async function(){
     var g=await geo(page, L), f=path.join(OUT,'n4-'+TAG+'.png'); await page.screenshot({path:f});
-    check(g.navOp==='1' && g.c1bg==='rgb(250, 250, 250)', 'nav nổi hiện, pill Paper: '+g.navOp+' / '+g.c1bg);
-    var s=px(f, [[g.c1.x+10, g.c1.y+g.c1.h/2]]); check(isPaper(s[0]), 'điểm ảnh pill Paper: '+hex(s[0]));
+    check(g.navOp==='1' && g.c1.w===48 && g.c1.h===48 && g.c1icon==='#i-play' && g.icon==='#i-back' && g.txt==='Bắt đầu nghỉ', 'nav hiện sẵn: '+JSON.stringify({op:g.navOp, w:g.c1.w, c1:g.c1icon, g1:g.icon, label:g.txt}));
+    await navOk(page, L, 'n4 dat gio 1-2', '#i-back', 'Bắt đầu nghỉ', 'paper');
+    var s=px(f, [[g.c1.x+g.c1.w/2-12, g.c1.y+g.c1.h/2]]); check(isPaper(s[0]), 'điểm ảnh trong nút tròn Paper: '+hex(s[0]));
     var hit=await page.evaluate(function(p){ var e=document.elementFromPoint(p.x,p.y); return e && e.closest('.c1') ? 'c1' : (e && e.className) || ''; }, {x:g.c1.x+g.c1.w/2, y:g.c1.y+g.c1.h/2});
-    check(hit==='c1', 'chạm giữa pill tới nút: '+hit);
+    check(hit==='c1', 'chạm giữa nút tới nút: '+hit);
   });
-  await run('N5', '1:2 · đóng .ovl: cụm nút ẩn (opacity 0)', async function(){
-    await page.evaluate(function(){ setFocus(-1); }); await page.waitForTimeout(450);
-    check((await page.evaluate(function(L){ return getComputedStyle(document.querySelector(L+'> .lp .nav')).opacity; }, L))==='0', 'nav ẩn');
+  await run('N5', '1:2 · đang nghỉ: ✓ Acid tròn 48 + ↩, nửa kia vẫn hiện nav của nó', async function(){
+    await page.click(L+'.c1'); await page.waitForTimeout(900);
+    var g=await geo(page, L); check(g.c1icon==='#i-check' && g.txt==='Nghỉ xong · kế tiếp', 'nút chính ✓: '+g.c1icon+' / '+g.txt);
+    await navOk(page, L, 'n5 dang nghi 1-2', '#i-undo', 'Nghỉ xong · kế tiếp', 'acid');
+    check((await page.evaluate(function(){ return getComputedStyle(document.querySelector('#loop-host .loop:nth-child(2) > .lp .nav')).opacity; }))==='1', 'nav nửa 2 vẫn hiện');
   });
   await B.ctx.close();
 

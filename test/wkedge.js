@@ -175,8 +175,8 @@ function wkEdgesInPage(){
     await page.click(L+'.c1'); await w(400); await expectEdges('đang nghỉ 400ms (sóng Acid trên vành)', INK, INK, {darkOnly:true}); await shot('rest-hat');
     await w(3300); await expectEdges('hết giờ (0:00, bóng số 0)', INK, INK, {darkOnly:true});
   });
-  await run('W4', 'Pill trên màn nghỉ: đang hiện (y ≥ 10) không che điểm lấy mẫu; sau khi tắt → hidden (display:none) và tính lại màu; bấm dồn (Đạt → Hoàn tác 380ms) không kẹt', async function(){
-    await page.click(L+'.g1'); await w(500); await page.click(L+'.film .exl button:first-child'); await w(900);
+  await run('W4', 'Pill trên màn nghỉ: đang hiện (y ≥ 10) không che điểm lấy mẫu; sau khi tắt → hidden (display:none) và tính lại màu; bấm dồn (Đạt → Lùi 380ms) không kẹt', async function(){
+    await page.click(L+'.c1'); await w(500); await page.click(L+'.film .exl button:first-child'); await w(900);
     await page.click(L+'.c1'); await w(500); await page.click(L+'.j1'); await w(1200); await pillGone(); await expectEdges('đặt giờ nghỉ lần 2', INK, INK, {darkOnly:true});
     await ev(function(){ notify('Kiểm tra pill trên màn nghỉ'); }); await w(500);
     var st=await ev(function(){ var p=document.getElementById('pill'), r=p.getBoundingClientRect(); return {on:p.classList.contains('on'), hidden:p.hidden, top:Math.round(r.top), pe:getComputedStyle(p).pointerEvents}; });
@@ -188,19 +188,19 @@ function wkEdgesInPage(){
     var st2=await ev(function(){ var p=document.getElementById('pill'); return {on:p.classList.contains('on'), hidden:p.hidden, disp:getComputedStyle(p).display}; });
     check(!st2.on && st2.hidden && st2.disp==='none', 'pill ẩn hẳn sau 240ms: '+JSON.stringify(st2));
     await expectEdges('pill đã ẩn', INK, INK, {darkOnly:true});
-    await page.click(L+'.g1'); await w(900);                                   /* Hoàn tác → thiết lập */
-    await page.click(L+'.c1'); await w(500); await page.click(L+'.j1'); await w(380); await page.click(L+'.g1'); await w(240);
+    await page.click(L+'.g1'); await w(900);                                   /* v2.6: ← lùi về đang tập (bỏ kết quả vừa chấm) */
+    await page.click(L+'.j1'); await w(380); await page.click(L+'.g1'); await w(240);   /* bấm dồn: Đạt → ← lùi */
     var ov=await ev(function(){ var cs=getComputedStyle(document.documentElement); return {t:cs.getPropertyValue('--edge-t').trim(), b:cs.getPropertyValue('--edge-b').trim()}; });
     check(/#0A0A0A/i.test(ov.t) && /#0A0A0A/i.test(ov.b), 'bấm dồn: dải vẫn Ink: '+JSON.stringify(ov));
     await w(700); await pillGone();
     var ov2=await ev(function(){ var s=LOOPS[0].state(); return {ph:state.session.people[0].phase, slices:s.slices, chase:s.chase}; });
-    check(ov2.ph==='setup' && ov2.slices===0 && ov2.chase, 'sau Đạt → Hoàn tác: thiết lập, vành nhịp, không sót hạt: '+JSON.stringify(ov2)); await expectEdges('sau bấm dồn', INK, INK, {darkOnly:true});
-    await page.click(L+'.c1'); await w(500); await page.click(L+'.j1'); await w(1200); await pillGone(); await expectEdges('đặt giờ nghỉ lần 3', INK, INK, {darkOnly:true});
+    check(ov2.ph==='active' && ov2.slices===0 && ov2.chase, 'sau Đạt → Lùi: đang tập, vành nhịp, không sót hạt: '+JSON.stringify(ov2)); await expectEdges('sau bấm dồn', INK, INK, {darkOnly:true});
+    await page.click(L+'.j1'); await w(1200); await pillGone(); await expectEdges('đặt giờ nghỉ lần 3', INK, INK, {darkOnly:true});
   });
   await run('W5', 'Màng .film v2.5.2: kính Ink 80–90 % + blur 11px (như mép cuộn đáy) → mép Ink/Ink khi mở; vào set mới → Ink', async function(){
     await ev(function(){ state.session.people[0].restTotal=60; saveSession(); });
     await page.click(L+'.c1'); await w(400); await expectEdges('nghỉ dài', INK, INK, {darkOnly:true});
-    await page.click(L+'.g1'); await w(600);
+    await page.click(L+'.c1'); await w(600);
     var f=await ev(function(){ var f=document.querySelector('#loop-host .loop .film'), cs=getComputedStyle(f); return {on:f.classList.contains('on'), dark:f.classList.contains('dark'), op:cs.opacity, bf:cs.backdropFilter||cs.webkitBackdropFilter, dim:getComputedStyle(f,'::before').backgroundImage}; });
     /* v2.5.2: màng là kính Ink 80–90 % + blur 11px (như mép cuộn đáy) — mép vẫn Ink vì dưới kính là nền Ink */
     check(f.on && f.dark && f.op==='1' && f.bf==='blur(11px)' && /0\.8\).*0\.9\)/.test(f.dim), 'màng kính Ink mở: '+JSON.stringify(f));
@@ -209,7 +209,7 @@ function wkEdgesInPage(){
   });
   await run('W6', 'Rời loop (Bước khác → Kết thúc buổi tập) → tổng kết Ink/Ink', async function(){
     await page.click(L+'.c1'); await w(500); await page.click(L+'.j1'); await w(1200); await pillGone(); await expectEdges('đặt giờ trước khi rời', INK, INK, {darkOnly:true});
-    await page.click(L+'.c1'); await w(400); await page.click(L+'.g1'); await w(500); await page.click(L+'.film .fend'); await screen('p-summary'); await w(800);
+    await page.click(L+'.c1'); await w(400); await page.click(L+'.c1'); await w(500); await page.click(L+'.film .fend'); await screen('p-summary'); await w(800);
     await expectEdges('tổng kết', INK, INK, {darkOnly:true});
   });
   await run('W7', 'Loop 1:2 v2.5: nửa trên nghỉ, rồi cả hai nghỉ — dải Ink/Ink (không còn nửa Acid)', async function(){
@@ -221,11 +221,11 @@ function wkEdgesInPage(){
     await page.click('#pl-go'); await screen('p-loop'); await w(1300);
     check(await ev(function(){ return document.getElementById('loop-host').classList.contains('two'); }), 'loop chia đôi');
     await expectEdges('1:2 thiết lập', INK, INK, {darkOnly:true});
-    await ev(function(){ setFocus(0); }); await w(400); await page.click('#loop-host .loop:nth-child(1) .c1'); await w(500);
-    await ev(function(){ setFocus(0); }); await w(400); await page.click('#loop-host .loop:nth-child(1) .j1'); await w(1200);
+    await page.click('#loop-host .loop:nth-child(1) .c1'); await w(500);
+    await page.click('#loop-host .loop:nth-child(1) .j1'); await w(1200);
     await pillGone(); await expectEdges('1:2 nửa trên đặt giờ nghỉ', INK, INK, {darkOnly:true}); await shot('two-top-rest');
-    await ev(function(){ setFocus(1); }); await w(400); await page.click('#loop-host .loop:nth-child(2) .c1'); await w(500);
-    await ev(function(){ setFocus(1); }); await w(400); await page.click('#loop-host .loop:nth-child(2) .j1'); await w(1200);
+    await page.click('#loop-host .loop:nth-child(2) .c1'); await w(500);
+    await page.click('#loop-host .loop:nth-child(2) .j1'); await w(1200);
     await pillGone(); await expectEdges('1:2 cả hai đặt giờ nghỉ', INK, INK, {darkOnly:true}); await shot('two-both-rest');
   });
   await run('W8', 'Không lỗi JS', async function(){ check(!PAGEERR.length, 'PAGEERR: '+PAGEERR.join(' | ')); });

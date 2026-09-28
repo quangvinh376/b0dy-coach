@@ -125,7 +125,7 @@ async function run(id, name, fn){ CUR={id:id,name:name,fails:[]}; RES.push(CUR);
     await page.click(L+'.c1'); await w(400); await ink('đang nghỉ');
     await w(3400); await ink('hết giờ (0:00)');
     await page.screenshot({path:path.join(OUT,'e6-zero.png')});
-    await page.click(L+'.g1'); await w(500); await ink('menu bước tiếp mở');
+    await page.click(L+'.c1'); await w(500); await ink('menu bước tiếp mở');
     await page.click(L+'.fend'); await screen('p-summary'); await w(700);
     var bg2=await ev(function(){ return getComputedStyle(document.documentElement).getPropertyValue('--bg').trim(); }); check(/#0A0A0A/i.test(bg2), 'rời loop → Ink: '+bg2);
   });

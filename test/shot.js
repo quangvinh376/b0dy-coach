@@ -35,13 +35,12 @@ var {chromium}=require('playwright'); var serve=require('./serve'); var fs=requi
   await page.click('#lib-list .row:nth-of-type(1)'); await page.click('#lib-list .row:nth-of-type(2)'); await page.click('#lib-list .row:nth-of-type(4)'); await page.click('#lib-list .row:nth-of-type(6)'); await shot('lib-4');
   await page.click('#lib-go'); await shot('plan-4');
   await page.click('#pl-go'); await shot('loop-setup',1200);
-  async function tap(i){ await page.evaluate(function(i){ setFocus(i); }, i); await page.waitForTimeout(150); }
-  await tap(0); await shot('loop-setup-nav',300);
-  await page.click('#loop-host .loop:nth-child(1) .c1'); await shot('loop-active',900); await tap(0);
-  await page.click('#loop-host .loop:nth-child(1) .j1'); await shot('loop-rest-setup',900); await tap(0);
-  await page.click('#loop-host .loop:nth-child(1) .c1'); await shot('loop-rest',1500); await tap(1);
-  await page.click('#loop-host .loop:nth-child(2) .c1'); await shot('loop-2-active',900); await page.waitForTimeout(6000); await shot('loop-rest-late',300); await tap(0);
-  await page.click('#loop-host .loop:nth-child(1) .g1'); await shot('loop-menu',600);
+  /* 1:2 (v2.6): nav rút gọn luôn hiện ở đáy mỗi nửa — bấm thẳng nút của nửa cần thao tác */
+  await page.click('#loop-host .loop:nth-child(1) .c1'); await shot('loop-active',900);
+  await page.click('#loop-host .loop:nth-child(1) .j1'); await shot('loop-rest-setup',900);
+  await page.click('#loop-host .loop:nth-child(1) .c1'); await shot('loop-rest',1500);
+  await page.click('#loop-host .loop:nth-child(2) .c1'); await shot('loop-2-active',900); await page.waitForTimeout(6000); await shot('loop-rest-late',300);
+  await page.click('#loop-host .loop:nth-child(1) .c1'); await shot('loop-menu',600);
   await page.click('#loop-host .loop:nth-child(1) .fend'); await shot('summary',1200);
   await page.click('#sm-form button:nth-child(4)'); await page.fill('#sm-note','Vai trái hơi mỏi'); await shot('summary-filled');
   await page.click('#sm-go'); await shot('summary-2',900);
