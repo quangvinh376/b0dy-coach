@@ -7,7 +7,7 @@
    ===================================================================== */
 'use strict';
 var $=function(id){ return document.getElementById(id); };
-var APP_VER='v2.6.0';
+var APP_VER='v2.6.1';
 
 /* ---------------- tiện ích ---------------- */
 function isoToday(d){ d=d||new Date(); return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2); }
@@ -666,7 +666,7 @@ var REPS_VALS=range(1,50,1), KG_VALS=range(0,300,2.5), REST_VALS=range(15,600,15
 /* =====================================================================
    ĐỒNG HỒ CHUYỂN ĐỘNG (MT) — v2.5
    Mọi chuyển động do JS điều khiển (vành hạt, vành nhịp, chữ/nút/bộ đếm của màn loop, số bay, tên bay giữa hai màn)
-   chạy theo MT (giây), tiến theo khung hình (dt ≤ 50 ms) trong MÔT vòng rAF duy nhất → chữ, nút và hạt khớp từng khung.
+   chạy theo MT (giây), tiến theo khung hình (dt ≤ 50 ms) trong MỘT vòng rAF duy nhất (v2.6.1: thật sự chỉ một — xem motTick) → chữ, nút và hạt khớp từng khung.
    Mỗi tween có key: gọi lại cùng key = đi tiếp từ giá trị đang hiện (ngắt được, không nhảy). rAF tự ngủ khi không còn
    gì chạy và màn loop không mở. Giờ thật của đồng hồ nghỉ vẫn tính bằng Date.now() (restStart), không theo MT.
    Giảm chuyển động: tween không đánh dấu keepRM thì nhảy thẳng tới cuối; keepRM = mờ ngắn tại chỗ (nhẹ hơn, không bằng không).
@@ -686,7 +686,7 @@ function bez(x1,y1,x2,y2){
 var EO=bez(.22,.85,.22,1), EIO=bez(.65,0,.35,1), OUT3=function(k){ return 1-Math.pow(1-k,3); }, LIN=function(k){ return k; };
 function clamp(v,a,b){ return v<a?a:(v>b?b:v); }
 function lerp(a,b,t){ return a+(b-a)*t; }
-var MT=0, MTW=[], MTT=[], MOT={raf:0, last:0};
+var MT=0, MTW=[], MTT=[], MOT={raf:0, last:0, inFrame:false, st:null};
 function tw(o){
   if(o.key) twKill(o.key);
   o.t0=MT+(o.delay||0); o.ease=o.ease||EO;
@@ -707,11 +707,25 @@ function twRun(){
 function after(sec, fn, key){ if(key) MTT=MTT.filter(function(t){ return t.key!==key; }); MTT.push({at:MT+sec, fn:fn, key:key}); motWake(); }
 function afterKill(key){ MTT=MTT.filter(function(t){ return t.key!==key; }); }
 function afterRun(){ for(var i=0;i<MTT.length;i++){ if(MT>=MTT[i].at){ var f=MTT[i].fn; MTT.splice(i,1); i--; f(); } } }
-function motWake(){ if(!MOT.raf && !MOT.hold){ MOT.last=0; MOT.raf=requestAnimationFrame(motTick); } }
+/* v2.6.1 — MỘT vòng rAF, không bao giờ hai. Trước đây motTick đặt MOT.raf=0 rồi mới chạy khung: tween/after khởi động NGAY TRONG khung
+   (nửa sau của fadeSwap / swapIcon, mốc 10 giây cuối, 0:00 …) gọi motWake() thấy raf=0 → hẹn thêm một vòng, trong khi motTick vẫn tự
+   hẹn vòng của nó → nhân đôi; LOOP_ON giữ mọi vòng sống suốt màn loop (~6 vòng mỗi set, ~100 vòng sau 16 set) → mỗi khung vẽ lại cùng
+   một hình hàng chục lần (dt = 0, không ai thấy) = nóng máy + rớt khung cuối buổi. Vòng thừa đầu tiên trong khung còn nhận dt = 1/60
+   (motWake xoá MOT.last) → MT nhảy cóc 16 ms mỗi lần đổi pha.
+   Nay: đang ở trong khung thì motWake() không hẹn (và không xoá MOT.last); motTick hẹn khung kế đúng một lần ở cuối, kể cả khi khung
+   ném lỗi (finally) — thứ vừa khởi động trong khung (MTW / MTT / FX) nằm sẵn trong điều kiện hẹn. MOT.st: số đo cho màn chẩn đoán. */
+function motWake(){ if(!MOT.raf && !MOT.hold && !MOT.inFrame){ MOT.last=0; MOT.raf=requestAnimationFrame(motTick); } }
 function motTick(now){
-  MOT.raf=0; if(MOT.hold) return; var dt=MOT.last?(now-MOT.last)/1000:1/60; MOT.last=now;
-  motFrame(dt);
-  if(LOOP_ON || MTW.length || MTT.length || FX.busy()) MOT.raf=requestAnimationFrame(motTick); else MOT.last=0;
+  MOT.raf=0; if(MOT.hold) return;
+  var dt=MOT.last?(now-MOT.last)/1000:1/60, S=MOT.st, t0=S?performance.now():0; MOT.last=now;
+  MOT.inFrame=true;
+  try{ motFrame(dt); }
+  finally{
+    MOT.inFrame=false;
+    if(S && LOOP_ON){ S.n++; S.ms+=performance.now()-t0; if(now===S.at) S.dup++; else { S.at=now; S.f++; S.sec+=Math.min(dt,.25); } }
+    if(LOOP_ON || MTW.length || MTT.length || FX.busy()){ if(!MOT.raf && !MOT.hold) MOT.raf=requestAnimationFrame(motTick); }
+    else MOT.last=0;
+  }
 }
 /* một khung: đồng hồ → hẹn giờ → trạng thái loop (rụng hạt theo giờ thật) → tween → vẽ */
 function motFrame(dt){
@@ -725,6 +739,12 @@ function motFrame(dt){
 document.addEventListener('visibilitychange', function(){ MOT.last=0; });
 /* kiểm chứng chuyển động (test/quay khung): giữ MT rồi tự bước từng khung — __mot.hold(true); __mot.step(1000/60) */
 window.__mot={hold:function(on){ MOT.hold=!!on; if(on){ cancelAnimationFrame(MOT.raf); MOT.raf=0; } else motWake(); }, step:function(ms){ motFrame((ms==null?1000/60:ms)/1000); }, t:function(){ return MT; }};
+/* màn chẩn đoán: lượt loop gần nhất — khung/giây thật · ms JS mỗi khung · số vòng vẽ mỗi khung (đúng = 1) · thời gian ở loop */
+function mtDiag(){
+  var S=MOT.st; if(!S || !S.f) return 'MT CHƯA VÀO LOOP';
+  function d(v,k){ return v.toFixed(k).replace('.',','); }
+  return 'MT '+Math.round(S.f/Math.max(S.sec,1e-3))+' KHUNG/S · '+d(S.ms/S.f,2)+' MS JS/KHUNG · '+d(S.n/S.f,1)+' VÒNG/KHUNG · '+d(S.sec/60,1)+' PHÚT LOOP';
+}
 
 /* =====================================================================
    FX — hiệu ứng xuyên màn (v2.5), chạy theo MT:
@@ -1202,7 +1222,7 @@ HOOK['p-pin']=function(){ startPin(); warm(); };
   var cs=getComputedStyle(pr), vv=window.visualViewport;
   $('diag').hidden=false;
   var rs=getComputedStyle(document.documentElement), bot=(function(){ var q=document.createElement('div'); q.style.cssText='position:fixed;left:0;right:0;bottom:0;height:1px;visibility:hidden'; document.body.appendChild(q); var y=Math.round(q.getBoundingClientRect().bottom); q.remove(); return y; })();
-  $('diag').textContent='WIN '+innerWidth+'×'+innerHeight+' · SCREEN '+screen.width+'×'+screen.height+' · VV '+(vv?Math.round(vv.height):'-')+' · SAT '+cs.paddingTop+' · SAB '+cs.paddingBottom+' · '+(matchMedia('(display-mode: standalone)').matches?'STANDALONE':'BROWSER')+(navigator.standalone?' · NAV.SA':'')+' · '+(document.documentElement.classList.contains('sb-legacy')?'BẢN CÀI CŨ (THANH ĐEN)':'TRÀN MÀN HÌNH')+' · TOP '+rs.getPropertyValue('--top').trim()+' · ĐÁY FIXED '+bot+' · DPR '+devicePixelRatio+' · '+APP_VER;
+  $('diag').textContent='WIN '+innerWidth+'×'+innerHeight+' · SCREEN '+screen.width+'×'+screen.height+' · VV '+(vv?Math.round(vv.height):'-')+' · SAT '+cs.paddingTop+' · SAB '+cs.paddingBottom+' · '+(matchMedia('(display-mode: standalone)').matches?'STANDALONE':'BROWSER')+(navigator.standalone?' · NAV.SA':'')+' · '+(document.documentElement.classList.contains('sb-legacy')?'BẢN CÀI CŨ (THANH ĐEN)':'TRÀN MÀN HÌNH')+' · TOP '+rs.getPropertyValue('--top').trim()+' · ĐÁY FIXED '+bot+' · DPR '+devicePixelRatio+' · '+APP_VER+' · '+mtDiag();
   pr.remove();
 }); })();
 
@@ -1959,6 +1979,7 @@ function buildLoops(){
   MTW=MTW.filter(function(o){ return !/^L\d:/.test(o.key||''); }); MTT=MTT.filter(function(t){ return !/^L\d:/.test(t.key||''); });   /* tween của loop cũ: bỏ */
   if(!s){ go('p-home','back'); return; }
   s.people.forEach(function(p,i){ primePerson(p); LOOPS.push(Loop(host, p, {half:s.people.length>1, idx:i})); });
+  MOT.st={n:0, f:0, dup:0, ms:0, sec:0, at:-1};   /* số đo vòng vẽ của lượt loop này → màn chẩn đoán (chạm wordmark màn PIN 5 lần) */
   loopWake();
   $('p-loop')._after=function(){ loopLayoutAll(); LOOPS.forEach(function(l){ l.enter(); }); };
 }
