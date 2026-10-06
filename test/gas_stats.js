@@ -1,5 +1,6 @@
 /* v2.7 — chạy Stats.gs + Admin.gs THẬT trên sheet giả (không mạng, không Code.gs).
    Kiểm: hoa hồng từng buổi (đơn giá × % coach, bán hộ vào ngày bán) khớp cách tính tab COM; w8/n28/lastAll; plan; Admin cũng có w8 + plan.
+   v2.7.1: giờ = giờ ký trên app (cột N), thứ tự dòng SESSION LOG; Admin có Doanh thu từng buổi (sess · comMon).
    Chạy: node test/gas_stats.js            (dữ liệu giả — repo public)
          FIXTURE=/đường/dẫn.json node test/gas_stats.js   (dữ liệu khác, cùng định dạng; kỳ vọng đọc từ fixture.expect) */
 var fs = require('fs'), vm = require('vm'), path = require('path');
@@ -25,27 +26,36 @@ function fakeFixture(){
   ];
   var log = [['— SESSION LOG'], ['Mỗi dòng'], [], ['#','Ngày','Thứ','Khung giờ','Coach','Mã coach','Học viên','Mã HV','Loại','Khung','Trạng thái','_h','_tuần','Ký điện tử']];
   function us(iso){ var p = iso.split('-'); return (+p[1]) + '/' + (+p[2]) + '/' + p[0]; }
-  function s(iso, slot, coach, name, id, st){ log.push(['', us(iso), '', slot, coach, '', name, id, '1:1', '', st || 'Đã tập', '', '', '']); }
-  s('2026-08-18','08:00 – 09:00','Coach Một','Khách An','101');          /* tuần 1 */
-  s('2026-09-01','08:00 – 09:00','Coach Một','Khách An','101');          /* tuần 3 · tháng 9 */
-  s('2026-09-14','10:00 – 11:00','Coach Một','Khách Bình','102');        /* tuần 5 · tháng 9 */
-  s('2026-09-14','15:00 – 16:00','Coach Một','Khách An','101','Hủy');    /* hủy → bỏ */
-  s('2026-09-30','07:00 – 08:00','Coach Một','Khách Cường','103B');      /* tuần 7 */
-  s('2026-10-01','06:00 – 07:00','Coach Một','Khách An','101');          /* tuần 7 */
-  s('2026-10-05','15:00 – 16:00','Coach Một','Khách An','101');          /* tuần 8 */
-  s('2026-10-06','08:00 – 09:00','Coach Một','Khách Bình','102');        /* hôm nay, tuần 8 */
-  s('2026-10-06','09:00 – 10:00','Coach Một','Khách Cường','');          /* thiếu mã HV → theo tên, dòng còn buổi (103B) */
-  s('2026-10-06','10:00 – 11:00','Coach Hai','Khách Dung','201');        /* coach khác → bỏ */
-  s('2026-10-07','10:00 – 11:00','Coach Một','Khách An','101');          /* tương lai → không vào sess */
+  /* cột N = vết ký trên app "app HH:mm · ký: …" (v2.7.1: giờ hiện trên trang Hoa hồng / Doanh thu); dòng nhập tay để trống */
+  function s(iso, slot, coach, name, id, st, sig){ log.push(['', us(iso), '', slot, coach, '', name, id, '1:1', '', st || 'Đã tập', '', '', sig || '']); }
+  s('2026-08-18','08:00 – 09:00','Coach Một','Khách An','101','','app 08:05 · ký: Một');          /* tuần 1 */
+  s('2026-09-01','08:00 – 09:00','Coach Một','Khách An','101','','app 8:02 · ký: Một');           /* tuần 3 · tháng 9 · giờ 1 chữ số */
+  s('2026-09-14','10:00 – 11:00','Coach Một','Khách Bình','102');                                 /* tuần 5 · tháng 9 · nhập tay → không giờ */
+  s('2026-09-14','15:00 – 16:00','Coach Một','Khách An','101','Hủy','app 15:00 · ký: Một');       /* hủy → bỏ */
+  s('2026-09-30','07:00 – 08:00','Coach Một','Khách Cường','103B','','app 07:10 · ký: Admin');    /* tuần 7 */
+  s('2026-10-01','06:00 – 07:00','Coach Một','Khách An','101','','app 06:03 · ký: Một · ký: Một');/* tuần 7 · vết ký lặp */
+  s('2026-10-05','15:00 – 16:00','Coach Một','Khách An','101','','app 15:01 · duyệt: Một');       /* tuần 8 */
+  s('2026-10-06','09:00 – 10:00','Coach Một','Khách Cường','','','app 09:05 · ký: Một');          /* hôm nay · thiếu mã HV → theo tên (103B) · dòng TRƯỚC Bình dù ký muộn hơn */
+  s('2026-10-06','08:00 – 09:00','Coach Một','Khách Bình','102','','app 08:01 · ký: Một');        /* hôm nay, tuần 8 */
+  s('2026-10-06','10:00 – 11:00','Coach Hai','Khách Dung','201','','app 10:00 · ký: Hai');        /* coach khác → bỏ (Admin: có) */
+  s('2026-10-07','10:00 – 11:00','Coach Một','Khách An','101');                                   /* tương lai → không vào sess */
   for (var k = 0; k < 40; k++) log.push(['', '', '', '', '', '', '', '', '', '', '', '', '', '']);   /* công thức kéo sẵn: dòng rỗng cuối bảng */
   var cfg = [['— CONFIG 2'], ['Chỉnh sửa'], [], ['Coach','Giai đoạn','% Com'], ['Coach Một','',0.2], ['Coach Hai','01/09 -',0.15], ['Coach Hai (giai đoạn 1)','',0.1]];
   var expect = {
     coach: 'Coach Một', pin: '1111', month: '2026-10', today: '2026-10-06',
+    /* v2.7.1: giờ = giờ ký (cột N), trong ngày theo thứ tự dòng SESSION LOG, bán hộ cuối ngày */
     sess: [
-      ['2026-09-01','08:00','Khách An',60000,0], ['2026-09-14','10:00','Khách Bình',50000,0], ['2026-09-15','','Khách Em',40000,1], ['2026-09-30','07:00','Khách Cường',70000,0],
-      ['2026-10-01','06:00','Khách An',60000,0], ['2026-10-02','','Khách Dung',100000,1], ['2026-10-05','15:00','Khách An',60000,0],
-      ['2026-10-06','08:00','Khách Bình',50000,0], ['2026-10-06','09:00','Khách Cường',70000,0]
+      ['2026-09-01','08:02','Khách An',60000,0], ['2026-09-14','','Khách Bình',50000,0], ['2026-09-15','','Khách Em',40000,1], ['2026-09-30','07:10','Khách Cường',70000,0],
+      ['2026-10-01','06:03','Khách An',60000,0], ['2026-10-02','','Khách Dung',100000,1], ['2026-10-05','15:01','Khách An',60000,0],
+      ['2026-10-06','09:05','Khách Cường',70000,0], ['2026-10-06','08:01','Khách Bình',50000,0]
     ],
+    /* Admin — Doanh thu từng buổi = đơn giá buổi, mọi coach, cùng thứ tự dòng; không có bán hộ */
+    admSess: [
+      ['2026-09-01','08:02','Khách An',300000], ['2026-09-14','','Khách Bình',250000], ['2026-09-30','07:10','Khách Cường',350000],
+      ['2026-10-01','06:03','Khách An',300000], ['2026-10-05','15:01','Khách An',300000],
+      ['2026-10-06','09:05','Khách Cường',350000], ['2026-10-06','08:01','Khách Bình',250000], ['2026-10-06','10:00','Khách Dung',500000]
+    ],
+    admMon: { '2026-09': 900000, '2026-10': 1700000 },
     comMon: { '2026-09': 220000, '2026-10': 340000 },
     w8: { 'Khách An': [1,0,1,0,0,0,1,1], 'Khách Bình': [0,0,0,0,1,0,0,1], 'Khách Cường': [0,0,0,0,0,0,1,1] },
     n28: { 'Khách An': 2, 'Khách Bình': 2, 'Khách Cường': 2 },
@@ -117,6 +127,13 @@ check(okP, 'S6 plan (Buổi/tuần) khách của coach ' + JSON.stringify(res.pl
 if (!process.env.FIXTURE) check(!('Khách Dung' in (res.plan || {})) && !res.perClient['Khách Dung'], 'S7 không lẫn khách / buổi của coach khác');
 check(R.logReads < R.logRows * 14, 'S8 chỉ đọc SESSION LOG tới dòng có ngày cuối: ' + R.logReads + ' ô < ' + (R.logRows * 14));
 check(adm.ok && adm.w0 === E.w0 && adm.plan && Object.keys(E.w8).every(function (n) { return JSON.stringify((adm.perClient[n] || {}).w8) === JSON.stringify(E.w8[n]); }), 'S9 Admin: w8 + plan + w0');
+if (E.admSess) {
+  var ga = (adm.sess || []).map(function (x) { return [x.d, x.t, x.n, x.c]; });
+  check(JSON.stringify(ga) === JSON.stringify(E.admSess) && JSON.stringify(adm.comMon) === JSON.stringify(E.admMon) && adm.comFrom === res.comFrom,
+    'S11 Admin Doanh thu: từng buổi = đơn giá, mọi coach, thứ tự dòng, tổng tháng ' + JSON.stringify(adm.comMon) + (JSON.stringify(ga) === JSON.stringify(E.admSess) ? '' : '\n      got ' + JSON.stringify(ga)));
+}
+if (E.admMon && process.env.FIXTURE) check(Object.keys(E.admMon).every(function (k) { return adm.comMon && adm.comMon[k] === E.admMon[k]; }), 'S11r Admin Doanh thu tháng khớp tab COM ' + JSON.stringify(adm.comMon));
+check(!(adm.sess || []).some(function (x) { return 'r' in x; }) && !(res.sess || []).some(function (x) { return 'r' in x; }), 'S12 không gửi số dòng nội bộ (r) xuống app');
 check(Object.keys(res).indexOf('hist') >= 0 && Object.keys(res).indexOf('days') >= 0 && res.monthTotal >= 0, 'S10 khoá cũ của stats giữ nguyên (days · monthTotal · hist)');
 console.log(fail ? 'FAIL ' + pass + '/' + (pass + fail) : 'PASS ' + pass + '/' + pass);
 process.exit(fail ? 1 : 0);

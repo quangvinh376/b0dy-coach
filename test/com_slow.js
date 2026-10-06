@@ -77,6 +77,18 @@ var {chromium}=require('playwright'); var serve=require('./serve'); var fs=requi
   await page.fill('#sl-q','long'); await wait(200);
   check((await ev(function(){ return [].map.call(document.querySelectorAll('#sl-list .row .nm'), function(e){ return e.textContent; }).join(); }))==='Nguyễn Thành Long', 'S6 tìm "long"');
   await page.fill('#sl-q',''); await wait(200);
+  /* S8 — v2.7.1: khoảng thở cuối danh sách như Khách hàng — cuộn hết thì phần cuối dừng cách nav đúng một nhịp dòng
+     (danh sách dòng + phần mở rộng: khoảng ghost = cao DÒNG cuối, kể cả khi phần mở rộng cuối đang đóng hoặc mở) */
+  await page.setViewportSize({width:375,height:667}); await wait(400);
+  var s8=await ev(function(){ var el=document.getElementById('sl-list'), out={};
+    function meas(){ el.scrollTop=1e5; var rows=el.querySelectorAll('.row'), lastRow=rows[rows.length-1], tail=el.lastElementChild, b=(tail.getBoundingClientRect().height? tail : lastRow).getBoundingClientRect().bottom;
+      return {gap:Math.round(document.querySelector('#p-slow>.nav').getBoundingClientRect().top-b), rowH:Math.round(lastRow.getBoundingClientRect().height), sc:el.scrollHeight>el.clientHeight}; }
+    SL_OPEN={}; renderSlow(false); out.closed=meas();
+    var rows=el.querySelectorAll('.row'); rows[rows.length-1].click(); out.open=meas();
+    SL_OPEN={}; renderSlow(false); return out; });
+  await page.setViewportSize({width:393,height:852}); await wait(400);
+  check(s8.open.sc && s8.open.gap>=s8.open.rowH && s8.open.gap<=s8.open.rowH+24, 'S8a mở dòng cuối, cuộn hết: cách nav '+s8.open.gap+'px ≈ 1 dòng ('+s8.open.rowH+'px)');
+  check(!s8.closed.sc || (s8.closed.gap>=s8.closed.rowH && s8.closed.gap<=s8.closed.rowH+24), 'S8b dòng cuối đóng: '+JSON.stringify(s8.closed));
   /* S7 — máy chủ cũ (không w8/w0) → định nghĩa cũ, dòng mở hồ sơ, quay lại về p-slow */
   var old=await ev(function(){ var s=state.stats, keep=JSON.stringify(s); delete s.w0; Object.keys(s.perClient).forEach(function(k){ delete s.perClient[k].w8; }); renderSlow(false);
     var r={secs:[].map.call(document.querySelectorAll('#sl-list .sec'), function(e){ return e.textContent; }).join('|'), n:document.querySelectorAll('#sl-list .row').length}; window.__keep=keep; return r; });
@@ -171,13 +183,39 @@ var {chromium}=require('playwright'); var serve=require('./serve'); var fs=requi
     var r={gap:Math.round(nav.top-last.bottom), rowH:Math.round(last.height), n:rs.length, sc:l.scrollTop>0}; CM.sel=TODAY_ISO; CM.wk=wkStart(TODAY_ISO); renderCom(false); return r; });
   await page.setViewportSize({width:393,height:852}); await wait(400);
   check(c12b.sc && c12b.gap>=c12b.rowH && c12b.gap<=c12b.rowH+24, 'C12b cuộn hết: dòng cuối cách nav '+c12b.gap+'px (≈ 1 dòng '+c12b.rowH+'px + đệm nav), '+c12b.n+' buổi');
-  /* C13 — quay lại trang chủ; Admin: ô Doanh thu không mở trang Hoa hồng */
+  /* C13 — v2.7.1: giờ cạnh tên = giờ ký thật (rỗng → "—"), thứ tự trong ngày = thứ tự sess (dòng SESSION LOG) */
+  var c13=await ev(function(){ var s=state.stats, keep=s.sess, d=TODAY_ISO;
+    s.sess=keep.filter(function(x){ return x.d!==d; }).concat([{d:d,t:'09:40',n:'Khách Sau',c:100000},{d:d,t:'',n:'Khách Tay',c:90000},{d:d,t:'07:05',n:'Khách Sớm',c:80000},{d:d,t:'',n:'Khách Bán',c:50000,b:1}]);
+    CM.src=null; CM.sel=d; CM.wk=wkStart(d); renderCom(false);
+    var r=[].map.call(document.querySelectorAll('#cm-list .cmr'), function(e){ return e.querySelector('.t').textContent+' '+e.querySelector('.n').textContent; });
+    s.sess=keep; CM.src=null; renderCom(false); return r; });
+  check(c13.join('|')==='09:40 Khách Sau|— Khách Tay|07:05 Khách Sớm|— Bán hộ · Khách Bán', 'C13 giờ ký thật · "—" khi nhập tay · giữ thứ tự dòng (không xếp theo giờ): '+c13.join('|'));
   await page.click('#p-com .nav .ghost'); await waitScreen('p-home'); await wait(800);
-  var c13=await ev(function(){ state.admin=true; var keep=state.stats; state.stats=JSON.parse(JSON.stringify(demoDb().astats)); renderHome(false);
-    var t=document.querySelector('#h-tiles .tile:nth-child(4)'); t.click(); var r={sc:state.screen, l:t.querySelector('.tl').textContent};
-    state.admin=false; state.stats=keep; renderHome(false); return r; });
-  await wait(300);
-  check(c13.sc==='p-home' && /^Doanh thu/.test(c13.l), 'C13 Admin: ô Doanh thu không mở trang Hoa hồng');
+
+  console.log('— ADMIN · DOANH THU (v2.7.1) —');
+  var actx=await browser.newContext({viewport:{width:393,height:852}, deviceScaleFactor:2, hasTouch:true, isMobile:true});
+  await actx.route(/fontshare|fonts\.googleapis|fonts\.gstatic/, function(r){ r.fulfill({status:200, contentType:'text/css', body:''}); });
+  var ap=await actx.newPage(); ap.on('pageerror', function(e){ errs.push('admin: '+String(e)); });
+  await ap.goto('http://localhost:'+PORT+'/?demo'); await ap.waitForSelector('#p-pin.on'); await ap.waitForTimeout(400);
+  for(var k2 of '0000') await ap.click('#pin-pad button:has-text("'+k2+'")');
+  await ap.waitForFunction(function(){ return state.screen==='p-home' && state.admin && state.stats && state.stats.sess; }, null, {timeout:8000}); await ap.waitForTimeout(1200);
+  var a1=await ap.evaluate(function(){ var t=document.querySelector('#h-tiles .tile:nth-child(4)'), m=TODAY_ISO.slice(0,7);
+    return {l:t.querySelector('.tl').textContent, v:t.querySelector('.tv').textContent.replace(/\s+/g,' ').trim(), want:fmtTr(state.stats.comMon[m])+' TR', rev:fmtTr(state.stats.rev.total)+' TR'}; });
+  check(a1.l==='Doanh thu' && a1.v===a1.want && a1.want!==a1.rev, 'A1 ô Doanh thu = doanh thu tháng này từ SESSION LOG (không còn dòng Tổng tab COM): '+a1.v);
+  await ap.click('#h-tiles .tile:nth-child(4)'); await ap.waitForFunction(function(){ return state.screen==='p-com' && document.getElementById('p-com').classList.contains('on'); }, null, {timeout:6000}); await ap.waitForTimeout(1000);
+  var a2=await ap.evaluate(function(){ var s=state.stats, m=TODAY_ISO.slice(0,7), by={}; s.sess.forEach(function(x){ by[x.d]=(by[x.d]||0)+x.c; });
+    var pane=document.querySelectorAll('#cm-track .wkp')[1];
+    return {title:document.getElementById('cm-title').textContent, mon:document.getElementById('cm-mon').textContent, total:document.getElementById('cm-total').textContent, want:fmtVnd(s.comMon[m]),
+      pillsOk:[].every.call(pane.querySelectorAll('.pd'), function(b){ var d=b.getAttribute('data-d'); return b.querySelector('.pv').textContent===(by[d]?fmtK(by[d]):'-'); }),
+      rows:[].map.call(document.querySelectorAll('#cm-list .cmr'), function(r){ return [].map.call(r.children, function(c){ return c.textContent; }).join('|'); }).join(','),
+      wantRows:s.sess.filter(function(x){ return x.d===TODAY_ISO; }).map(function(x){ return (x.t||'—')+'|'+x.n+'|'+fmtVnd(x.c); }).join(','),
+      dash:s.sess.some(function(x){ return x.d===TODAY_ISO && !x.t; }), day:document.querySelector('#cm-list .cmday .v').textContent, dayT:fmtVnd(by[TODAY_ISO]||0)}; });
+  check(a2.title==='Doanh thu' && a2.total===a2.want && /^THÁNG /.test(a2.mon), 'A2 trang Doanh thu: tiêu đề + tổng tháng '+a2.total);
+  check(a2.pillsOk && a2.day===a2.dayT, 'A3 dải tuần = doanh thu theo ngày, dòng ngày '+a2.day);
+  check(a2.rows===a2.wantRows && a2.dash, 'A4 các buổi hôm nay (mọi coach, giờ ký, "—" nhập tay): '+a2.rows.split(',').length+' buổi');
+  if(process.env.SHOT) await ap.screenshot({path:path.join(OUT, 'admin-dt.png')});
+  await ap.click('#p-com .nav .ghost'); await ap.waitForFunction(function(){ return state.screen==='p-home'; }, null, {timeout:6000});
+  await actx.close();
 
   check(errs.length===0, 'Không pageerror'+(errs.length?': '+errs.join(' | '):''));
   console.log('\n'+pass+'/'+(pass+fail)+' PASS'+(fail?' · '+fail+' FAIL':''));

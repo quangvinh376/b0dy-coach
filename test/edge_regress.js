@@ -64,7 +64,9 @@ async function measure(root, port, vp){
     var tag=vp.width+'×'+vp.height;
     if(a._errs.length) fails.push(tag+' base pageerror: '+a._errs.join(' | '));
     if(b._errs.length) fails.push(tag+' v2.4 pageerror: '+b._errs.join(' | '));
-    function cmp(k, f, g, lab){ var x=f(a[k]), y=f(b[k]); var ok=(x==null&&y==null) || (x!=null&&y!=null&&Math.abs(x-y)<=TOL);
+    /* v2.7.1 — khác biệt CỐ Ý: danh sách dòng + phần mở rộng (Hiệu suất tập) có khoảng thở cuối = một dòng (51px), như Khách hàng → cuộn hết dòng cuối lên 51px */
+    var INTENDED={'perf|cuối danh sách (cuộn hết) đáy':-51, 'perf|quãng cuộn tối đa':51};
+    function cmp(k, f, g, lab){ var x=f(a[k]), y=f(b[k]), dv=INTENDED[k+'|'+lab]||0; var ok=(x==null&&y==null) || (x!=null&&y!=null&&(Math.abs(x-y)<=TOL || (dv && Math.abs((y-x)-dv)<=TOL)));
       rows.push((ok?'  ok ':'  XX ')+tag+' '+k+' '+lab+': '+x+' → '+y); if(!ok) fails.push(tag+' '+k+' '+lab+': '+x+' → '+y); }
     ['home'].forEach(function(k){ ['head','tiles','nav','bars'].forEach(function(p){ [0,1,2,3].forEach(function(i){ cmp(k, function(o){ return o[p]&&o[p][i]; }, null, p+'['+i+']'); }); }); });
     ['clients','profile','measure','perf','csheet','pick','lib','plan'].forEach(function(k){
