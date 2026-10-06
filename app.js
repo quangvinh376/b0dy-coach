@@ -7,7 +7,7 @@
    ===================================================================== */
 'use strict';
 var $=function(id){ return document.getElementById(id); };
-var APP_VER='v2.6.1';
+var APP_VER='v2.6.2';
 
 /* ---------------- tiện ích ---------------- */
 function isoToday(d){ d=d||new Date(); return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2); }
@@ -1543,6 +1543,18 @@ function perfHist(m){
   Object.keys(h).forEach(function(ex){ h[ex].sort(function(a,b){ return a.d<b.d?1:a.d>b.d?-1:0; }); });
   return h;
 }
+/* Hiệu suất tập (v2.6.2): mỗi ngày chỉ MỘT dòng = set cao nhất của bài trong ngày đó (khớp Figma 493:2335).
+   Set cao nhất = set Đạt có mức tạ lớn nhất, bằng tạ thì nhiều rep hơn; ngày không có set Đạt nào → set nặng nhất, tô đỏ (.er). */
+function perfBetter(a, b){ return (a.kg-b.kg) || (a.rep-b.rep); }
+function perfDays(rows){
+  var by={}, out=[];
+  (rows||[]).forEach(function(r){ if(!r || !r.d) return; var k=String(r.d).slice(0,10), cur=by[k];
+    var c={d:k, kg:+r.kg||0, rep:+r.rep||0, ok:r.ok?1:0};
+    if(!cur || (c.ok && !cur.ok) || (c.ok===cur.ok && perfBetter(c, cur)>0)) by[k]=c; });
+  Object.keys(by).forEach(function(k){ out.push(by[k]); });
+  return out.sort(function(a,b){ return a.d<b.d?1:a.d>b.d?-1:0; });
+}
+function perfRowsHtml(rows){ return perfDays(rows).slice(0,12).map(function(r){ return '<div class="kv"><span>'+vnLong(r.d)+'</span><span class="v'+(r.ok?'':' er')+'">'+r.rep+' × '+fmtN(r.kg)+'<i>KG</i></span></div>'; }).join(''); }
 function renderPerf(animate){
   var m=state.client, q=norm($('pe-q').value), el=$('pe-list'), hist=perfHist(m); el.innerHTML=''; var i=0, any=false;
   var hasData=Object.keys(hist).some(function(ex){ return (hist[ex]||[]).length; });
@@ -1555,14 +1567,14 @@ function renderPerf(animate){
       var rows=hist[e.name]||[], b=document.createElement('button'); b.className='row r51'+(animate?' rowin':''); if(animate) b.style.animationDelay=Math.min(i++*20,240)+'ms';
       b.innerHTML='<span class="lt"><span class="nm mq"><span>'+esc(exShort(e.name))+'</span></span></span>'+ico('i-chev','dn');
       var sub=document.createElement('div'); sub.className='xp';
-      sub.innerHTML=rows.slice(0,12).map(function(r){ return '<div class="kv"><span>'+vnLong(r.d)+'</span><span class="v'+(r.ok?'':' er')+'">'+r.rep+' × '+fmtN(r.kg)+'<i>KG</i></span></div>'; }).join('');
+      sub.innerHTML=perfRowsHtml(rows);
       b.onclick=function(){ b.classList.toggle('open'); setTimeout(function(){ fogUpdate(el); },20); };
       el.appendChild(b); el.appendChild(sub);
     });
   });
   Object.keys(hist).forEach(function(ex){ if(libEntries().some(function(e){return e.name===ex})) return; if(q && norm(ex).indexOf(q)<0) return; any=true;
     var b=document.createElement('button'); b.className='row'; b.innerHTML='<span class="lt"><span class="nm mq"><span>'+esc(exShort(ex))+'</span></span><span class="lab">BÀI CŨ</span></span>'+ico('i-chev','dn');
-    var sub=document.createElement('div'); sub.className='xp'; sub.innerHTML=hist[ex].slice(0,12).map(function(r){ return '<div class="kv"><span>'+vnLong(r.d)+'</span><span class="v'+(r.ok?'':' er')+'">'+r.rep+' × '+fmtN(r.kg)+'<i>KG</i></span></div>'; }).join('');
+    var sub=document.createElement('div'); sub.className='xp'; sub.innerHTML=perfRowsHtml(hist[ex]);
     b.onclick=function(){ b.classList.toggle('open'); setTimeout(function(){ fogUpdate(el); },20); }; el.appendChild(b); el.appendChild(sub); });
   if(!any){ var e=document.createElement('div'); e.className='lab empty'; e.textContent=q?'KHÔNG TÌM THẤY BÀI NÀY':'CHƯA CÓ DỮ LIỆU NÀO'; el.appendChild(e); }
   fogUpdate(el); if(!animate) mqInit(el);
