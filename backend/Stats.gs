@@ -65,10 +65,9 @@ function statsPcAdd_(pc, d, ctx){
   if (n > ctx.tN - 28) pc.n28 = (pc.n28 || 0) + 1;
   if (!pc.lastAll || d > pc.lastAll) pc.lastAll = d;
 }
-/* "08:00 – 09:00" | Date (ô định dạng giờ) → "08:00" */
-function statsSlot_(v){
-  if (v instanceof Date) return Utilities.formatDate(v, STATS_TZ, 'HH:mm');
-  var m = String(v || '').match(/(\d{1,2}):(\d{2})/); return m ? ('0' + m[1]).slice(-2) + ':' + m[2] : '';
+/* v2.7.1: giờ KÝ THẬT trên app — cột N "app 08:12 · ký: Quyết" → "08:12" (dòng nhập tay, không có vết app → '') */
+function statsSigned_(v){
+  var m = String(v || '').match(/app\s+(\d{1,2}):(\d{2})/i); return m ? ('0' + m[1]).slice(-2) + ':' + m[2] : '';
 }
 /* MEMBERS — mã HV · tên · đơn giá buổi · coach · buổi/tuần · người bán gói · ngày bán hộ · còn lại. Tìm cột theo tên (bỏ dấu). */
 function statsMem_(ba){
@@ -139,7 +138,7 @@ function statsApi_(body){
       if (d.slice(0, 7) === month) { out.days[d] = (out.days[d] || 0) + 1; out.monthTotal++; pc.m++; }
       if (d < today && d > pc.last) pc.last = d;
       statsPcAdd_(pc, d, ctx);
-      if (d >= cFrom && d <= today) raw.push({ d: d, t: statsSlot_(r[3]), n: name, id: String(r[7] || '').trim(), co: String(r[4] || '').trim() });
+      if (d >= cFrom && d <= today) raw.push({ d: d, t: statsSigned_(r[13]), n: name, id: String(r[7] || '').trim(), co: String(r[4] || '').trim(), r: i });
     }
   }
 
@@ -151,17 +150,19 @@ function statsApi_(body){
     raw.forEach(function (x) {
       var m = mem ? (mem.byId[x.id] || statsMemByName_(mem, x.n, key)) : null;
       var c = (m ? m.price : 0) * statsPctOf_(pct, x.co || coach, myPct);
-      sess.push({ d: x.d, t: x.t, n: x.n, c: Math.round(c) });
+      sess.push({ d: x.d, t: x.t, n: x.n, c: Math.round(c), r: x.r });
       mon[x.d.slice(0, 7)] = (mon[x.d.slice(0, 7)] || 0) + c;
     });
     if (mem) mem.rows.forEach(function (m) {
       if (!m.sold || m.sold < cFrom || m.sold > today) return;
       if (statsCoachKey_(m.seller) !== key || statsCoachKey_(m.coach) === key) return;
       var c = m.price * myPct;
-      sess.push({ d: m.sold, t: '', n: m.name, c: Math.round(c), b: 1 });
+      sess.push({ d: m.sold, t: '', n: m.name, c: Math.round(c), b: 1, r: 1e9 });
       mon[m.sold.slice(0, 7)] = (mon[m.sold.slice(0, 7)] || 0) + c;
     });
-    sess.sort(function (a, b) { return a.d < b.d ? -1 : a.d > b.d ? 1 : ((a.b || 0) - (b.b || 0)) || (a.t < b.t ? -1 : a.t > b.t ? 1 : a.n.localeCompare(b.n, 'vi')); });
+    /* v2.7.1: trong ngày giữ ĐÚNG thứ tự dòng SESSION LOG; bán hộ cuối ngày */
+    sess.sort(function (a, b) { return a.d < b.d ? -1 : a.d > b.d ? 1 : ((a.b || 0) - (b.b || 0)) || (a.r - b.r) || a.n.localeCompare(b.n, 'vi'); });
+    sess.forEach(function (x) { delete x.r; });
     for (var mk in mon) mon[mk] = Math.round(mon[mk]);
     out.sess = sess; out.comMon = mon;
     if (mem) { out.plan = {}; mem.rows.forEach(function (m) { if (statsCoachKey_(m.coach) !== key) return; if (!(m.name in out.plan) || m.left > 0) out.plan[m.name] = m.plan; }); }

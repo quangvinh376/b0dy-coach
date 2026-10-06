@@ -289,9 +289,11 @@ function admStats_(p) {
   var ix = (ba === chkSS_()) ? admLogB_() : null;
   var log = ix ? ix.log : ba.getSheetByName('SESSION LOG');
   var ctx = statsCtx_(today); out.w0 = ctx.w0;                        /* v2.7: w8/n28/lastAll cho trang Khách tập chậm */
+  var cFrom = statsPrevMonth_(month) + '-01', raw = [];                /* v2.7.1: trang Doanh thu — buổi từ đầu tháng trước */
+  out.comFrom = cFrom;
   if (log) {
     var r1 = ix ? ix.R1 : 1, nr = ix ? (ix.last - ix.R1 + 1) : log.getLastRow();
-    var vals = nr > 0 ? log.getRange(r1, 2, nr, 10).getValues() : [];      /* B..K */
+    var vals = nr > 0 ? log.getRange(r1, 2, nr, 13).getValues() : [];      /* B..N */
     for (var i = 0; i < vals.length; i++) {
       var r = vals[i], d = statsIso_(r[0], tz), name = String(r[5] || '').trim(), st = String(r[9] || '');
       if (!d || !name) continue;
@@ -300,11 +302,24 @@ function admStats_(p) {
       if (d.slice(0, 7) === month) { out.days[d] = (out.days[d] || 0) + 1; out.monthTotal++; pc.m++; }
       if (d < today && d > pc.last) pc.last = d;
       statsPcAdd_(pc, d, ctx);
+      if (d >= cFrom && d <= today) raw.push({ d: d, t: statsSigned_(r[12]), n: name, id: String(r[6] || '').trim(), co: String(r[3] || '').trim(), r: i });
     }
   }
   try {                                                               /* v2.7: buổi/tuần đăng ký (MEMBERS) mọi khách */
     var memA = statsMem_(ba);
     if (memA) { out.plan = {}; memA.rows.forEach(function (m) { if (!(m.name in out.plan) || m.left > 0) out.plan[m.name] = m.plan; }); }
+    /* v2.7.1 — Doanh thu từng buổi = đơn giá buổi (MEMBERS theo mã HV) — cùng công thức cột "Doanh thu" tab COM.
+       sess giữ thứ tự dòng SESSION LOG trong ngày; comMon = doanh thu theo tháng (ô Doanh thu trang chủ + trang chi tiết). */
+    var sessA = [], monA = {}; monA[statsPrevMonth_(month)] = 0; monA[month] = 0;
+    raw.forEach(function (x) {
+      var m = memA ? (memA.byId[x.id] || statsMemByName_(memA, x.n, statsCoachKey_(x.co))) : null, c = m ? m.price : 0;
+      sessA.push({ d: x.d, t: x.t, n: x.n, c: Math.round(c), r: x.r });
+      monA[x.d.slice(0, 7)] = (monA[x.d.slice(0, 7)] || 0) + c;
+    });
+    sessA.sort(function (a, b) { return a.d < b.d ? -1 : a.d > b.d ? 1 : a.r - b.r; });
+    sessA.forEach(function (x) { delete x.r; });
+    for (var mk in monA) monA[mk] = Math.round(monA[mk]);
+    out.sess = sessA; out.comMon = monA;
   } catch (errP) { out.planError = String(errP).slice(0, 200); }
   T.lap('log');
 
