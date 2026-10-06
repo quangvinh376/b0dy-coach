@@ -7,7 +7,7 @@
    ===================================================================== */
 'use strict';
 var $=function(id){ return document.getElementById(id); };
-var APP_VER='v2.6.2';
+var APP_VER='v2.7.0';
 
 /* ---------------- tiện ích ---------------- */
 function isoToday(d){ d=d||new Date(); return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2); }
@@ -289,7 +289,7 @@ function refreshData(quiet){
   }).catch(function(){ if(ep!==AUTH_EP) return; state._refreshing=null; if(!quiet) notify('Máy chủ chậm', {err:true}); });
   return p;
 }
-var REFRESHABLE={'p-home':1,'p-clients':1,'p-profile':1,'p-pick':1,'p-confirm':1,'p-measure':1,'p-perf':1};
+var REFRESHABLE={'p-home':1,'p-clients':1,'p-profile':1,'p-pick':1,'p-confirm':1,'p-measure':1,'p-perf':1,'p-slow':1,'p-com':1};
 /* thống kê cho trang chủ + hiệu suất tập (action stats · Apps Script). Thiếu cũng không sao: ô hiện "—". */
 function refreshStats(quiet, again){
   if(state._stats) return state._stats;
@@ -308,6 +308,8 @@ function statsApply(res){
   if(state.screen==='p-home') renderHome(false);
   else if(state.screen==='p-perf') renderPerf(false);
   else if(state.screen==='p-confirm') HOOK['p-confirm'](null,true);
+  else if(state.screen==='p-slow') renderSlow(false);
+  else if(state.screen==='p-com') renderCom(false);
 }
 function loadStats(coach){ try{ var c=JSON.parse(ST('lb_stats_'+coach)||'null'); return c&&c.res?c.res:null; }catch(e){ return null; } }
 function logout(msg){ state.pin=''; setAdmin(false); hidePill(); SES('lb_pin',null); state.loading=false; state.clients=[]; state.stats=null; go('p-pin','back'); if(msg) setTimeout(function(){ pinError(msg); },300); }
@@ -386,11 +388,27 @@ function demoDb(){
   for(var i=1;i<=31;i++){ var iso=d0+'-'+pad2(i); if(iso>TODAY_ISO) break; if(i%7!==0) days[iso]=2+((i*7)%6); }
   var hist={}; hist[D[0].name]={'Lat Pulldown (Wide Pronated Grip)':[{d:'2026-08-25',kg:40,rep:12,ok:1},{d:'2026-09-08',kg:40,rep:12,ok:1},{d:'2026-09-22',kg:40,rep:12,ok:1}],'Seated Cable Row (Close Neutral Grip)':[{d:'2026-09-08',kg:55,rep:10,ok:1},{d:'2026-09-22',kg:55,rep:10,ok:0}]};
   var per={}; D.forEach(function(c,i){ per[c.name]={m:[12,11,9,7,0,3,0][i], last:['2026-09-16','2026-09-22','2026-09-20','2026-09-19','','2026-09-21',''][i]}; });
-  var perAll=JSON.parse(JSON.stringify(per)); perAll['Vũ Sao Mai']={m:3,last:'2026-09-23'}; perAll['Trần Minh Anh']={m:11,last:'2026-09-24'};
+  /* v2.7 — Khách tập chậm: hạn gói + nhịp tập tính theo hôm nay (demo luôn có 2 nhóm: hết hạn trong / sau 60 ngày) */
+  var tN=isoN(TODAY_ISO), rel=function(n){ return nIso(tN+n); };
+  [46,0,46,46,46,95,0].forEach(function(n,i){ if(n) D[i].exp=rel(n); }); E[1].exp=rel(46);
+  [[[2,3,2,2,1,1,1,1],4,3,2],[[1,2,1,1,2,1,1,0],4,8,2],[[2,1,2,2,1,2,2,1],6,1,2],[[0,1,1,0,1,1,0,1],3,2,2],[[0,0,0,0,0,0,0,0],0,0,3],[[1,1,0,1,1,0,1,0],2,6,2],[[0,0,0,0,0,0,0,0],0,0,2]]
+    .forEach(function(r,i){ var p=per[D[i].name]; p.w8=r[0]; p.n28=r[1]; p.lastAll=r[1]?rel(-r[2]):''; });
+  var plan={}; D.forEach(function(c,i){ plan[c.name]=[2,2,2,2,3,2,2][i]; });
+  var perAll=JSON.parse(JSON.stringify(per)); perAll['Vũ Sao Mai']={m:3,last:'2026-09-23',w8:[1,1,0,1,0,1,1,0],n28:3,lastAll:rel(-5)}; perAll['Trần Minh Anh']={m:11,last:'2026-09-24',w8:[3,3,2,3,3,2,3,1],n28:11,lastAll:rel(-1)};
+  var planAll=JSON.parse(JSON.stringify(plan)); planAll['Vũ Sao Mai']=2; planAll['Trần Minh Anh']=3;
+  /* v2.7 — Hoa hồng từng buổi: đầu tháng trước → hôm nay (số tiền giả); tháng này khớp số buổi stats.days, thêm 2 dòng bán hộ */
+  var cm0=d0, sess=[], comMon={}, TM=['06:00','07:00','08:30','16:30','17:30','18:30','19:30','20:30'], PR=[135000,150000,126000,112500,120000], WHO=[0,1,2,3,5];
+  var cFrom=(function(){ var y=+d0.slice(0,4), mo=+d0.slice(5,7)-1; if(!mo){ y--; mo=12; } return y+'-'+pad2(mo)+'-01'; })();
+  for(var n=isoN(cFrom); n<=tN; n++){ var di=nIso(n), dd=+di.slice(8,10); if(dd%7===0) continue;
+    var cnt= di.slice(0,7)===cm0 ? days[di] : 2+((dd*5)%6);
+    for(var k=0;k<cnt;k++){ var ci0=(dd+k*3)%5; sess.push({d:di, t:TM[k], n:D[WHO[ci0]].name, c:PR[ci0]}); }
+    if(dd===3 || dd===17) sess.push({d:di, t:'', n:dd===3?E[1].name:'Nguyễn Thành Long', c:dd===3?600000:450000, b:1});
+  }
+  sess.forEach(function(x){ var mm=x.d.slice(0,7); comMon[mm]=(comMon[mm]||0)+x.c; });
   var daysAll={}; Object.keys(days).forEach(function(k){ daysAll[k]=days[k]*3; });
   var ci={checked:{}, at:{}}; try{ ci=JSON.parse(SES('demo_ci')||'null')||ci; }catch(e){}   /* demo: check-in hôm nay giữ qua reload (như máy chủ thật) */
-  DEMO_DB={clients:D.concat(E), checked:ci.checked||{}, at:ci.at||{}, log:[], stats:{ok:true, month:d0, days:days, perClient:per, com:{month:d0,total:9769250}, hist:hist},
-           astats:{ok:true, admin:true, month:d0, days:daysAll, perClient:perAll, rev:{month:d0,total:96500000}, hist:hist}};
+  DEMO_DB={clients:D.concat(E), checked:ci.checked||{}, at:ci.at||{}, log:[], stats:{ok:true, month:d0, days:days, perClient:per, com:{month:d0,total:9769250}, hist:hist, w0:nIso(isoN(wkStart(TODAY_ISO))-49), plan:plan, sess:sess, comMon:comMon, comFrom:cFrom},
+           astats:{ok:true, admin:true, month:d0, days:daysAll, perClient:perAll, rev:{month:d0,total:96500000}, hist:hist, w0:nIso(isoN(wkStart(TODAY_ISO))-49), plan:planAll}};
   return DEMO_DB;
 }
 function demoApi(body){
@@ -528,7 +546,7 @@ var FOG_TOP=32, FOG_BOT=72;
    Danh sách .ex (mép cuộn iOS) tràn tới đáy màn hình → cộng thêm chiều cao thanh đáy (--bz) để phần tử cuối vẫn dừng đúng chỗ cũ. */
 function tailPad(el){
   if(el.id==='pl-scroll') return;
-  var lc=el.lastElementChild; while(lc && lc.lastElementChild && /\b(exrows|rows|next)\b/.test(lc.className)) lc=lc.lastElementChild;
+  var lc=el.lastElementChild; while(lc && lc.lastElementChild && /\b(exrows|rows|next|cmdet|cms)\b/.test(lc.className)) lc=lc.lastElementChild;   /* v2.7: trang Hoa hồng → dòng buổi cuối */
   var pad=lc ? Math.round(lc.getBoundingClientRect().height) : 0;
   if(el._tp!==pad){ el._tp=pad; el.style.paddingBottom=el.classList.contains('ex') ? 'calc(var(--bz,0px) + '+pad+'px)' : pad+'px'; }
 }
@@ -1273,7 +1291,7 @@ function adminLogout(){ logout(); }
    ===================================================================== */
 function monthOf(iso){ return iso.slice(0,7); }
 function statsFor(name){ var s=state.stats; return (s && s.perClient && s.perClient[name]) || null; }
-function slowClients(){ var s=state.stats; if(!s||!s.perClient) return null; return state.clients.filter(function(c){ var p=s.perClient[c.name]; return c.left>0 && p && (+p.m||0)<10; }); }
+/* slowClients()/slowList(): định nghĩa v2.7 ở mục 1d (trang Khách tập chậm) */
 HOOK['p-home']=function(dir, quiet){ renderHome(!quiet); };
 function homeRange(r){ state.homeRange=r; $('h-7d').classList.toggle('on', r==='7d'); $('h-1m').classList.toggle('on', r==='1m'); renderBars(true); }
 /* tween số: từ from → to trong dur ms, ease-out cubic (cùng ngôn ngữ countUp). Huỷ tween cũ trên cùng phần tử. */
@@ -1311,20 +1329,21 @@ function renderHome(animate){
   var active=state.clients.filter(function(c){ return c.left>0; }).length;
   var slow=slowClients(), today=state.clients.filter(function(c){ return c.checked || (ciFor(c.name)&&ciFor(c.name).status==='ok'); }).length;
   /* ô tiền: coach = Hoa hồng của mình (tab COM) · Admin = Doanh thu cả phòng (dòng Tổng tab COM). Tháng COM khác tháng này → ghi rõ "T8". */
-  var com=state.admin ? (s && s.rev && s.rev.total!=null ? s.rev : null) : (s && s.com && s.com.total!=null ? s.com : null),
+  /* v2.7: coach = hoa hồng tính thẳng từ SESSION LOG tháng này (stats.comMon, khớp trang Hoa hồng); máy chủ cũ → tab COM */
+  var com=state.admin ? (s && s.rev && s.rev.total!=null ? s.rev : null) : (s && s.comMon && s.comMon[m]!=null ? {month:m, total:s.comMon[m]} : (s && s.com && s.com.total!=null ? s.com : null)),
       comLab=(state.admin?'Doanh thu':'Hoa hồng')+(com && com.month && com.month!==m ? ' T'+(+com.month.slice(5,7)) : '');
   var tiles=[
     {l:'Tổng số khách', v:state.loading?'—':String(active), ic:'t-people', go:'p-clients'},
-    {l:'Khách tập chậm', v:slow?String(slow.length):'—', ic:'t-trend', go:'p-clients', q:'slow'},
+    {l:'Khách tập chậm', v:slow?String(slow.length):'—', ic:'t-trend', go:'p-slow'},
     {l:'Khách hôm nay', v:state.loading?'—':String(today), ic:'t-bar', acid:true, go:'p-clients', q:'today'},
-    {l:comLab, v:com?fmtTr(com.total):'—', small:com?'TR':'', ic:'t-dong', thin:true}
+    {l:comLab, v:com?fmtTr(com.total):'—', small:com?'TR':'', ic:'t-dong', thin:true, go:state.admin?'':'p-com'}
   ];
   var el=$('h-tiles'); el.innerHTML='';
   tiles.forEach(function(t,i){
     var b=document.createElement('button'); b.className='tile'+(t.acid?' acid':'')+(animate?' rowin':''); if(animate) b.style.animationDelay=(120+i*50)+'ms';
     b.innerHTML='<div><div class="tl">'+t.l+'</div><div class="tv"><span class="n">'+t.v+'</span>'+(t.small?'<small> '+t.small+'</small>':'')+'</div></div>'+ico(t.ic, t.thin?'thin':'');
     if(animate && /^\d+$/.test(t.v)) countUp(b.querySelector('.n'), +t.v, 600, 300+i*60);
-    if(t.go) b.onclick=function(){ if(t.q==='slow'||t.q==='today') openClientSheet(t.q); else { state.clFilter=t.q||''; go(t.go,'fwd'); } };
+    if(t.go) b.onclick=function(){ if(t.q==='today') openClientSheet(t.q); else if(t.go==='p-clients'){ state.clFilter=t.q||''; go(t.go,'fwd'); } else go(t.go,'fwd'); };
     el.appendChild(b);
   });
   $('h-go').textContent= loadSession() ? 'Tiếp tục buổi tập' : 'Vào buổi tập';
@@ -1579,6 +1598,183 @@ function renderPerf(animate){
   if(!any){ var e=document.createElement('div'); e.className='lab empty'; e.textContent=q?'KHÔNG TÌM THẤY BÀI NÀY':'CHƯA CÓ DỮ LIỆU NÀO'; el.appendChild(e); }
   fogUpdate(el); if(!animate) mqInit(el);
 }
+
+/* =====================================================================
+   1d — KHÁCH TẬP CHẬM (v2.7 · trang riêng, thay cửa sổ · Figma 621:336 / 621:400)
+   Chậm = giữ tempo 4 tuần gần nhất thì tới ngày hết hạn gói còn dư ≥ SLOW_MIN buổi. Gói mới < 14 ngày: chưa đủ dữ liệu → bỏ qua.
+   tempo = buổi 28 ngày qua ÷ (min(28, số ngày từ khi bắt đầu) / 7) · cần = còn lại ÷ số tuần tới hạn · dư = còn lại − tempo × số tuần tới hạn.
+   Số liệu: stats.perClient[tên] = {w8 (8 tuần, tuần này cuối), n28, lastAll} + stats.plan[tên] (Buổi/tuần MEMBERS) + khách (left · start · exp).
+   Máy chủ chưa có w8 (bản cũ / cache cũ) → định nghĩa cũ (< 10 buổi trong tháng), dòng mở hồ sơ như trước.
+   ===================================================================== */
+var SLOW_MIN=2, SLOW_SOON=60;
+function isoN(iso){ var m=String(iso||'').match(/^(\d{4})-(\d{2})-(\d{2})/); return m ? Date.UTC(+m[1],+m[2]-1,+m[3])/864e5 : NaN; }
+function nIso(n){ var d=new Date(n*864e5); return d.getUTCFullYear()+'-'+pad2(d.getUTCMonth()+1)+'-'+pad2(d.getUTCDate()); }
+function dayIso(v){ var s=String(v||'').trim(), m;
+  if((m=s.match(/^(\d{4})-(\d{2})-(\d{2})/))) return m[1]+'-'+m[2]+'-'+m[3];
+  if((m=s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2}|\d{4})$/))) return (m[3].length===2?'20'+m[3]:m[3])+'-'+pad2(m[2])+'-'+pad2(m[1]);   /* dd/mm/yy(yy) */
+  return ''; }
+function ddmm(iso){ return iso ? iso.slice(8,10)+'/'+iso.slice(5,7) : ''; }
+function wdOf(iso){ return new Date(isoN(iso)*864e5).getUTCDay(); }
+function wkStart(iso){ return nIso(isoN(iso)-((wdOf(iso)+6)%7)); }
+function slowWeeks(){ var s=state.stats; if(!s||!s.perClient) return false; if(s.w0) return true; for(var k in s.perClient) if(s.perClient[k].w8) return true; return false; }
+function slowInfo(c){
+  var s=state.stats; if(!s || !(c.left>0)) return null;
+  var exp=dayIso(c.exp||c.end); if(!exp) return null;
+  var p=(s.perClient && s.perClient[c.name])||{}, tN=isoN(TODAY_ISO), st=isoN(dayIso(c.start));
+  var since=isNaN(st) ? 28 : tN-st+1; if(since<14) return null;
+  var rate=(+p.n28||0)/(Math.min(28, since)/7), days=isoN(exp)-tN, wl=Math.max(0, days/7);
+  var plan=+((s.plan && s.plan[c.name])||0);
+  return {m:c, rate:rate, need: wl>0 ? c.left/wl : Infinity, wl:wl, exp:exp, days:days, extra:Math.max(0, c.left-rate*wl),
+          plan:plan, extraPlan: plan>0 && wl>0 ? c.left-plan*wl : null, w8:p.w8||[0,0,0,0,0,0,0,0], last:p.lastAll||p.last||''};
+}
+function slowList(){
+  var s=state.stats; if(!s || !s.perClient) return null;
+  if(!slowWeeks()) return state.clients.filter(function(c){ var p=s.perClient[c.name]; return c.left>0 && p && (+p.m||0)<10; }).map(function(c){ return {m:c, old:1}; });
+  return state.clients.map(slowInfo).filter(function(i){ return i && Math.round(i.extra)>=SLOW_MIN; }).sort(function(a,b){ return b.extra-a.extra || a.days-b.days; });
+}
+function slowClients(){ var l=slowList(); return l ? l.map(function(i){ return i.m; }) : null; }
+var SL_OPEN={};
+HOOK['p-slow']=function(dir, quiet){ if(!quiet){ $('sl-q').value=''; SL_OPEN={}; } renderSlow(!quiet); if(!slowWeeks() && !state.loading) refreshStats(true); };
+function slowMeta(i){ return i.old ? clientMeta(i.m) : 'DƯ ~'+Math.round(i.extra)+' BUỔI · HẾT '+ddmm(i.exp); }
+function slowDetail(i){
+  var w=i.w8, fin=isFinite(i.need), mx=Math.max.apply(null, w.concat([fin?i.need:0, 1]))*1.25, H=64, bars='', nums='';
+  w.forEach(function(v,k){ var c= k===7 ? 'cur' : (v?'':'z');
+    bars+='<i class="'+c+'" style="height:'+(v?Math.max(2,Math.round(v/mx*H)):1)+'px;transition-delay:'+(k*24)+'ms"></i>';
+    nums+='<span class="'+c+'">'+v+'</span>'; });
+  var w0=(state.stats && state.stats.w0) || nIso(isoN(wkStart(TODAY_ISO))-49);
+  var kv=[['Tempo hiện tại', (i.rate ? fmt1(i.rate) : '0')+' BUỔI/TUẦN'], ['Tempo cần đạt', fin ? fmt1(i.need)+' BUỔI/TUẦN' : '—']];
+  if(i.extraPlan!=null && Math.round(i.extraPlan)>=1) kv.push(['Tập đúng lịch '+i.plan+' buổi/tuần', 'VẪN DƯ ~'+Math.round(i.extraPlan)+' BUỔI']);
+  kv.push(['Hết hạn', vnFull(i.exp)], ['Buổi gần nhất', i.last ? ddmm(i.last) : 'CHƯA CÓ'], ['Dự báo', 'DƯ ~'+Math.round(i.extra)+' BUỔI', 'er']);
+  return '<div class="wkc"><div class="wkh"><span class="lab">8 TUẦN GẦN NHẤT</span>'+(fin?'<span class="lab acid">CẦN '+fmt1(i.need)+' BUỔI/TUẦN</span>':'')+'</div>'
+    +'<div class="wkb">'+bars+(fin?'<b class="need" style="bottom:'+Math.round(i.need/mx*H)+'px"></b>':'')+'</div>'
+    +'<div class="wkn">'+nums+'</div><div class="wka"><span class="lab">'+ddmm(w0)+'</span><span class="lab">TUẦN NÀY</span></div></div>'
+    +kv.map(function(r){ return '<div class="kv"><span>'+esc(r[0])+'</span><span class="v'+(r[2]?' '+r[2]:'')+'">'+r[1]+'</span></div>'; }).join('');
+}
+function slowOpen(b, x, i, anim){
+  b.classList.add('open'); x.innerHTML=slowDetail(i); var c=x.querySelector('.wkc');
+  if(!anim || rm()){ c.classList.add('in'); return; }
+  void c.offsetWidth; requestAnimationFrame(function(){ c.classList.add('in'); });
+}
+function renderSlow(animate){
+  var el=$('sl-list'), q=norm($('sl-q').value), all=slowList(), k=0; el.innerHTML='';
+  $('sl-q').closest('.search').hidden=!(all && all.length);
+  var list=(all||[]).filter(function(i){ return !q || norm(i.m.name).indexOf(q)>=0; });
+  if(!list.length){ var e=document.createElement('div'); e.className='lab empty'; e.textContent= !all ? 'ĐANG TẢI SỐ LIỆU' : (q && all.length ? 'KHÔNG TÌM THẤY TÊN NÀY' : 'KHÔNG CÓ KHÁCH TẬP CHẬM'); el.appendChild(e); fogUpdate(el); return; }
+  var groups= list[0].old ? [['KHÁCH TẬP CHẬM', list]]
+    : [['HẾT HẠN TRONG '+SLOW_SOON+' NGÀY', list.filter(function(i){ return i.days<=SLOW_SOON; })], ['HẾT HẠN SAU '+SLOW_SOON+' NGÀY', list.filter(function(i){ return i.days>SLOW_SOON; })]];
+  groups.forEach(function(g){ if(!g[1].length) return;
+    var d=document.createElement('div'); d.className='lab sec'; d.textContent=g[0]+' · '+g[1].length; el.appendChild(d);
+    g[1].forEach(function(i){
+      if(i.old){ el.appendChild(clientRow(i.m, animate, k++, slowMeta(i), function(){ var h=FX.heroPrep(this.querySelector('.nm'), firstName(i.m.name)); state.client=i.m; state.back='p-slow'; go('p-profile','fwd'); FX.heroFly(h, $('pf-name')); })); return; }
+      var b=clientRow(i.m, animate, k++, slowMeta(i), null, 'i-chev', 'dn'), x=document.createElement('div'); x.className='xp';
+      el.appendChild(b); el.appendChild(x);
+      if(SL_OPEN[i.m.name]) slowOpen(b, x, i, false);
+      b.onclick=function(){
+        if(b.classList.contains('open')){ b.classList.remove('open'); delete SL_OPEN[i.m.name]; }
+        else { SL_OPEN[i.m.name]=1; slowOpen(b, x, i, true); }
+        setTimeout(function(){ fogUpdate(el); },20);
+      };
+    });
+  });
+  fogUpdate(el); if(!animate) mqInit(el);
+}
+
+/* =====================================================================
+   1e — HOA HỒNG (v2.7 · trang riêng · Figma 628:496)
+   stats.sess = [{d, t, n, c, b}] buổi "Đã tập" (+ bán hộ b:1) từ đầu tháng trước tới hôm nay, c = đơn giá buổi × % coach (như tab COM);
+   stats.comMon = {'yyyy-mm': tổng}. Dải tuần 7 viên: ngày (nhỏ) · hoa hồng ngày (lớn), viên Acid = ngày đang chọn, chấm = hôm nay.
+   Vuốt ngang đổi tuần trong [tuần chứa đầu tháng trước, tuần này]; ngày chọn giữ thứ trong tuần (kẹp trong khoảng có dữ liệu).
+   ===================================================================== */
+var CM={sel:'', wk:''}, VN_WD=['Chủ nhật','Thứ hai','Thứ ba','Thứ tư','Thứ năm','Thứ sáu','Thứ bảy'];
+function fmtVnd(v){ return String(Math.round(+v||0)).replace(/\B(?=(\d{3})+(?!\d))/g,'.'); }
+function fmtK(v){ v=+v||0; return v>=1e6 ? fmt1(v/1e6)+'TR' : Math.round(v/1000)+'K'; }
+function comData(){
+  var s=state.stats; if(!s || !s.sess) return null;
+  if(CM.src===s.sess) return CM.data;
+  var by={}; s.sess.forEach(function(x){ var o=by[x.d]||(by[x.d]={t:0,l:[]}); o.t+=+x.c||0; o.l.push(x); });
+  CM.src=s.sess; CM.data={by:by, from:dayIso(s.comFrom)||(TODAY_ISO.slice(0,7)+'-01'), mon:s.comMon||{}};
+  return CM.data;
+}
+function comBounds(D){ var from=D ? D.from : TODAY_ISO.slice(0,7)+'-01'; return {from:from, min:wkStart(from), max:wkStart(TODAY_ISO)}; }
+function comClamp(d, B){ return d>TODAY_ISO ? TODAY_ISO : d<B.from ? B.from : d; }
+HOOK['p-com']=function(dir, quiet){ if(!quiet){ CM.sel=TODAY_ISO; CM.wk=wkStart(TODAY_ISO); } renderCom(!quiet); if(!(state.stats && state.stats.sess) && !state.loading) refreshStats(true); };
+function tweenVnd(el, to, dur){
+  if(el._tw) cancelAnimationFrame(el._tw); el._tw=0;
+  if(rm() || !(dur>0)){ el.textContent=fmtVnd(to); return; }
+  var t0=performance.now(); (function f(t){ var p=Math.min(1,(t-t0)/dur); p=1-Math.pow(1-p,3); el.textContent=fmtVnd(to*p); el._tw= p<1 ? requestAnimationFrame(f) : 0; })(t0);
+}
+function comHero(D, animate){
+  var mon=CM.sel.slice(0,7), v= D && D.mon[mon]!=null ? D.mon[mon] : null, el=$('cm-total'), key=mon+'|'+v;
+  $('cm-mon').textContent='THÁNG '+(+mon.slice(5,7))+'/'+mon.slice(0,4);
+  if(el._k===key) return; var first=!el._k; el._k=key;
+  if(v==null){ el.textContent='—'; return; }
+  if(animate && first) tweenVnd(el, v, 600); else { if(el._tw){ cancelAnimationFrame(el._tw); el._tw=0; } el.textContent=fmtVnd(v); }
+}
+function comPane(D, B, ws){
+  if(!ws || ws<B.min || ws>B.max) return '<div class="wkp"></div>';
+  var h='';
+  for(var k=0;k<7;k++){
+    var d=nIso(isoN(ws)+k), o=D && D.by[d], off= d>TODAY_ISO || d<B.from, v=o ? o.t : 0;
+    var c='pd'+(d===CM.sel?' on':'')+(d===TODAY_ISO?' today':'')+(off?' off':'')+(k===6 && !v?' dim':'');
+    h+='<button class="'+c+'" data-d="'+d+'"'+(off?' tabindex="-1" aria-disabled="true"':'')+' aria-label="'+VN_WD[wdOf(d)]+' '+ddmm(d)+'">'
+      +'<span class="pn">'+d.slice(8,10)+'</span><span class="pv'+(v?'':' z')+'">'+(v?fmtK(v):'-')+'</span><i class="pdot"></i></button>';
+  }
+  return '<div class="wkp">'+h+'</div>';
+}
+function comStrip(D, B){
+  var tr=$('cm-track'); tr.classList.remove('go'); tr.style.transform='';
+  tr.innerHTML=comPane(D,B,nIso(isoN(CM.wk)-7))+comPane(D,B,CM.wk)+comPane(D,B,nIso(isoN(CM.wk)+7));
+}
+function comDetail(D, fade){
+  var el=$('cm-list'), d=CM.sel, o=D && D.by[d];
+  var h='<div class="cmdet'+(fade && !rm()?' sw':'')+'"><div class="cmday"><span class="d">'+VN_WD[wdOf(d)]+', '+ddmm(d)+'</span><span class="v">'+(D ? fmtVnd(o?o.t:0) : '—')+'</span></div>';
+  if(o && o.l.length) h+='<div class="cms">'+o.l.map(function(x){ return '<div class="cmr"><span class="t">'+(x.b||!x.t?'—':x.t)+'</span><span class="n">'+esc(x.b?'Bán hộ · '+x.n:x.n)+'</span><span class="v">'+fmtVnd(x.c)+'</span></div>'; }).join('')+'</div>';
+  else h+='<div class="lab empty">'+(D?'KHÔNG CÓ BUỔI NÀO':'ĐANG TẢI SỐ LIỆU')+'</div>';
+  el.innerHTML=h+'</div>'; el.scrollTop=0; fogUpdate(el);
+}
+function renderCom(animate){
+  var D=comData(), B=comBounds(D);
+  CM.sel=comClamp(CM.sel||TODAY_ISO, B);
+  if(!CM.wk || CM.wk>B.max || CM.wk<B.min) CM.wk=wkStart(CM.sel);
+  if(animate) $('cm-total')._k='';
+  comHero(D, animate); comStrip(D, B); comDetail(D, false);
+}
+function comPick(d){
+  if(d===CM.sel) return; CM.sel=d;
+  [].forEach.call($('cm-track').querySelectorAll('.pd'), function(b){ b.classList.toggle('on', b.getAttribute('data-d')===d); });
+  var D=comData(); comHero(D, false); comDetail(D, true);
+  if(navigator.vibrate) try{ navigator.vibrate(4); }catch(e){}
+}
+function comShift(dir){
+  var D=comData(), B=comBounds(D), wk=nIso(isoN(CM.wk)+7*dir); if(wk<B.min || wk>B.max) return;
+  CM.wk=wk; CM.sel=comClamp(nIso(isoN(CM.sel)+7*dir), B);
+  comStrip(D, B); comHero(D, false); comDetail(D, true);
+}
+/* vuốt ngang: dải đi theo ngón tay (1:1), nhả quá 18 % bề ngang → bắt sang tuần kế (260 ms --eo), không thì về chỗ; hết tuần thì kéo nặng (×0,25).
+   Chạm (không kéo) = chọn ngày. Kéo dọc → nhường cho cuộn trang. */
+(function(){
+  var wk=$('cm-wk'), tr=$('cm-track'); if(!wk) return;
+  var on=false, drag=false, moved=false, x0=0, y0=0, dx=0, W=0, pid=0;
+  wk.addEventListener('pointerdown', function(e){ if(e.button) return; on=true; drag=false; moved=false; x0=e.clientX; y0=e.clientY; dx=0; W=wk.clientWidth||1; pid=e.pointerId; });
+  wk.addEventListener('pointermove', function(e){
+    if(!on) return; var ddx=e.clientX-x0, ddy=e.clientY-y0;
+    if(!drag){ if(Math.abs(ddx)<8 && Math.abs(ddy)<8) return; if(Math.abs(ddy)>Math.abs(ddx)){ on=false; return; } drag=true; moved=true; tr.classList.remove('go'); try{ wk.setPointerCapture(pid); }catch(x){} }
+    var B=comBounds(comData()); dx=ddx; if((dx>0 && CM.wk<=B.min) || (dx<0 && CM.wk>=B.max)) dx*=0.25;
+    tr.style.transform='translateX(calc(-33.3333% + '+dx+'px))';
+  });
+  function end(){
+    if(!on) return; on=false; if(!drag) return; drag=false;
+    var B=comBounds(comData()), dir=0; if(dx<-W*0.18 && CM.wk<B.max) dir=1; else if(dx>W*0.18 && CM.wk>B.min) dir=-1;
+    if(rm()){ if(dir) comShift(dir); else tr.style.transform=''; return; }
+    tr.classList.add('go'); tr.style.transform= dir ? 'translateX('+(dir>0?'-66.6667%':'0%')+')' : '';
+    if(dir){ var done=false, fin=function(){ if(done) return; done=true; tr.removeEventListener('transitionend', fin); comShift(dir); }; tr.addEventListener('transitionend', fin); setTimeout(fin, 320); }
+  }
+  wk.addEventListener('pointerup', end); wk.addEventListener('pointercancel', end);
+  wk.addEventListener('click', function(e){
+    if(moved){ moved=false; e.preventDefault(); e.stopPropagation(); return; }
+    var b=e.target.closest('.pd'); if(!b || b.classList.contains('off')) return; comPick(b.getAttribute('data-d'));
+  }, true);
+})();
 
 /* =====================================================================
    2 — CHỌN KHÁCH (1 hoặc 2 khách một buổi)

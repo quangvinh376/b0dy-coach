@@ -685,6 +685,62 @@ body.adm .tab-adm{display:flex}
 #am-list .row .ghost.x{width:40px;height:40px;border-radius:20px}
 #am-list .row .ghost.x .ic{width:16px;height:16px;color:var(--paper)}
 
+/* ============ v2.7 — KHÁCH TẬP CHẬM (trang riêng · Figma 621:336 / 621:400) ============
+   Dòng + chevron mở tại chỗ y như Hiệu suất tập (.row .ic.dn · .xp vạch Acid). Khối 8 tuần: cột cao theo số buổi (tuần này Acid),
+   số dưới cột, vạch đứt Acid = tempo cần đạt. Cột mọc từ đáy (scaleY, chỉ transform) khi mở. */
+.wkc{padding-bottom:16px}
+.wkc .wkh{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:12px}
+.wkc .wkb{position:relative;height:64px;display:flex;align-items:flex-end;gap:12px}
+.wkc .wkb i{flex:1 1 0;min-width:0;display:block;background:var(--paper);transform-origin:50% 100%;transform:scaleY(0);transition:transform .36s var(--eo)}
+.wkc .wkb i.z{background:rgba(250,250,250,.16)}
+.wkc .wkb i.cur{background:var(--acid)}
+.wkc.in .wkb i{transform:scaleY(1)}
+.wkc .wkb .need{position:absolute;left:0;right:0;height:1px;background:linear-gradient(to right,var(--acid) 50%,transparent 50%) 0 0/8px 1px repeat-x;pointer-events:none}
+.wkc .wkn{display:flex;gap:12px;margin-top:8px}
+.wkc .wkn span{flex:1 1 0;min-width:0;text-align:center;font-family:var(--mono);font-size:11px;line-height:13px;letter-spacing:.88px;color:var(--paper);font-variant-numeric:tabular-nums}
+.wkc .wkn span.z{color:var(--slate)}
+.wkc .wkn span.cur{color:var(--acid)}
+.wkc .wka{display:flex;justify-content:space-between;margin-top:8px}
+.wkc .wka .lab{color:var(--slate)}
+
+/* ============ v2.7 — HOA HỒNG (trang riêng · Figma 628:496) ============
+   Số tổng tháng (Mono 24 + ₫) · dải tuần 7 viên vuốt ngang (3 tuần nối nhau, kéo theo ngón tay, nhả → bắt tuần) ·
+   ngày đang chọn = viên Acid · chấm = hôm nay · dòng ngày (vạch Acid trên) + các buổi. */
+.cm-hero{flex:none;margin-top:32px;padding-bottom:32px;display:flex;flex-direction:column;gap:8px}
+.cm-hero .lab{color:var(--paper55)}
+.cm-v{font-family:var(--mono);font-size:24px;line-height:23px;letter-spacing:-.72px;display:flex;align-items:baseline;gap:6px;font-variant-numeric:tabular-nums;color:var(--paper)}
+.cm-v i{font-style:normal;font-size:11px;line-height:13px;letter-spacing:.44px;color:var(--gray)}
+.wkv{flex:none;margin:0 calc(-1 * var(--rail));overflow:hidden;touch-action:pan-y;user-select:none;-webkit-user-select:none}
+.wkt{display:flex;width:300%;transform:translateX(-33.3333%)}
+.wkt.go{transition:transform .26s var(--eo)}
+.wkp{width:33.3333%;flex:none;padding:0 var(--rail);display:flex;gap:4px;box-sizing:border-box}
+.pd{flex:1 1 0;min-width:0;display:flex;flex-direction:column;align-items:center;gap:6px;padding:10px 0 12px;border-radius:24px;background:transparent;
+  transition:background-color .16s ease,transform .1s var(--eo)}
+.pd:active{transform:scale(.94)}
+.pd .pn{font-family:var(--mono);font-size:11px;line-height:13px;letter-spacing:.88px;color:var(--slate);transition:color .16s ease}
+.pd .pv{font-family:var(--mono);font-size:12px;line-height:14px;letter-spacing:.48px;color:var(--paper);white-space:nowrap;font-variant-numeric:tabular-nums;transition:color .16s ease}
+.pd .pv.z{color:var(--slate)}
+.pd .pdot{width:4px;height:4px;border-radius:2px;background:transparent}
+.pd.today .pdot{background:var(--acid)}
+.pd.on{background:var(--acid)}
+.pd.on .pn{color:var(--ink55)}
+.pd.on .pv{color:var(--ink)}
+.pd.on.today .pdot{background:var(--ink)}
+.pd.dim{opacity:.5}
+.pd.off{pointer-events:none}
+#cm-list{--lpt:24px}
+.cmday{display:flex;align-items:center;gap:12px;padding:12px 0;border-top:1px solid var(--acid)}
+.cmday .d{flex:1 1 0;min-width:0;color:var(--acid);font-size:16px;line-height:19px;letter-spacing:-.16px}
+.cmday .v{font-family:var(--mono);font-size:14px;line-height:17px;font-variant-numeric:tabular-nums;color:var(--paper)}
+.cms{padding:4px 0}
+.cmr{height:40px;display:flex;align-items:center;border-bottom:1px solid var(--hair)}
+.cmr:last-child{border-bottom:0}
+.cmr .t{width:56px;flex:none;font-family:var(--mono);font-size:14px;line-height:17px;color:var(--gray);font-variant-numeric:tabular-nums}
+.cmr .n{flex:1 1 0;min-width:0;font-size:16px;line-height:19px;letter-spacing:-.16px;color:var(--paper55);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cmr .v{margin-left:12px;font-family:var(--mono);font-size:14px;line-height:17px;font-variant-numeric:tabular-nums;color:var(--paper)}
+.cmdet.sw{animation:fadein .18s linear}
+.cmdet .empty{padding:24px 0;text-align:left}
+
 /* ============ giảm chuyển động = nhẹ hơn, không bằng không ============ */
 @media (prefers-reduced-motion:reduce){
   .page.enter-fwd,.page.enter-back{animation:fadein .2s linear both}
@@ -701,6 +757,9 @@ body.adm .tab-adm{display:flex}
   .sheet{transition:opacity .2s linear;transform:none;opacity:0;pointer-events:none}
   .sheet.on{opacity:1;pointer-events:auto}
   .dimx{filter:none!important}
+  .wkc .wkb i{transition:none;transform:none}
+  .wkt.go{transition:none}
+  .pd{transition:background-color .2s linear}
 }
 @media (hover:hover) and (pointer:fine){
   .ghost:hover{border-color:var(--slate)}
