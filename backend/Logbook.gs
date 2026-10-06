@@ -61,8 +61,25 @@ function lbSheet_(coach, create) {
 function lbInitSheet_(sh) {
   sh.getRange(1, 1, 1, LB_W).setValues([LB_HEAD]).setFontWeight('bold');
   sh.setFrozenRows(1);
-  sh.getRange(1, 1, 5000, 4).setNumberFormat('@');    /* id, Ghi lúc, Ngày, Khách = chuỗi */
-  sh.getRange(1, 14, 5000, 1).setNumberFormat('@');   /* Chỉ số */
+  /* v2.8: chỉ định dạng lưới đang có (trước: ép 5.000 dòng → lưới trống khổng lồ); dòng thêm sau do lbAppend_ định dạng */
+  var R = Math.max(2, sh.getMaxRows());
+  sh.getRange(1, 1, R, 4).setNumberFormat('@');       /* id, Ghi lúc, Ngày, Khách = chuỗi */
+  sh.getRange(1, 14, R, 1).setNumberFormat('@');      /* Chỉ số */
+}
+/* v2.8 — ghi nối đuôi sau dòng dữ liệu cuối; TỰ thêm dòng khi lưới hết chỗ (từ khi Archive.gs dọn lưới trống,
+   tab coach chỉ chừa ~50 dòng trống — getRange(n + 1) vượt lưới sẽ lỗi). Dòng mới: cột A–D + N dạng chuỗi. */
+var LB_GROW = 200;
+function lbAppend_(sh, rows) {
+  if (!rows || !rows.length) return 0;
+  var n = sh.getLastRow(), need = n + rows.length, max = sh.getMaxRows();
+  if (max < need) {
+    var add = need - max + LB_GROW;
+    sh.insertRowsAfter(max, add);
+    sh.getRange(max + 1, 1, add, 4).setNumberFormat('@');
+    sh.getRange(max + 1, 14, add, 1).setNumberFormat('@');
+  }
+  sh.getRange(n + 1, 1, rows.length, LB_W).setValues(rows);
+  return rows.length;
 }
 
 /* ---------- chuẩn hoá ngày đọc từ sheet về 'yyyy-MM-dd' (nhận cả Date lẫn chuỗi) ---------- */
@@ -275,7 +292,7 @@ function lbLog_(p) {
         e.main == null ? '' : (e.main ? 1 : 0), e.metric || '', e.val == null ? '' : Number(e.val),
         e.form == null ? '' : Number(e.form), e.note || '', coach]);
     });
-    if (rows.length) sh.getRange(n + 1, 1, rows.length, LB_W).setValues(rows);
+    if (rows.length) lbAppend_(sh, rows);                 /* v2.8: tự thêm dòng khi lưới hết chỗ */
     return { ok: true, written: rows.length, dup: dup };
   } finally {
     lock.releaseLock();

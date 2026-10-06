@@ -258,8 +258,8 @@ function admLog_(p) {
     });
     var written = 0;
     order.forEach(function (owner) {
-      var rows = groups[owner], sh = lbSheet_(owner, true), n = sh.getLastRow();
-      sh.getRange(n + 1, 1, rows.length, LB_W).setValues(rows);
+      var rows = groups[owner], sh = lbSheet_(owner, true);
+      lbAppend_(sh, rows);                                   /* v2.8: tự thêm dòng khi lưới hết chỗ (Archive.gs dọn lưới) */
       written += rows.length;
     });
     return { ok: true, written: written, dup: dup };
@@ -336,25 +336,15 @@ function admStats_(p) {
   }
   T.lap('com');
 
-  /* 3. Lịch sử set theo bài — mọi sheet "Khách của …" */
+  /* 3. Lịch sử set theo bài — mọi sheet "Khách của …" + tab "Tổng hợp bài" (v2.8: set cao nhất mỗi ngày, 24 ngày — Stats.gs) */
   try {
-    var ctz = lbDb_().getSpreadsheetTimeZone();
+    var ctz = lbDb_().getSpreadsheetTimeZone(), acc = {};
     lbCoachSheets_().forEach(function (sh) {
       if (sh.getLastRow() < 2) return;
-      var hv = sh.getRange(2, 1, sh.getLastRow() - 1, 12).getValues();
-      for (var k = 0; k < hv.length; k++) {
-        var h = hv[k]; if (String(h[5]) !== 'SET') continue;
-        var who = String(h[3] || '').trim(), ex = String(h[7] || '').trim(), dd = statsIso_(h[2], ctz);
-        if (!who || !ex || !dd) continue;
-        var byEx = out.hist[who] || (out.hist[who] = {}), arr = byEx[ex] || (byEx[ex] = []);
-        arr.push({ d: dd, kg: statsNum_(h[9]), rep: statsNum_(h[10]), ok: (h[11] === 1 || h[11] === true || /^(1|true|x|✓)$/i.test(String(h[11]))) ? 1 : 0 });
-      }
+      statsHistRows_(acc, sh.getRange(2, 1, sh.getLastRow() - 1, 12).getValues(), ctz);
     });
-    for (var w in out.hist) for (var e in out.hist[w]) {
-      var arr2 = out.hist[w][e];
-      arr2.sort(function (x, y) { return x.d < y.d ? 1 : x.d > y.d ? -1 : 0; });
-      if (arr2.length > 24) out.hist[w][e] = arr2.slice(0, 24);
-    }
+    statsHistSum_(acc, lbDb_().getSheetByName(STATS_SUM), ctz, null);
+    out.hist = statsHistOut_(acc);
   } catch (err) { out.histError = String(err).slice(0, 200); }
   T.lap('hist');
   T.done('stats');

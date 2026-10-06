@@ -180,21 +180,50 @@ function statsApi_(body){
     if (total !== null) out.com = { month: comMonth || month, total: total };
   }
 
-  /* 3. Lịch sử set theo bài — sheet "Khách của <coach>" (id · Ghi lúc · Ngày · Khách · Buổi # · Loại · Buổi tập · Bài tập · Set # · KG · REP · Đạt) */
+  /* 3. Lịch sử set theo bài — sheet "Khách của <coach>" (id · Ghi lúc · Ngày · Khách · Buổi # · Loại · Buổi tập · Bài tập · Set # · KG · REP · Đạt)
+        v2.8: MỘT set cao nhất mỗi ngày, 24 ngày gần nhất mỗi khách × bài (trước: 24 SET → chỉ ~5–8 ngày);
+        + tab "Tổng hợp bài" (ngày đã chuyển sang file lưu trữ — Archive.gs), chỉ dòng của coach này. */
   try {
-    var cdb = SpreadsheetApp.openById(STATS_CDB_ID), sh = cdb.getSheetByName('Khách của ' + coach);
-    if (sh && sh.getLastRow() > 1) {
-      var hv = sh.getRange(2, 1, sh.getLastRow() - 1, 12).getValues();
-      for (var k = 0; k < hv.length; k++) {
-        var h = hv[k]; if (String(h[5]) !== 'SET') continue;
-        var who = String(h[3] || '').trim(), ex = String(h[7] || '').trim(), dd = statsIso_(h[2], cdb.getSpreadsheetTimeZone());
-        if (!who || !ex || !dd) continue;
-        var byEx = out.hist[who] || (out.hist[who] = {}), arr = byEx[ex] || (byEx[ex] = []);
-        arr.push({ d: dd, kg: statsNum_(h[9]), rep: statsNum_(h[10]), ok: (h[11] === 1 || h[11] === true || /^(1|true|x|✓)$/i.test(String(h[11]))) ? 1 : 0 });
-      }
-      for (var w in out.hist) for (var e in out.hist[w]) { var a = out.hist[w][e]; a.sort(function (p, q) { return p.d < q.d ? 1 : p.d > q.d ? -1 : 0; }); if (a.length > 24) out.hist[w][e] = a.slice(0, 24); }
-    }
+    var cdb = SpreadsheetApp.openById(STATS_CDB_ID), ctz = cdb.getSpreadsheetTimeZone(), acc = {}, sh = cdb.getSheetByName('Khách của ' + coach);
+    if (sh && sh.getLastRow() > 1) statsHistRows_(acc, sh.getRange(2, 1, sh.getLastRow() - 1, 12).getValues(), ctz);
+    statsHistSum_(acc, cdb.getSheetByName(STATS_SUM), ctz, function (c) { return statsCoachKey_(c) === key; });
+    out.hist = statsHistOut_(acc);
   } catch (err) { out.histError = String(err); }
+  return out;
+}
+
+/* ---- v2.8 — Hiệu suất tập: set cao nhất mỗi ngày (cùng luật perfDays của app: Đạt trước, nặng hơn, nhiều rep hơn) ---- */
+var STATS_SUM = 'Tổng hợp bài', STATS_HIST_DAYS = 24;
+function statsOk_(v) { return (v === 1 || v === true || /^(1|true|x|✓)$/i.test(String(v))) ? 1 : 0; }
+function statsHistAdd_(acc, who, ex, d, kg, rep, ok) {
+  var byEx = acc[who] || (acc[who] = {}), byD = byEx[ex] || (byEx[ex] = {}), c = { d: d, kg: kg, rep: rep, ok: ok }, cur = byD[d];
+  if (!cur || ((c.ok - cur.ok) || (c.kg - cur.kg) || (c.rep - cur.rep)) > 0) byD[d] = c;
+}
+/* dòng tab coach (A..L) */
+function statsHistRows_(acc, hv, tz) {
+  for (var k = 0; k < hv.length; k++) {
+    var h = hv[k]; if (String(h[5]) !== 'SET') continue;
+    var who = String(h[3] || '').trim(), ex = String(h[7] || '').trim(), dd = statsIso_(h[2], tz);
+    if (!who || !ex || !dd) continue;
+    statsHistAdd_(acc, who, ex, dd, statsNum_(h[9]), statsNum_(h[10]), statsOk_(h[11]));
+  }
+}
+/* tab "Tổng hợp bài": Ngày · Khách · Bài tập · KG · REP · Đạt · Số set · Số set đạt · Khối lượng · Coach */
+function statsHistSum_(acc, sh, tz, keep) {
+  if (!sh || sh.getLastRow() < 2) return;
+  sh.getRange(2, 1, sh.getLastRow() - 1, 10).getValues().forEach(function (r) {
+    var who = String(r[1] || '').trim(), ex = String(r[2] || '').trim(), d = statsIso_(r[0], tz);
+    if (!who || !ex || !d || (keep && !keep(r[9]))) return;
+    statsHistAdd_(acc, who, ex, d, statsNum_(r[3]), statsNum_(r[4]), statsOk_(r[5]));
+  });
+}
+function statsHistOut_(acc) {
+  var out = {};
+  for (var w in acc) { out[w] = {}; for (var e in acc[w]) {
+    var a = []; for (var d in acc[w][e]) a.push(acc[w][e][d]);
+    a.sort(function (p, q) { return p.d < q.d ? 1 : p.d > q.d ? -1 : 0; });
+    out[w][e] = a.slice(0, STATS_HIST_DAYS);
+  } }
   return out;
 }
 
