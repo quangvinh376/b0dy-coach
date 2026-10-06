@@ -42,8 +42,8 @@ async function measure(root, port, vp){
   await page.click('#p-perf .nav .ghost'); await screen('p-profile'); await w(400);
   await page.click('#p-profile .nav .ghost'); await screen('p-clients'); await w(400);
   await page.click('#p-clients .nav .ghost:nth-child(1)'); await screen('p-home'); await w(900);
-  /* window khách tập chậm */
-  await page.click('#h-tiles .tile:nth-child(2)'); await page.waitForSelector('#csheet.on'); await snap('csheet', '#cs-list', '#csheet');
+  /* window khách (v2.7: ô "Khách tập chậm" thành trang riêng → đo window qua ô "Khách hôm nay", có ở cả hai bản) */
+  await page.click('#h-tiles .tile:nth-child(3)'); await page.waitForSelector('#csheet.on'); await snap('csheet', '#cs-list', '#csheet');
   await page.click('#cs-go'); await w(600);
   /* chọn khách → xác nhận → check-in → bài tập hôm nay (window thư viện) → lưới bài */
   await page.click('#h-go'); await screen('p-pick'); await snap('pick', '#pk-list', '#p-pick');
