@@ -288,6 +288,7 @@ function admStats_(p) {
   /* 1. SESSION LOG — mọi buổi "Đã tập" (B ngày · G tên · K trạng thái) */
   var ix = (ba === chkSS_()) ? admLogB_() : null;
   var log = ix ? ix.log : ba.getSheetByName('SESSION LOG');
+  var ctx = statsCtx_(today); out.w0 = ctx.w0;                        /* v2.7: w8/n28/lastAll cho trang Khách tập chậm */
   if (log) {
     var r1 = ix ? ix.R1 : 1, nr = ix ? (ix.last - ix.R1 + 1) : log.getLastRow();
     var vals = nr > 0 ? log.getRange(r1, 2, nr, 10).getValues() : [];      /* B..K */
@@ -298,8 +299,13 @@ function admStats_(p) {
       var pc = out.perClient[name] || (out.perClient[name] = { m: 0, last: '' });
       if (d.slice(0, 7) === month) { out.days[d] = (out.days[d] || 0) + 1; out.monthTotal++; pc.m++; }
       if (d < today && d > pc.last) pc.last = d;
+      statsPcAdd_(pc, d, ctx);
     }
   }
+  try {                                                               /* v2.7: buổi/tuần đăng ký (MEMBERS) mọi khách */
+    var memA = statsMem_(ba);
+    if (memA) { out.plan = {}; memA.rows.forEach(function (m) { if (!(m.name in out.plan) || m.left > 0) out.plan[m.name] = m.plan; }); }
+  } catch (errP) { out.planError = String(errP).slice(0, 200); }
   T.lap('log');
 
   /* 2. COM — Doanh thu cả phòng: dòng "Tổng" (cột A) của bảng tổng hợp, cột C. Tháng = ô "THÁNG:". */

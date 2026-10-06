@@ -3,6 +3,7 @@
    Thêm file này vào project Apps Script "B0DY Discord KPI" (cạnh Code.gs, Logbook.gs).
    Cung cấp:
      1. statsApi_(body)   — action "stats": buổi dạy theo ngày trong tháng, số buổi/khách, hoa hồng (tab COMMISSION),
+                            v2.7: hoa hồng TỪNG BUỔI 2 tháng (sess · comMon · comFrom), w8/n28/lastAll + plan cho Khách tập chậm,
                             lịch sử set theo bài (sheet "Khách của <coach>") cho trang chủ + Hiệu suất tập.
      2. installLibrary()  — ghi thư viện bài tập mới (64 bài · Tên · Nhóm · Vùng · id) vào tab "Bài tập". Chạy tay MỘT lần.
    Nối vào api_() trong Code.gs:   case 'stats': return statsApi_(body);
@@ -48,6 +49,72 @@ function statsMonthLabel_(v){   // "September, 2026" | Date | "2026-09" → "202
 }
 function statsNum_(v){ if (typeof v === 'number') return v; var n = parseFloat(String(v || '').replace(/[^\d.\-]/g, '')); return isNaN(n) ? 0 : n; }
 
+/* =====================================================================
+   v2.7 (06/10/2026) — trang Hoa hồng + trang Khách tập chậm
+   ===================================================================== */
+function statsDayN_(iso){ var p = String(iso).split('-'); return Date.UTC(+p[0], +p[1] - 1, +p[2]) / 864e5; }
+function statsNIso_(n){ var d = new Date(n * 864e5); return d.getUTCFullYear() + '-' + ('0' + (d.getUTCMonth() + 1)).slice(-2) + '-' + ('0' + d.getUTCDate()).slice(-2); }
+/* cửa sổ 8 tuần (thứ Hai → Chủ nhật), tuần cuối = tuần chứa hôm nay. s0 = thứ Hai của tuần đầu. */
+function statsCtx_(today){ var tN = statsDayN_(today), dow = (new Date(tN * 864e5).getUTCDay() + 6) % 7, s0 = tN - dow - 49; return { today: today, tN: tN, s0: s0, w0: statsNIso_(s0) }; }
+function statsPrevMonth_(month){ var y = +month.slice(0, 4), m = +month.slice(5, 7) - 1; if (m < 1) { m = 12; y--; } return y + '-' + ('0' + m).slice(-2); }
+/* một buổi "Đã tập" ngày d của khách → w8 (số buổi mỗi tuần, 8 tuần) · n28 (28 ngày tính cả hôm nay) · lastAll (buổi gần nhất, tính cả hôm nay) */
+function statsPcAdd_(pc, d, ctx){
+  var n = statsDayN_(d); if (!(n <= ctx.tN)) return;
+  if (!pc.w8) pc.w8 = [0, 0, 0, 0, 0, 0, 0, 0];
+  if (n >= ctx.s0) pc.w8[Math.floor((n - ctx.s0) / 7)]++;
+  if (n > ctx.tN - 28) pc.n28 = (pc.n28 || 0) + 1;
+  if (!pc.lastAll || d > pc.lastAll) pc.lastAll = d;
+}
+/* "08:00 – 09:00" | Date (ô định dạng giờ) → "08:00" */
+function statsSlot_(v){
+  if (v instanceof Date) return Utilities.formatDate(v, STATS_TZ, 'HH:mm');
+  var m = String(v || '').match(/(\d{1,2}):(\d{2})/); return m ? ('0' + m[1]).slice(-2) + ':' + m[2] : '';
+}
+/* MEMBERS — mã HV · tên · đơn giá buổi · coach · buổi/tuần · người bán gói · ngày bán hộ · còn lại. Tìm cột theo tên (bỏ dấu). */
+function statsMem_(ba){
+  var sh = ba.getSheetByName('MEMBERS'); if (!sh) return null;
+  var hr = (typeof memHdrRow_ === 'function') ? memHdrRow_(sh) : 5, lastC = sh.getLastColumn();
+  var hdr = sh.getRange(hr, 1, 1, lastC).getValues()[0].map(function (h) { return lbNorm_(h); });
+  function col(){ for (var a = 0; a < arguments.length; a++) { var i = hdr.indexOf(arguments[a]); if (i >= 0) return i; } return -1; }
+  var iId = col('#', 'ma', 'ma hv'), iName = col('ten'), iPrice = col('don gia buoi', 'don gia'), iCoach = col('coach'), iPlan = col('buoi/tuan'),
+      iSeller = col('nguoi ban goi'), iSold = col('ngay ban ho'), iLeft = col('con lai');
+  if (iName < 0) return null;
+  var out = { byId: {}, byName: {}, rows: [] };
+  var last = (typeof admLastRow_ === 'function') ? admLastRow_(sh, iName + 1, hr + 1) : sh.getLastRow();
+  if (last <= hr) return out;
+  var v = sh.getRange(hr + 1, 1, last - hr, lastC).getValues(), tz = ba.getSpreadsheetTimeZone();
+  for (var r = 0; r < v.length; r++) {
+    var x = v[r], name = String(x[iName] || '').trim(); if (!name) continue;
+    var m = { id: iId >= 0 ? String(x[iId]).trim() : '', name: name, price: iPrice >= 0 ? statsNum_(x[iPrice]) : 0, coach: iCoach >= 0 ? String(x[iCoach] || '').trim() : '',
+      plan: iPlan >= 0 ? statsNum_(x[iPlan]) : 0, seller: iSeller >= 0 ? String(x[iSeller] || '').trim() : '', sold: iSold >= 0 ? statsIso_(x[iSold], tz) : '', left: iLeft >= 0 ? statsNum_(x[iLeft]) : 0 };
+    if (m.id) out.byId[m.id] = m;
+    (out.byName[name] = out.byName[name] || []).push(m);
+    out.rows.push(m);
+  }
+  return out;
+}
+/* buổi không có mã HV → dòng MEMBERS cùng tên, ưu tiên cùng coach + còn buổi */
+function statsMemByName_(mem, name, key){
+  var l = mem.byName[name] || []; if (!l.length) return null;
+  var best = null; l.forEach(function (m) { var s = (statsCoachKey_(m.coach) === key ? 2 : 0) + (m.left > 0 ? 1 : 0); if (!best || s >= best.s) best = { s: s, m: m }; });
+  return best.m;
+}
+/* % hoa hồng theo coach — tab " ⚙️ 2" (Coach · Giai đoạn · % Com) */
+function statsPct_(ba){
+  var sh = null, out = {};
+  ba.getSheets().forEach(function (s) { var n = s.getName().replace(/\s+/g, ''); if (!sh && n.indexOf('⚙') >= 0 && /2$/.test(n)) sh = s; });
+  if (!sh) return out;
+  sh.getRange(1, 1, Math.min(Math.max(sh.getLastRow(), 1), 40), 3).getValues().forEach(function (r) {
+    var k = String(r[0] || '').trim(), p = r[2]; if (k && typeof p === 'number' && p > 0 && p < 1) out[k] = p;
+  });
+  return out;
+}
+function statsPctOf_(pct, name, fallback){
+  name = String(name || '').trim(); if (name in pct) return pct[name];
+  var k = statsCoachKey_(name); for (var n in pct) if (n.indexOf('(') < 0 && statsCoachKey_(n) === k) return pct[n];
+  return fallback || 0;
+}
+
 function statsApi_(body){
   var coach = statsCoach_(body.pin);
   if (!coach) return { ok: false, error: 'sai_pin' };
@@ -56,10 +123,14 @@ function statsApi_(body){
   var out = { ok: true, coach: coach, month: month, days: {}, monthTotal: 0, perClient: {}, com: null, hist: {}, today: today };
   var ba = SpreadsheetApp.openById(STATS_BA_ID), tz = ba.getSpreadsheetTimeZone();
 
-  /* 1. SESSION LOG: buổi "Đã tập" của coach — theo ngày trong tháng + theo khách (số buổi tháng, buổi gần nhất) */
-  var log = ba.getSheetByName('SESSION LOG');
+  /* 1. SESSION LOG: buổi "Đã tập" của coach — theo ngày trong tháng + theo khách (số buổi tháng, buổi gần nhất)
+        v2.7: + w8/n28/lastAll mỗi khách (trang Khách tập chậm) + danh sách buổi 2 tháng (trang Hoa hồng).
+        Chỉ đọc tới dòng có ngày cuối cùng (cột B) — công thức kéo sẵn tới dòng 5.000 (bài học Admin.gs v2.4.1). */
+  var log = ba.getSheetByName('SESSION LOG'), ctx = statsCtx_(today), cFrom = statsPrevMonth_(month) + '-01', raw = [], key = statsCoachKey_(coach);
+  out.w0 = ctx.w0; out.comFrom = cFrom;
   if (log) {
-    var vals = log.getRange(1, 1, log.getLastRow(), 14).getValues(), key = statsCoachKey_(coach);
+    var nLog = (typeof admLastRow_ === 'function') ? admLastRow_(log, 2, 1) : log.getLastRow();
+    var vals = nLog > 0 ? log.getRange(1, 1, nLog, 14).getValues() : [];
     for (var i = 0; i < vals.length; i++) {
       var r = vals[i], d = statsIso_(r[1], tz), name = String(r[6] || '').trim(), st = String(r[10] || '');
       if (!d || !name || statsCoachKey_(r[4]) !== key) continue;
@@ -67,8 +138,34 @@ function statsApi_(body){
       var pc = out.perClient[name] || (out.perClient[name] = { m: 0, last: '' });
       if (d.slice(0, 7) === month) { out.days[d] = (out.days[d] || 0) + 1; out.monthTotal++; pc.m++; }
       if (d < today && d > pc.last) pc.last = d;
+      statsPcAdd_(pc, d, ctx);
+      if (d >= cFrom && d <= today) raw.push({ d: d, t: statsSlot_(r[3]), n: name, id: String(r[7] || '').trim(), co: String(r[4] || '').trim() });
     }
   }
+
+  /* 1b. v2.7 — hoa hồng từng buổi (tháng trước + tháng này) = đơn giá buổi (MEMBERS theo mã HV) × % coach (tab ⚙️ 2),
+         bán hộ = đơn giá buổi gói bán × % coach, tính vào ngày bán — cùng công thức tab COM. Buổi tập/tuần cho trang Khách tập chậm. */
+  try {
+    var mem = statsMem_(ba), pct = statsPct_(ba), myPct = statsPctOf_(pct, coach, 0), sess = [], mon = {};
+    mon[statsPrevMonth_(month)] = 0; mon[month] = 0;
+    raw.forEach(function (x) {
+      var m = mem ? (mem.byId[x.id] || statsMemByName_(mem, x.n, key)) : null;
+      var c = (m ? m.price : 0) * statsPctOf_(pct, x.co || coach, myPct);
+      sess.push({ d: x.d, t: x.t, n: x.n, c: Math.round(c) });
+      mon[x.d.slice(0, 7)] = (mon[x.d.slice(0, 7)] || 0) + c;
+    });
+    if (mem) mem.rows.forEach(function (m) {
+      if (!m.sold || m.sold < cFrom || m.sold > today) return;
+      if (statsCoachKey_(m.seller) !== key || statsCoachKey_(m.coach) === key) return;
+      var c = m.price * myPct;
+      sess.push({ d: m.sold, t: '', n: m.name, c: Math.round(c), b: 1 });
+      mon[m.sold.slice(0, 7)] = (mon[m.sold.slice(0, 7)] || 0) + c;
+    });
+    sess.sort(function (a, b) { return a.d < b.d ? -1 : a.d > b.d ? 1 : ((a.b || 0) - (b.b || 0)) || (a.t < b.t ? -1 : a.t > b.t ? 1 : a.n.localeCompare(b.n, 'vi')); });
+    for (var mk in mon) mon[mk] = Math.round(mon[mk]);
+    out.sess = sess; out.comMon = mon;
+    if (mem) { out.plan = {}; mem.rows.forEach(function (m) { if (statsCoachKey_(m.coach) !== key) return; if (!(m.name in out.plan) || m.left > 0) out.plan[m.name] = m.plan; }); }
+  } catch (err0) { out.comError = String(err0).slice(0, 200); }
 
   /* 2. COMMISSION: dòng của coach trong "TỔNG HỢP THEO COACH", cột Σ Hoa hồng (H). Tháng = ô "THÁNG:". */
   var com = ba.getSheetByName('COMMISSION') || ba.getSheetByName('COM');
