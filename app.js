@@ -7,7 +7,7 @@
    ===================================================================== */
 'use strict';
 var $=function(id){ return document.getElementById(id); };
-var APP_VER='v2.7.0';
+var APP_VER='v2.7.1';
 
 /* ---------------- tiện ích ---------------- */
 function isoToday(d){ d=d||new Date(); return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2); }
@@ -406,9 +406,17 @@ function demoDb(){
   }
   sess.forEach(function(x){ var mm=x.d.slice(0,7); comMon[mm]=(comMon[mm]||0)+x.c; });
   var daysAll={}; Object.keys(days).forEach(function(k){ daysAll[k]=days[k]*3; });
+  /* v2.7.1 — Admin · Doanh thu từng buổi (đơn giá buổi giả, mọi coach), cùng số buổi với daysAll; vài buổi nhập tay không giờ ký */
+  var ALL=D.concat(E), PRA=[350000,300000,270000,400000,320000],
+      TMA=['06:05','06:58','07:12','08:03','08:47','09:10','10:02','15:56','16:31','17:04','17:40','18:12','18:55','19:31','20:08','20:44','21:10','21:30'], sessA=[], monA={};
+  for(var nA=isoN(cFrom); nA<=tN; nA++){ var dA=nIso(nA), ddA=+dA.slice(8,10); if(ddA%7===0) continue;
+    var cA= dA.slice(0,7)===cm0 ? daysAll[dA] : (2+((ddA*5)%6))*3;
+    for(var kA=0;kA<cA;kA++){ var wA=(ddA+kA*2)%ALL.length; sessA.push({d:dA, t:(kA===2||kA>=TMA.length)?'':TMA[kA], n:ALL[wA].name, c:PRA[(ddA+kA)%PRA.length]}); }
+  }
+  sessA.forEach(function(x){ var mm=x.d.slice(0,7); monA[mm]=(monA[mm]||0)+x.c; });
   var ci={checked:{}, at:{}}; try{ ci=JSON.parse(SES('demo_ci')||'null')||ci; }catch(e){}   /* demo: check-in hôm nay giữ qua reload (như máy chủ thật) */
   DEMO_DB={clients:D.concat(E), checked:ci.checked||{}, at:ci.at||{}, log:[], stats:{ok:true, month:d0, days:days, perClient:per, com:{month:d0,total:9769250}, hist:hist, w0:nIso(isoN(wkStart(TODAY_ISO))-49), plan:plan, sess:sess, comMon:comMon, comFrom:cFrom},
-           astats:{ok:true, admin:true, month:d0, days:daysAll, perClient:perAll, rev:{month:d0,total:96500000}, hist:hist, w0:nIso(isoN(wkStart(TODAY_ISO))-49), plan:planAll}};
+           astats:{ok:true, admin:true, month:d0, days:daysAll, perClient:perAll, rev:{month:d0,total:96500000}, hist:hist, w0:nIso(isoN(wkStart(TODAY_ISO))-49), plan:planAll, sess:sessA, comMon:monA, comFrom:cFrom}};
   return DEMO_DB;
 }
 function demoApi(body){
@@ -547,6 +555,7 @@ var FOG_TOP=32, FOG_BOT=72;
 function tailPad(el){
   if(el.id==='pl-scroll') return;
   var lc=el.lastElementChild; while(lc && lc.lastElementChild && /\b(exrows|rows|next|cmdet|cms)\b/.test(lc.className)) lc=lc.lastElementChild;   /* v2.7: trang Hoa hồng → dòng buổi cuối */
+  while(lc && /\bxp\b/.test(lc.className)) lc=lc.previousElementSibling;   /* v2.7.1: danh sách dòng + phần mở rộng (Khách tập chậm, Hiệu suất tập) → nhịp = dòng cuối, như Khách hàng */
   var pad=lc ? Math.round(lc.getBoundingClientRect().height) : 0;
   if(el._tp!==pad){ el._tp=pad; el.style.paddingBottom=el.classList.contains('ex') ? 'calc(var(--bz,0px) + '+pad+'px)' : pad+'px'; }
 }
@@ -1330,13 +1339,14 @@ function renderHome(animate){
   var slow=slowClients(), today=state.clients.filter(function(c){ return c.checked || (ciFor(c.name)&&ciFor(c.name).status==='ok'); }).length;
   /* ô tiền: coach = Hoa hồng của mình (tab COM) · Admin = Doanh thu cả phòng (dòng Tổng tab COM). Tháng COM khác tháng này → ghi rõ "T8". */
   /* v2.7: coach = hoa hồng tính thẳng từ SESSION LOG tháng này (stats.comMon, khớp trang Hoa hồng); máy chủ cũ → tab COM */
-  var com=state.admin ? (s && s.rev && s.rev.total!=null ? s.rev : null) : (s && s.comMon && s.comMon[m]!=null ? {month:m, total:s.comMon[m]} : (s && s.com && s.com.total!=null ? s.com : null)),
+  /* v2.7.1: Admin = Doanh thu tháng này từ SESSION LOG (stats.comMon, khớp trang Doanh thu); máy chủ cũ → dòng Tổng tab COM */
+  var com=(s && s.comMon && s.comMon[m]!=null) ? {month:m, total:s.comMon[m]} : state.admin ? (s && s.rev && s.rev.total!=null ? s.rev : null) : (s && s.com && s.com.total!=null ? s.com : null),
       comLab=(state.admin?'Doanh thu':'Hoa hồng')+(com && com.month && com.month!==m ? ' T'+(+com.month.slice(5,7)) : '');
   var tiles=[
     {l:'Tổng số khách', v:state.loading?'—':String(active), ic:'t-people', go:'p-clients'},
     {l:'Khách tập chậm', v:slow?String(slow.length):'—', ic:'t-trend', go:'p-slow'},
     {l:'Khách hôm nay', v:state.loading?'—':String(today), ic:'t-bar', acid:true, go:'p-clients', q:'today'},
-    {l:comLab, v:com?fmtTr(com.total):'—', small:com?'TR':'', ic:'t-dong', thin:true, go:state.admin?'':'p-com'}
+    {l:comLab, v:com?fmtTr(com.total):'—', small:com?'TR':'', ic:'t-dong', thin:true, go:'p-com'}
   ];
   var el=$('h-tiles'); el.innerHTML='';
   tiles.forEach(function(t,i){
@@ -1680,14 +1690,15 @@ function renderSlow(animate){
 }
 
 /* =====================================================================
-   1e — HOA HỒNG (v2.7 · trang riêng · Figma 628:496)
+   1e — HOA HỒNG (v2.7 · trang riêng · Figma 628:496) · Admin: DOANH THU (v2.7.1, cùng trang, c = đơn giá buổi, mọi coach)
    stats.sess = [{d, t, n, c, b}] buổi "Đã tập" (+ bán hộ b:1) từ đầu tháng trước tới hôm nay, c = đơn giá buổi × % coach (như tab COM);
+   t = giờ KÝ THẬT trên app (cột N SESSION LOG, '' = dòng nhập tay → "—"); trong ngày giữ thứ tự dòng SESSION LOG, bán hộ cuối ngày (v2.7.1);
    stats.comMon = {'yyyy-mm': tổng}. Dải tuần 7 viên: ngày (nhỏ) · hoa hồng ngày (lớn), viên Acid = ngày đang chọn, chấm = hôm nay.
    Vuốt ngang đổi tuần trong [tuần chứa đầu tháng trước, tuần này]; ngày chọn giữ thứ trong tuần (kẹp trong khoảng có dữ liệu).
    ===================================================================== */
 var CM={sel:'', wk:''}, VN_WD=['Chủ nhật','Thứ hai','Thứ ba','Thứ tư','Thứ năm','Thứ sáu','Thứ bảy'];
 function fmtVnd(v){ return String(Math.round(+v||0)).replace(/\B(?=(\d{3})+(?!\d))/g,'.'); }
-function fmtK(v){ v=+v||0; return v>=1e6 ? fmt1(v/1e6)+'TR' : Math.round(v/1000)+'K'; }
+function fmtK(v){ v=+v||0; return v>=1e7 ? Math.round(v/1e6)+'TR' : v>=1e6 ? fmt1(v/1e6)+'TR' : Math.round(v/1000)+'K'; }   /* ≤ 5 ký tự: vừa viên 43px ở 375 (Doanh thu ngày ≥ 10 TR → "12TR") */
 function comData(){
   var s=state.stats; if(!s || !s.sess) return null;
   if(CM.src===s.sess) return CM.data;
@@ -1697,7 +1708,7 @@ function comData(){
 }
 function comBounds(D){ var from=D ? D.from : TODAY_ISO.slice(0,7)+'-01'; return {from:from, min:wkStart(from), max:wkStart(TODAY_ISO)}; }
 function comClamp(d, B){ return d>TODAY_ISO ? TODAY_ISO : d<B.from ? B.from : d; }
-HOOK['p-com']=function(dir, quiet){ if(!quiet){ CM.sel=TODAY_ISO; CM.wk=wkStart(TODAY_ISO); } renderCom(!quiet); if(!(state.stats && state.stats.sess) && !state.loading) refreshStats(true); };
+HOOK['p-com']=function(dir, quiet){ $('cm-title').textContent= state.admin ? 'Doanh thu' : 'Hoa hồng'; if(!quiet){ CM.sel=TODAY_ISO; CM.wk=wkStart(TODAY_ISO); } renderCom(!quiet); if(!(state.stats && state.stats.sess) && !state.loading) refreshStats(true); };
 function tweenVnd(el, to, dur){
   if(el._tw) cancelAnimationFrame(el._tw); el._tw=0;
   if(rm() || !(dur>0)){ el.textContent=fmtVnd(to); return; }
