@@ -7,7 +7,7 @@
    ===================================================================== */
 'use strict';
 var $=function(id){ return document.getElementById(id); };
-var APP_VER='v2.7.1';
+var APP_VER='v2.7.2';
 
 /* ---------------- tiện ích ---------------- */
 function isoToday(d){ d=d||new Date(); return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2); }
@@ -47,16 +47,24 @@ function metric(id){ return METRICS.filter(function(x){return x.id===id})[0]; }
 function H(m,id){ return (m.measures||[]).filter(function(x){return x[id]!=null}).map(function(x){return x[id]}); }
 function last(a){ return a.length?a[a.length-1]:null; }
 
-/* ---------------- THƯ VIỆN BÀI TẬP (b0dy-exercise-library v1) ----------------
-   Máy chủ có sheet "Bài tập" (Tên · Nhóm · Vùng · id) thì ghi đè; đây là bản mặc định để app chạy được ngay. */
+/* ---------------- THƯ VIỆN BÀI TẬP (b0dy-exercise-library v1 + 06/10: Chin-Up · Bench Press · Dip) ----------------
+   Máy chủ có sheet "Bài tập" (Tên · Nhóm · Vùng · id) thì sheet quyết định thứ tự + nhóm (v2.7.2, xem libEntries);
+   đây là bản mặc định để app chạy được ngay (chưa có mạng / demo) — giữ trùng với sheet. */
 var EX_LIB=[
  ['Lat Pulldown (Wide Pronated Grip)','Lat Pulldown','Back','lat-pulldown-wide-pronated-grip'],
  ['Lat Pulldown (Medium Supinated Grip)','Lat Pulldown','Back','lat-pulldown-medium-supinated-grip'],
  ['Lat Pulldown (Neutral Grip)','Lat Pulldown','Back','lat-pulldown-neutral-grip'],
+ ['Chin-Up (Wide Pronated Grip)','Chin-Up','Back','chin-up-wide-pronated-grip'],
+ ['Chin-Up (Medium Supinated Grip)','Chin-Up','Back','chin-up-medium-supinated-grip'],
+ ['Chin-Up (Medium Neutral Grip)','Chin-Up','Back','chin-up-medium-neutral-grip'],
  ['Seated Cable Row (Close Neutral Grip)','Row','Back','seated-cable-row-close-neutral-grip'],
  ['Seated Cable Row (Wide/Medium Pronated Grip)','Row','Back','seated-cable-row-wide-medium-pronated-grip'],
  ['DB Bent-Over Row','Row','Back','db-bent-over-row'],
  ['T-Bar Row','Row','Back','t-bar-row'],
+ ['BB Bench Press','Bench Press','Chest','bb-bench-press'],
+ ['BB Bench Press (Close Grip)','Bench Press','Chest','bb-bench-press-close-grip'],
+ ['Spoto Press','Bench Press','Chest','spoto-press'],
+ ['Spoto Press (Close Grip)','Bench Press','Chest','spoto-press-close-grip'],
  ['Incline DB Press (15°)','Incline Press','Chest','incline-db-press-15deg'],
  ['Incline DB Press (35°)','Incline Press','Chest','incline-db-press-35deg'],
  ['Incline BB Press (35°)','Incline Press','Chest','incline-bb-press-35deg'],
@@ -64,6 +72,7 @@ var EX_LIB=[
  ['Incline Push-Up','Push-Up','Chest','incline-push-up'],
  ['Weighted Push-Up','Push-Up','Chest','weighted-push-up'],
  ['Ring Push-Up','Push-Up','Chest','ring-push-up'],
+ ['Dip','Dip','Chest','dip'],
  ['Standing BB Overhead Press','Overhead Press','Shoulders','standing-bb-overhead-press'],
  ['Seated DB Shoulder Press (65°)','Overhead Press','Shoulders','seated-db-shoulder-press-65deg'],
  ['Arnold Press','Overhead Press','Shoulders','arnold-press'],
@@ -132,9 +141,12 @@ var EX_SHORT={
  'DB Split Squat':'DB Split Squat','BB Split Squat':'BB Split Squat','DB Bulgarian Split Squat':'DB Bulgarian Split Squat','BB Bulgarian Split Squat':'BB Bulgarian Split Squat','Leg Extension':'Leg Extension',
  'BB Romanian Deadlift':'BB RDL','DB Romanian Deadlift':'DB RDL','Deficit Romanian Deadlift':'Deficit RDL','Wide-Stance Good Morning':'Wide Good Morning','Good Morning':'Good Morning',
  'Lying Leg Curl':'Lying Leg Curl','Nordic Hamstring Curl':'Nordic Curl','Glute-Ham Raise':'Glute-Ham Raise','Hip Adduction Machine':'Hip Adduction','Hip Abduction Machine':'Hip Abduction','Glute Kickback':'Glute Kickback',
- 'Standing Smith Calf Raise':'Standing Smith Calf','Seated Smith Calf Raise':'Seated Smith Calf','Soleus Push-Up':'Soleus Push-Up','Johnson Calf Raise':'Johnson Calf Raise'
+ 'Standing Smith Calf Raise':'Standing Smith Calf','Seated Smith Calf Raise':'Seated Smith Calf','Soleus Push-Up':'Soleus Push-Up','Johnson Calf Raise':'Johnson Calf Raise',
+ 'Chin-Up (Wide Pronated Grip)':'Chin-Up Wide Pronated','Chin-Up (Medium Supinated Grip)':'Chin-Up Medium Supinated','Chin-Up (Medium Neutral Grip)':'Chin-Up Medium Neutral',
+ 'BB Bench Press':'BB Bench Press','BB Bench Press (Close Grip)':'BB Bench Close Grip','Spoto Press':'Spoto Press','Spoto Press (Close Grip)':'Spoto Press Close Grip','Dip':'Dip'
 };
-var EX_ABBR=[[/\bLat Pulldown\b/gi,'PD'],[/\bPulldown\b/gi,'PD'],[/\bPull ?Down\b/gi,'PD'],[/\bRomanian Deadlift\b/gi,'RDL'],[/\bOverhead Press\b/gi,'OHP'],[/\bOverhead\b/gi,'OH'],[/\bTriceps\b/gi,'Tri'],[/\bExtension\b/gi,'Ext'],[/\bSingle-Arm\b/gi,'1-Arm'],[/\bAlternating\b/gi,'Alt'],[/\bDumbbell\b/gi,'DB'],[/\bBarbell\b/gi,'BB'],[/\bMachine\b/gi,''],[/\bGrip\b/gi,''],[/\bCable Row\b/gi,'Row'],[/\bChest-Supported\b/gi,''],[/\bRaise\b/gi,'']];
+/* "Grip" chỉ bỏ khi đứng riêng một từ ("Close-Grip" giữ nguyên — trước v2.7.2 thành "Close-") */
+var EX_ABBR=[[/\bLat Pulldown\b/gi,'PD'],[/\bPulldown\b/gi,'PD'],[/\bPull ?Down\b/gi,'PD'],[/\bRomanian Deadlift\b/gi,'RDL'],[/\bOverhead Press\b/gi,'OHP'],[/\bOverhead\b/gi,'OH'],[/\bTriceps\b/gi,'Tri'],[/\bExtension\b/gi,'Ext'],[/\bSingle-Arm\b/gi,'1-Arm'],[/\bAlternating\b/gi,'Alt'],[/\bDumbbell\b/gi,'DB'],[/\bBarbell\b/gi,'BB'],[/\bMachine\b/gi,''],[/(^|\s)Grip(?=\s|$)/gi,'$1'],[/\bCable Row\b/gi,'Row'],[/\bChest-Supported\b/gi,''],[/\bRaise\b/gi,'']];
 function exShort(n){
   n=String(n||''); if(EX_SHORT[n]) return EX_SHORT[n];
   var t=n.replace(/\(([^)]*)\)/g,' $1 ').replace(/,/g,' ');
@@ -142,14 +154,23 @@ function exShort(n){
   var w=t.split(/\s+/).filter(Boolean); if(w.length>4) w=w.slice(0,4);
   return w.join(' ')||n;
 }
-/* thư viện đang dùng: máy chủ trả {Nhóm:[Tên]} (sheet "Bài tập") → hợp với vùng cơ của bản nhúng */
-/* Bản nhúng là gốc; sheet "Bài tập" trên máy chủ chỉ BỔ SUNG bài chưa có (nhóm theo cột Nhóm của sheet).
-   Nhờ vậy sheet cũ (Upper/Lower/…) không ghi đè thư viện mới; chạy installLibrary() rồi thì hai bên trùng nhau. */
+/* thư viện đang dùng: máy chủ trả {Nhóm:[Tên]} theo đúng thứ tự dòng của sheet "Bài tập" (Worker + Apps Script).
+   v2.7.2: sheet theo thư viện mới (có ít nhất một tên trùng bản nhúng) → SHEET QUYẾT ĐỊNH danh sách, thứ tự, nhóm
+   (thêm / xoá / dời dòng trên sheet là app đổi theo); vùng cơ lấy từ bản nhúng nếu có tên đó.
+   Sheet kiểu cũ (Upper/Lower/…, không tên nào trùng) hoặc chưa tải được → bản nhúng là gốc, sheet chỉ bổ sung bài chưa có (như trước). */
+function libKey(n){ return norm(n).replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,''); }
 function libEntries(){
-  var srv=state.lib, out=EX_LIB.slice(), seen={}; EX_LIB.forEach(function(e){ seen[e.name]=1; });
+  var srv=state.lib, rows=[];
   if(srv && typeof srv==='object' && !Array.isArray(srv)){
-    Object.keys(srv).forEach(function(g){ (srv[g]||[]).forEach(function(n){ n=String(n||'').trim(); if(!n||seen[n]) return; seen[n]=1; out.push({name:n, group:g, part:'', id:norm(n).replace(/[^a-z0-9]+/g,'-')}); }); });
+    Object.keys(srv).forEach(function(g){ g=String(g||'').trim(); if(!g) return; (srv[g]||[]).forEach(function(n){ n=String(n||'').trim(); if(n) rows.push([n,g]); }); });
   }
+  var own=rows.some(function(r){ return EX_BY_NAME[r[0]]; }), out=[], seen={};
+  if(own){
+    rows.forEach(function(r){ var n=r[0], k=EX_BY_NAME[n]; if(seen[n]) return; seen[n]=1; out.push({name:n, group:r[1], part:k?k.part:'', id:k?k.id:libKey(n)}); });
+    return out;
+  }
+  EX_LIB.forEach(function(e){ seen[e.name]=1; out.push(e); });
+  rows.forEach(function(r){ var n=r[0]; if(seen[n]) return; seen[n]=1; out.push({name:n, group:r[1], part:'', id:libKey(n)}); });
   return out;
 }
 function libGroups(){
