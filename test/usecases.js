@@ -703,7 +703,7 @@ var CLIP={hard:[], ell:[]};
     await page.click('#loop-host .c1'); await h.wait(450); await page.click('#loop-host .film .exl button:nth-child(1)'); await h.wait(900);
     check((await h.txt('#loop-host .ex'))===ex && (await h.txt('#loop-host .lp .head .sub'))==='Thiết lập set 2', 'set 2 sau khôi phục');
     await page.click('#loop-host .g1'); await h.waitScreen('p-plan'); await h.wait(600);
-    check(/1 SET/.test(await h.txt('#pl-grid .ptile:nth-child(1) .lab')) && (await h.txt('#pl-go'))==='Bắt đầu · 1 bài', 'lưới bài ghi số set: '+(await h.txt('#pl-grid .ptile:nth-child(1) .lab')));
+    check((await h.txt('#pl-grid .ptile:nth-child(1) .pst'))==='Set 2' && !/SET/.test(await h.txt('#pl-grid .ptile:nth-child(1) .lab')) && (await h.txt('#pl-go'))==='Bắt đầu · 1 bài', 'lưới bài ghi tình trạng dưới tên (v2.7.3: "Set 2", nhãn đáy không còn số set): '+(await h.txt('#pl-grid .ptile:nth-child(1) .pst')));
     await page.click('#p-plan .nav .ghost'); await h.waitScreen('p-confirm'); await h.wait(1200);
     check((await h.txt('#cf-go'))==='Tiếp tục buổi tập' && /Đang ghi buổi 4/.test(await h.txt('#cf-body .lines')), 'xác nhận: Tiếp tục buổi tập / '+(await h.txt('#cf-body .lines .a')));
     await page.click('#cf-back'); await h.waitScreen('p-pick'); await h.wait(500);

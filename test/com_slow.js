@@ -212,7 +212,7 @@ var {chromium}=require('playwright'); var serve=require('./serve'); var fs=requi
       dash:s.sess.some(function(x){ return x.d===TODAY_ISO && !x.t; }), day:document.querySelector('#cm-list .cmday .v').textContent, dayT:fmtVnd(by[TODAY_ISO]||0)}; });
   check(a2.title==='Doanh thu' && a2.total===a2.want && /^THÁNG /.test(a2.mon), 'A2 trang Doanh thu: tiêu đề + tổng tháng '+a2.total);
   check(a2.pillsOk && a2.day===a2.dayT, 'A3 dải tuần = doanh thu theo ngày, dòng ngày '+a2.day);
-  check(a2.rows===a2.wantRows && a2.dash, 'A4 các buổi hôm nay (mọi coach, giờ ký, "—" nhập tay): '+a2.rows.split(',').length+' buổi');
+  check(a2.rows===a2.wantRows && (a2.dash || !a2.wantRows), 'A4 các buổi hôm nay (mọi coach, giờ ký, "—" nhập tay): '+(a2.rows?a2.rows.split(',').length:0)+' buổi');   /* demo không có buổi ngày 7/14/21/28 → ngày đó danh sách rỗng là đúng */
   if(process.env.SHOT) await ap.screenshot({path:path.join(OUT, 'admin-dt.png')});
   await ap.click('#p-com .nav .ghost'); await ap.waitForFunction(function(){ return state.screen==='p-home'; }, null, {timeout:6000});
   await actx.close();
