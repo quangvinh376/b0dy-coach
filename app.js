@@ -7,7 +7,7 @@
    ===================================================================== */
 'use strict';
 var $=function(id){ return document.getElementById(id); };
-var APP_VER='v2.7.2';
+var APP_VER='v2.7.3';
 
 /* ---------------- tiện ích ---------------- */
 function isoToday(d){ d=d||new Date(); return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2); }
@@ -1999,12 +1999,23 @@ function ciFail(m, ci, text, many){
    ===================================================================== */
 HOOK['p-plan']=function(dir, quiet){ renderPlan(!quiet); if(!quiet && !state.session.plan.length) setTimeout(openLib, 380); };
 function planCounts(name){ var s=state.session, n=0; s.people.forEach(function(p){ var e=p.ex[name]; if(e) n=Math.max(n, e.sets.length); }); return n; }
+/* v2.7.3 (Figma 641:1217): tình trạng tập ngay dưới tên bài — "Set n" Acid = bài đang tập dở / đang chọn (n = set kế tiếp),
+   "Đã xong n set" xám #9E9E9E = bài đã bấm xong (mọi khách của buổi), chưa tập gì thì không có dòng này. 1:2: số set = khách nhiều set hơn. */
+function planStatus(n, i){
+  var s=state.session, sets=planCounts(n), ps=s.people||[];
+  if(sets && ps.length && ps.every(function(p){ var e=p.ex[n]; return e && e.done; })) return {t:'Đã xong '+sets+' set', done:1};
+  if(sets || (s.started && ps.some(function(p){ return p.cur===i; }))) return {t:'Set '+(sets+1), done:0};
+  return null;
+}
 function renderPlan(animate){
   var s=state.session, g=$('pl-grid'); g.innerHTML='';
   s.plan.forEach(function(n,i){
     var t=document.createElement('div'); t.className='ptile'+(animate?' rowin':''); if(animate) t.style.animationDelay=Math.min(i*30,240)+'ms'; t.dataset.i=i;
-    var sets=planCounts(n);
-    t.innerHTML='<div><div class="no">'+pad2(i+1)+'</div><div class="nm">'+esc(exShort(n))+'</div></div><div class="ft"><span class="lab">'+esc(upper(exGroup(n)))+(sets?' · '+sets+' SET':'')+'</span>'+ico('i-drag')+'</div>';
+    var st=planStatus(n,i);
+    t.setAttribute('role','button'); t.tabIndex=0; t.setAttribute('aria-label', exShort(n)+(st?' — '+st.t:''));
+    t.innerHTML='<div><div class="no">'+pad2(i+1)+'</div><div class="nm">'+esc(exShort(n))+'</div>'+(st?'<div class="pst'+(st.done?' done':'')+'">'+esc(st.t)+'</div>':'')+'</div><div class="ft"><span class="lab">'+esc(upper(exGroup(n)))+'</span>'+ico('i-drag')+'</div>';
+    t.addEventListener('keydown', function(e){ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); planOpen(+t.dataset.i); } });
+    t.addEventListener('click', function(){ var k=t._tap; t._tap=0; if(k && Date.now()-k<800) planOpen(+t.dataset.i); });   /* chỉ chạm thật (dragify đánh dấu); nhấc/kéo/cuộn thì không */
     dragify(t); g.appendChild(t);
   });
   var add=document.createElement('button'); add.className='ptile add'+(animate?' rowin':''); if(animate) add.style.animationDelay=Math.min(s.plan.length*30,240)+'ms';
@@ -2036,6 +2047,7 @@ function dragify(t){
   t.addEventListener('touchmove', function(ev){ if(DRAG && DRAG.t===t && !DRAG.done && ev.cancelable) ev.preventDefault(); }, {passive:false});
   t.addEventListener('pointerdown', function(e){
     if(e.button>0 || t.classList.contains('ph')) return;
+    t._tap=0;
     if(DRAG){ if(DRAG.done && DRAG.finish) DRAG.finish(); else return; }   /* đang bay về → chốt ngay, cho nhấc tiếp (ngắt được) */
     var x0=e.clientX, y0=e.clientY, pid=e.pointerId, moved=false, timer=setTimeout(function(){ if(!moved) lift(e); }, 220);
     function mv(ev){
@@ -2043,7 +2055,12 @@ function dragify(t){
       if(!DRAG || DRAG.t!==t){ if(Math.abs(ev.clientX-x0)>6 || Math.abs(ev.clientY-y0)>6){ moved=true; clearTimeout(timer); } return; }
       if(ev.cancelable) ev.preventDefault(); move(ev);
     }
-    function up(ev){ if(ev && ev.pointerId!==pid) return; clearTimeout(timer); unbind(); if(DRAG && DRAG.t===t && !DRAG.done) drop(ev && ev.type==='pointercancel'); }
+    function up(ev){ if(ev && ev.pointerId!==pid) return; clearTimeout(timer); unbind();
+      if(DRAG && DRAG.t===t && !DRAG.done){ drop(ev && ev.type==='pointercancel'); return; }
+      /* v2.7.3: chạm = nhả trước khi nhấc, ngón chưa di > 6px, không phải trình duyệt huỷ để cuộn → đánh dấu; chuyển màn ở "click"
+         (chuyển ngay lúc pointerup thì iOS bắn click tổng hợp vào nút của màn loop vừa hiện dưới ngón = chạm ma) */
+      if(ev && ev.type==='pointerup' && !moved && !DRAG) t._tap=Date.now();
+    }
     function unbind(){ document.removeEventListener('pointermove',mv); document.removeEventListener('pointerup',up); document.removeEventListener('pointercancel',up); }
     document.addEventListener('pointermove',mv,{passive:false}); document.addEventListener('pointerup',up); document.addEventListener('pointercancel',up);
 
@@ -2161,6 +2178,21 @@ function startLoop(){
   closeLib(true); var first=!s.started; s.started=1; if(!s.startedAt) s.startedAt=Date.now();
   /* lần bắt đầu đầu tiên luôn vào bài 01 (kéo thả đổi chỗ trước khi bắt đầu đã dời p.cur theo bài cũ) */
   s.people.forEach(function(p){ if(first || p.cur>=s.plan.length) p.cur=0; primePerson(p); });
+  saveSession(); go('p-loop','fwd');
+}
+/* v2.7.3: chạm một thẻ ở "Bài tập hôm nay" → vào thẳng bài đó, đúng set kế tiếp (primePerson: set gần nhất trong buổi / lần trước).
+   Chỉ dời khách đang ở pha thiết lập (1:1 luôn vậy khi đứng ở màn này); 1:2 mà nửa kia đang trong set / đang nghỉ thì để nguyên nửa đó.
+   Chặn chạm đúp (cả hai lần đều gọi go). */
+var PLAN_OPEN_T=0;
+function planOpen(i){
+  var s=state.session; if(!s || !s.plan[i] || state.screen!=='p-plan' || DRAG) return;
+  var now=Date.now(); if(now-PLAN_OPEN_T<600) return; PLAN_OPEN_T=now;
+  closeLib(true); s.started=1; if(!s.startedAt) s.startedAt=now;
+  s.people.forEach(function(p){
+    if(!p.phase || p.phase==='setup'){ p.cur=i; p.phase='setup'; }
+    else if(p.cur>=s.plan.length) p.cur=0;
+    primePerson(p);
+  });
   saveSession(); go('p-loop','fwd');
 }
 /* reps/kg mặc định cho bài đang chọn: set gần nhất trong buổi → lần trước của khách → 10 × 20 */

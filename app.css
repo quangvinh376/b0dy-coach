@@ -483,7 +483,14 @@ svg{display:block}
        touch-action:pan-y;transition:transform .26s cubic-bezier(.2,.8,.2,1),opacity .2s linear,box-shadow .2s linear;border:1px solid transparent}
 .ptile .no{font-family:var(--mono);font-size:11px;line-height:13px;letter-spacing:.88px;color:var(--gray)}
 .ptile .nm{font-size:16px;line-height:19px;letter-spacing:-.16px;margin-top:8px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+/* v2.7.3 (Figma 641:1217): dòng tình trạng ngay dưới tên — cùng cỡ chữ tên; Acid = set đang tập, xám = đã xong */
+.ptile .pst{font-size:16px;line-height:19px;letter-spacing:-.16px;color:var(--acid);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ptile .pst.done{color:var(--gray)}
 .ptile .ft{display:flex;justify-content:space-between;align-items:center;height:20px}
+/* chạm thẻ = vào bài (v2.7.3): phản hồi bấm = nền sáng lên đúng màu thẻ đang nhấc (#2A2A2A) — không dùng scale
+   vì lúc nhấc kéo, kích thước/vị trí thẻ được đo ngay dưới ngón (scale làm lệch ô → đổi chỗ sai hàng) */
+.pgrid>.ptile{cursor:pointer;-webkit-tap-highlight-color:transparent}
+.pgrid>.ptile:not(.add):not(.ph):active{background:#2A2A2A}
 .ptile .ft .ic{color:var(--gray)}
 .ptile.add{background:none;border-color:var(--hair);justify-content:space-between;padding:12px}
 .ptile.add .nm{color:var(--acid);display:flex;align-items:center;gap:8px;margin-top:0}
