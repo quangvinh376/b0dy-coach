@@ -6,6 +6,8 @@
    Không có PIN thật nào ở đây: PIN giả 'ZZZZ' (admin), 'AAAA'/'BBBB' (coach). */
 var fs = require('fs'), path = require('path'), vm = require('vm'), assert = require('assert');
 var ROOT = path.resolve(__dirname, '..');
+/* v2.9: MARGIN=1 → chạy toàn bộ bài test trên bố cục BA mới (cột lề A trống ở MEMBERS · SESSION LOG · COM, "Ngày ký" thay "Ngày bán hộ") */
+var M = process.env.MARGIN ? 1 : 0;
 var CODE = process.env.GAS_CODE;
 if (!CODE || !fs.existsSync(CODE)) { console.log('SKIP: đặt GAS_CODE=<đường dẫn Code.gs>'); process.exit(0); }
 
@@ -46,12 +48,15 @@ Sheet.prototype.getRange = function (r, c, nr, nc) {
   return {
     getValues: function () { var out = []; for (var i = 0; i < nr; i++) { var row = []; for (var j = 0; j < nc; j++) row.push(sh.cell(r + i, c + j)); out.push(row); } return out; },
     getValue: function () { return sh.cell(r, c); },
-    setValue: function (v) { if (typeof v === 'string' && /^\d{1,2}\/\d{1,2}\/\d{4}$/.test(v) && sh.name === 'SESSION LOG' && c === 2) v = sheetDate(v, sh.ss.tz); sh.put(r, c, v); sh.ss.writes.push([sh.name, r, c, v]); return this; },
+    setValue: function (v) { if (typeof v === 'string' && /^\d{1,2}\/\d{1,2}\/\d{4}$/.test(v) && sh.name === 'SESSION LOG' && c === 2 + M) v = sheetDate(v, sh.ss.tz); sh.put(r, c, v); sh.ss.writes.push([sh.name, r, c, v]); return this; },
     setValues: function (vals) { if (vals.length !== nr || vals[0].length !== nc) throw new Error('setValues kích thước lệch'); for (var i = 0; i < nr; i++) for (var j = 0; j < nc; j++) sh.put(r + i, c + j, vals[i][j]); sh.ss.writes.push([sh.name, r, c, 'x' + nr]); return this; },
     setFontWeight: function () { return this; }, setNumberFormat: function () { return this; }
   };
 };
 Sheet.prototype.setFrozenRows = function (n) { this.frozen = n; };
+/* lưới giả: số dòng tối đa = số dòng đang có (Logbook.gs v2.x nới lưới bằng insertRowsAfter trước khi ghi) */
+Sheet.prototype.getMaxRows = function () { return Math.max(this.rows.length, 1); };
+Sheet.prototype.insertRowsAfter = function (r, n) { var a = []; for (var i = 0; i < n; i++) a.push([]); this.rows.splice.apply(this.rows, [r, 0].concat(a)); };
 function Spreadsheet(id, tz) { this.id = id; this.tz = tz; this.sheets = []; this.writes = []; }
 Spreadsheet.prototype.add = function (name, gid, rows) { var s = new Sheet(name, gid, rows, this); this.sheets.push(s); return s; };
 Spreadsheet.prototype.getSheetByName = function (n) { return this.sheets.filter(function (s) { return s.name === n; })[0] || null; };
@@ -92,6 +97,7 @@ function reset() {
   logRows.push(logRow(TODAY_VN, 'Đỗ Thành Công', 'Hủy', 'app 07:00 · hủy: Quyết Hán', 'Quyết Hán'));
   for (var i = 0; i < 20; i++) { var e = []; for (var k = 0; k < 14; k++) e.push(''); e[0] = '=IF($B5="","",""&TEXT(ROW()-4,"0000"))'; logRows.push(e); }   /* công thức kéo sẵn */
   ba.add('SESSION LOG', 95777908, logRows);
+  if (M) ba.sheets.forEach(function (sh) { sh.rows = sh.rows.map(function (r) { return [''].concat(r).map(function (v) { return v === 'Ngày bán hộ' ? 'Ngày ký' : v; }); }); });
   ba.add('COM', 22, [
     ['— COMMISSION'], ['Com dạy = Buổi × Đơn giá'], [' THÁNG:', new SDate(MONTH + '-15T00:00:00Z')], [' TỪ:', ''], [' ĐẾN:', ''],
     ['— TỔNG HỢP THEO COACH'],
@@ -185,12 +191,12 @@ var r = call({ action: 'adm_checkin', apin: 'ZZZZ', ip: '9.9.9.9', name: 'Nguy�
 check('ok từ IP lạ (không khoá IP)', r.ok === true, r);
 var log = F.ba.getSheetByName('SESSION LOG'), row = r.row;
 check('ghi đúng dòng trống đầu tiên (8)', row === 8, row);
-check('B = ngày hôm nay (Date theo TZ file)', Object.prototype.toString.call(log.cell(row, 2)) === '[object Date]' && formatDate(log.cell(row, 2), TZ_VN, 'yyyy-MM-dd') === TODAY_VN, String(log.cell(row, 2)));
-check('G = tên', log.cell(row, 7) === 'Nguyễn Quang Vinh');
-check('K = Đã tập', log.cell(row, 11) === 'Đã tập', log.cell(row, 11));
-check('N = app HH:mm · ký: Admin', /^app \d\d:\d\d · ký: Admin$/.test(log.cell(row, 14)), log.cell(row, 14));
-check('không ghi cột công thức (A giữ công thức)', String(log.cell(row, 1)).indexOf('=IF(') === 0);
-check('chỉ chạm B G K N', F.ba.writes.filter(function (w) { return w[0] === 'SESSION LOG'; }).every(function (w) { return [2, 7, 11, 14].indexOf(w[2]) >= 0; }), F.ba.writes);
+check('B = ngày hôm nay (Date theo TZ file)', Object.prototype.toString.call(log.cell(row, 2 + M)) === '[object Date]' && formatDate(log.cell(row, 2 + M), TZ_VN, 'yyyy-MM-dd') === TODAY_VN, String(log.cell(row, 2 + M)));
+check('G = tên', log.cell(row, 7 + M) === 'Nguyễn Quang Vinh');
+check('K = Đã tập', log.cell(row, 11 + M) === 'Đã tập', log.cell(row, 11 + M));
+check('N = app HH:mm · ký: Admin', /^app \d\d:\d\d · ký: Admin$/.test(log.cell(row, 14 + M)), log.cell(row, 14 + M));
+check('không ghi cột công thức (A giữ công thức)', String(log.cell(row, 1 + M)).indexOf('=IF(') === 0);
+check('chỉ chạm B G K N', F.ba.writes.filter(function (w) { return w[0] === 'SESSION LOG'; }).every(function (w) { return [2 + M, 7 + M, 11 + M, 14 + M].indexOf(w[2]) >= 0; }), F.ba.writes);
 check('trả coach phụ trách + by Admin + giờ', r.coach === 'Quyết Hán' && r.by === 'Admin' && /^\d\d:\d\d$/.test(r.at), r);
 check('member đọc lại (không khoá IP)', r.member && r.member.name === 'Nguyễn Quang Vinh', r.member);
 var r2 = call({ action: 'adm_checkin', apin: 'ZZZZ', ip: '9.9.9.9', name: 'Nguyễn Quang Vinh', date: TODAY_VN });
@@ -199,7 +205,7 @@ var before = F.ba.writes.length;
 var r3 = call({ action: 'adm_checkin', apin: 'ZZZZ', name: 'Người Lạ', date: TODAY_VN });
 check('khách không có trong MEMBERS → chặn TRƯỚC khi ghi', r3.error === 'khong_thay_khach' && F.ba.writes.length === before, r3);
 var r4 = call({ action: 'adm_checkin', apin: 'ZZZZ', name: 'Đỗ Thành Công', date: TODAY_VN });
-check('dòng Hủy hôm nay → check-in lại được', r4.ok === true && log.cell(r4.row, 11) === 'Đã tập', r4);
+check('dòng Hủy hôm nay → check-in lại được', r4.ok === true && log.cell(r4.row, 11 + M) === 'Đã tập', r4);
 check('thiếu tên', call({ action: 'adm_checkin', apin: 'ZZZZ', name: '' }).error === 'thieu_ten');
 check('khoá được nhả', LOCKS.held === 0, LOCKS);
 
@@ -266,6 +272,8 @@ reset();
 r = call({ action: 'coach', pin: 'AAAA' });
 check('coach (PIN Quyết Hán) vẫn chỉ khách của mình', r.ok && r.members.every(function (x) { return x.coach === 'Quyết Hán'; }) && r.members.length === 2, r.members && r.members.map(function (x) { return x.name; }));
 check('Hiền Mai (PIN) thấy khách của mình', call({ action: 'coach', pin: 'BBBB' }).members.filter(function (x) { return x.coach === 'Hiền Mai'; }).length === 1);
+var maiC = (call({ action: 'coach', pin: 'BBBB' }).members || []).filter(function (x) { return x.name === 'Vũ Sao Mai'; })[0];
+check('coach: khách đã ký hôm nay → checked + giờ ký (lbSignedToday_)', maiC && maiC.checked === true && maiC.signed === '08:15', maiC);
 check('coach bằng PIN admin vẫn sai_pin (app lui sang admin)', call({ action: 'coach', pin: 'ZZZZ' }).error === 'sai_pin');
 check('admin action cũ vẫn chạy', call({ action: 'admin', apin: 'ZZZZ' }).ok === true);
 check('ping', call({ action: 'ping' }).ok === true);
