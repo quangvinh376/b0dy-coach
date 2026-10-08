@@ -226,15 +226,15 @@ function lbCoach_(p) {
 function lbSignedToday_() {
   try {
     var sh = chkSS_().getSheetByName('SESSION LOG'); if (!sh) return {};
-    var n = sh.getLastRow(); if (n < 5) return {};
-    var v = sh.getRange(5, 2, n - 4, 13).getValues();          /* B..N */
+    var L = statsLogCols_(sh), n = sh.getLastRow(); if (n < L.r1) return {};   /* v2.9: cột theo tiêu đề (cột lề A) */
+    var v = sh.getRange(L.r1, 1, n - L.r1 + 1, L.w).getValues();
     var tz = chkSS_().getSpreadsheetTimeZone(), today = lbToday_(), out = {};
     for (var i = 0; i < v.length; i++) {
-      var d = v[i][0]; if (!d) continue;
+      var d = v[i][L.d]; if (!d) continue;
       var k = (d instanceof Date) ? Utilities.formatDate(d, tz, 'yyyy-MM-dd') : lbKey_(d);
       if (k !== today) continue;
-      var name = String(v[i][5] || '').trim(); if (!name) continue;      /* G */
-      var m = String(v[i][12] || '').match(/(\d{1,2}):(\d{2})/);         /* N */
+      var name = String(v[i][L.n] || '').trim(); if (!name) continue;    /* Học viên */
+      var m = String(v[i][L.sig] || '').match(/(\d{1,2}):(\d{2})/);      /* Ký điện tử */
       out[lbNorm_(name)] = m ? (('0' + m[1]).slice(-2) + ':' + m[2]) : '';
     }
     return out;

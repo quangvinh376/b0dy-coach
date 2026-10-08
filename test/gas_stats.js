@@ -63,7 +63,21 @@ function fakeFixture(){
     plan: { 'Khách An': 3, 'Khách Bình': 2, 'Khách Cường': 3, 'Khách Giang': 3 },
     w0: '2026-08-17'
   };
-  return { members: members, log: log, cfg: cfg, cfgName: ' ⚙️ 2', expect: expect };
+  /* COM — bảng tổng hợp theo coach (số GIẢ). Coach Một: Σ Hoa hồng 400.000 · dòng Tổng: Doanh thu 2.000.000 */
+  var comT = [['— COMMISSION'], ['Com dạy = Buổi × Đơn giá × % coach'], [], [' THÁNG:', { date: '2026-10-06' }], [' TỪ:', ''], [' ĐẾN:', ''], [],
+    ['— TỔNG HỢP THEO COACH'], ['Coach','Buổi dạy','Doanh thu','% Com','Hoa hồng','Buổi bán hộ','Com bán hộ','Σ Hoa hồng'],
+    ['Coach Một', 5, 1500000, 0.2, 300000, 1, 100000, 400000], ['Coach Hai', 1, 500000, 0.15, 75000, 0, 0, 75000], ['Tổng', 6, 2000000, '', 375000, 1, 100000, 475000]];
+  expect.com = { month: '2026-10', total: 400000 }; expect.rev = { month: '2026-10', total: 2000000 };
+  return { members: members, log: log, cfg: cfg, cfgName: ' ⚙️ 2', com: comT, expect: expect };
+}
+/* v2.9 — cùng dữ liệu nhưng theo bố cục BA mới (08/10/2026): cột lề A trống ở MỌI sheet + "Ngày bán hộ" đổi tên "Ngày ký".
+   Kết quả statsApi_ / admStats_ phải GIỐNG HỆT bố cục cũ. */
+function marginFixture(fx){
+  function pad(rows){ return rows.map(function (r) { return [''].concat(r); }); }
+  var g = JSON.parse(JSON.stringify(fx));
+  g.members = pad(g.members); g.log = pad(g.log); g.cfg = pad(g.cfg); g.com = pad(g.com);
+  g.members.forEach(function (r) { var i = r.indexOf('Ngày bán hộ'); if (i >= 0) r[i] = 'Ngày ký'; });
+  return g;
 }
 
 /* ---------- sheet giả ---------- */
@@ -84,7 +98,7 @@ Book.prototype.getSpreadsheetTimeZone = function(){ return this.tz; };
 
 function run(fx){
   var E = fx.expect, FIXED = Date.parse(E.today + 'T10:00:00+07:00');
-  var log = new Sheet('SESSION LOG', fx.log), mem = new Sheet('MEMBERS', fx.members), cfg = new Sheet(fx.cfgName, fx.cfg), com = new Sheet('COM', [['— COMMISSION']]);
+  var log = new Sheet('SESSION LOG', fx.log), mem = new Sheet('MEMBERS', fx.members), cfg = new Sheet(fx.cfgName, fx.cfg), com = new Sheet('COM', fx.com || [['— COMMISSION']]);
   var BA = new Book([mem, log, com, cfg, new Sheet(' ⚙️ 1', [['x']])], 'Asia/Ho_Chi_Minh'), CDB = new Book([], 'Asia/Ho_Chi_Minh');
   var RD = Date;
   function FD(){ var a = Array.prototype.slice.call(arguments); return a.length ? new (Function.prototype.bind.apply(RD, [null].concat(a)))() : new RD(FIXED); }
@@ -98,7 +112,7 @@ function run(fx){
     PropertiesService: { getScriptProperties: function(){ return { getProperty: function(k){ return k === 'COACH_PINS' ? JSON.stringify((function(){ var o = {}; o[E.coach] = E.pin; return o; })()) : null; } }; } },
     LockService: { getScriptLock: function(){ return { waitLock: function(){}, releaseLock: function(){} }; } },
     Logger: { log: function(){} },
-    memHdrRow_: function(sh){ for (var i = 0; i < sh.rows.length; i++) if (String(sh.rows[i][1]).trim() === 'Tên') return i + 1; return 5; },
+    memHdrRow_: function(sh){ for (var i = 0; i < sh.rows.length; i++) if ((sh.rows[i] || []).some(function (v) { return String(v).trim() === 'Tên'; })) return i + 1; return 5; },
     chkSS_: function(){ return { other: 1 }; },
     adminOk_: function(){ return true; }
   };
@@ -135,5 +149,16 @@ if (E.admSess) {
 if (E.admMon && process.env.FIXTURE) check(Object.keys(E.admMon).every(function (k) { return adm.comMon && adm.comMon[k] === E.admMon[k]; }), 'S11r Admin Doanh thu tháng khớp tab COM ' + JSON.stringify(adm.comMon));
 check(!(adm.sess || []).some(function (x) { return 'r' in x; }) && !(res.sess || []).some(function (x) { return 'r' in x; }), 'S12 không gửi số dòng nội bộ (r) xuống app');
 check(Object.keys(res).indexOf('hist') >= 0 && Object.keys(res).indexOf('days') >= 0 && res.monthTotal >= 0, 'S10 khoá cũ của stats giữ nguyên (days · monthTotal · hist)');
+if (E.com) check(JSON.stringify(res.com) === JSON.stringify(E.com), 'S13 hoa hồng tháng tab COM (cột Σ Hoa hồng) ' + JSON.stringify(res.com));
+if (E.rev) check(JSON.stringify(adm.rev) === JSON.stringify(E.rev), 'S14 Admin Doanh thu = dòng Tổng tab COM ' + JSON.stringify(adm.rev));
+if (!process.env.FIXTURE) {
+  /* v2.9 — bố cục mới: cột lề A ở SESSION LOG · COM · ⚙️ 2 · MEMBERS + "Ngày ký" */
+  var R2 = run(marginFixture(fx));
+  var same = JSON.stringify(R2.res) === JSON.stringify(res), sameA = JSON.stringify(R2.adm) === JSON.stringify(adm);
+  check(same, 'M1 bố cục có cột lề A: statsApi_ trả GIỐNG HỆT bố cục cũ' + (same ? '' : '\n      got ' + JSON.stringify(R2.res).slice(0, 600)));
+  check(sameA, 'M2 bố cục có cột lề A: admStats_ trả GIỐNG HỆT bố cục cũ' + (sameA ? '' : '\n      got ' + JSON.stringify(R2.adm).slice(0, 600)));
+  check(R2.res.com && R2.res.com.total === E.com.total && R2.adm.rev && R2.adm.rev.total === E.rev.total, 'M3 COM có cột lề: Σ Hoa hồng + Doanh thu đọc đúng cột');
+  check(R2.logReads < R2.logRows * 15, 'M4 vẫn chỉ đọc SESSION LOG tới dòng có ngày cuối: ' + R2.logReads + ' ô');
+}
 console.log(fail ? 'FAIL ' + pass + '/' + (pass + fail) : 'PASS ' + pass + '/' + pass);
 process.exit(fail ? 1 : 0);

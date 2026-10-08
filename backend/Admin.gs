@@ -122,11 +122,12 @@ function admSignedToday_(ix) {
     }
     if (!hit.length) return out;
     var lo = hit[0], hi = hit[hit.length - 1];
-    var blk = ix.log.getRange(ix.R1 + lo, CHECKIN.COL_DATE, hi - lo + 1, 13).getValues();   /* B..N */
+    var c0 = CHECKIN.COL_DATE, iN = CHECKIN.COL_NAME - c0, iS = CHECKIN.COL_NOTE - c0;     /* v2.9: cột theo chkInit_ (dò tiêu đề) */
+    var blk = ix.log.getRange(ix.R1 + lo, c0, hi - lo + 1, Math.max(iN, iS) + 1).getValues();
     for (var j = 0; j < hit.length; j++) {
       var v = blk[hit[j] - lo];
-      var name = String(v[5] || '').trim(); if (!name) continue;                           /* G */
-      var m = String(v[12] || '').match(/(\d{1,2}):(\d{2})/);                              /* N */
+      var name = String(v[iN] || '').trim(); if (!name) continue;                          /* Học viên */
+      var m = String(v[iS] || '').match(/(\d{1,2}):(\d{2})/);                              /* Ký điện tử */
       out[lbNorm_(name)] = m ? (('0' + m[1]).slice(-2) + ':' + m[2]) : '';
     }
   } catch (e) {}
@@ -292,17 +293,17 @@ function admStats_(p) {
   var cFrom = statsPrevMonth_(month) + '-01', raw = [];                /* v2.7.1: trang Doanh thu — buổi từ đầu tháng trước */
   out.comFrom = cFrom;
   if (log) {
-    var r1 = ix ? ix.R1 : 1, nr = ix ? (ix.last - ix.R1 + 1) : log.getLastRow();
-    var vals = nr > 0 ? log.getRange(r1, 2, nr, 13).getValues() : [];      /* B..N */
+    var r1 = ix ? ix.R1 : 1, nr = ix ? (ix.last - ix.R1 + 1) : log.getLastRow(), L = statsLogCols_(log);   /* v2.9: cột theo tiêu đề (cột lề A) */
+    var vals = nr > 0 ? log.getRange(r1, 1, nr, L.w).getValues() : [];
     for (var i = 0; i < vals.length; i++) {
-      var r = vals[i], d = statsIso_(r[0], tz), name = String(r[5] || '').trim(), st = String(r[9] || '');
+      var r = vals[i], d = statsIso_(r[L.d], tz), name = String(r[L.n] || '').trim(), st = String(r[L.st] || '');
       if (!d || !name) continue;
       if (st.indexOf('ã tập') < 0) continue;
       var pc = out.perClient[name] || (out.perClient[name] = { m: 0, last: '' });
       if (d.slice(0, 7) === month) { out.days[d] = (out.days[d] || 0) + 1; out.monthTotal++; pc.m++; }
       if (d < today && d > pc.last) pc.last = d;
       statsPcAdd_(pc, d, ctx);
-      if (d >= cFrom && d <= today) raw.push({ d: d, t: statsSigned_(r[12]), n: name, id: String(r[6] || '').trim(), co: String(r[3] || '').trim(), r: i });
+      if (d >= cFrom && d <= today) raw.push({ d: d, t: statsSigned_(r[L.sig]), n: name, id: String(r[L.id] || '').trim(), co: String(r[L.co] || '').trim(), r: i });
     }
   }
   try {                                                               /* v2.7: buổi/tuần đăng ký (MEMBERS) mọi khách */
@@ -326,11 +327,12 @@ function admStats_(p) {
   /* 2. COM — Doanh thu cả phòng: dòng "Tổng" (cột A) của bảng tổng hợp, cột C. Tháng = ô "THÁNG:". */
   var com = ba.getSheetByName('COMMISSION') || ba.getSheetByName('COM');
   if (com) {
-    var cv = com.getRange(1, 1, Math.min(com.getLastRow(), 60), 8).getValues(), comMonth = '', rev = null;
+    var cv = com.getRange(1, 1, Math.max(1, Math.min(com.getLastRow(), 60)), statsW_(com, 11)).getValues(), comMonth = '', rev = null;
+    var c0 = statsHdrAt_(cv, 'coach').c;                              /* v2.9: cột "Coach" (A cũ · B khi có cột lề) */
     for (var j = 0; j < cv.length; j++) {
-      var row = cv[j], a = String(row[0] || '').trim();
-      if (!comMonth && /THÁNG/i.test(a)) comMonth = statsMonthLabel_(row[1]);
-      if (rev === null && /^tổng$/i.test(a) && row[2] !== '') rev = statsNum_(row[2]);
+      var row = cv[j], a = String(row[c0] || '').trim();
+      if (!comMonth && /THÁNG/i.test(a)) comMonth = statsMonthLabel_(row[c0 + 1]);
+      if (rev === null && /^tổng$/i.test(a) && row[c0 + 2] !== '') rev = statsNum_(row[c0 + 2]);
     }
     if (rev !== null) out.rev = { month: comMonth || month, total: rev };
   }
