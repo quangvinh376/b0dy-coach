@@ -70,10 +70,11 @@ var ROOT=process.env.BASE||path.resolve(__dirname,'..'), serve=require(path.join
   check(r3.scr==='p-loop' && r3.cur===2 && r3.phase==='setup', 'T3a chạm thẻ 03 → màn loop, bài 03 (cur 2), thiết lập');
   check(r3.setNo===2 && r3.kg===60 && r3.reps===6, 'T3b đúng set kế tiếp (set 2) + reps/kg của set gần nhất: '+r3.setNo+' · '+r3.reps+' × '+r3.kg);
   check(/Front Squat/.test(r3.t1) && /set 2/i.test(r3.sub), 'T3c màn loop hiện đúng tên bài + set: '+r3.t1+' / '+r3.sub);
-  /* T3d — từ loop ← về danh sách: bài 03 giờ là bài đang chọn ("Set 2" Acid), CTA tiếp tục đúng bài đó */
+  /* T3d — v2.8.1: từ loop, nút Menu mở window "Buổi tập hôm nay" (không về trang này nữa); bài 03 là bài đang chọn ("Set 2") */
   await page.click('#loop-host .g1'); await page.waitForTimeout(900);
-  var r3d=await page.evaluate(function(){ return {scr:state.screen, cur:state.session.people[0].cur}; });
-  check(r3d.scr==='p-plan' && r3d.cur===2, 'T3d ← từ thiết lập về danh sách, vẫn giữ bài 03');
+  var r3d=await page.evaluate(function(){ var t=document.querySelectorAll('#ws-grid .ptile:not(.add)')[2], p=t&&t.querySelector('.pst'); return {scr:state.screen, ws:WS.open, cur:state.session.people[0].cur, st:p?p.textContent:null}; });
+  check(r3d.scr==='p-loop' && r3d.ws && r3d.cur===2 && r3d.st==='Set 2', 'T3d Menu ở thiết lập → window Buổi tập hôm nay, bài 03 "Set 2": '+JSON.stringify(r3d));
+  await page.click('#ws-close'); await page.waitForTimeout(600);
 
   /* T4 — chạm thẻ 02 (đã xong) → vào bài 02, set 4 */
   await setup();

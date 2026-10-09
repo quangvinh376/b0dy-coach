@@ -175,7 +175,7 @@ function wkEdgesInPage(){
     await page.click(L+'.c1'); await w(400); await expectEdges('đang nghỉ 400ms (sóng Acid trên vành)', INK, INK, {darkOnly:true}); await shot('rest-hat');
     await w(3300); await expectEdges('hết giờ (0:00, bóng số 0)', INK, INK, {darkOnly:true});
   });
-  await run('W4', 'Pill trên màn nghỉ: đang hiện (y ≥ 10) không che điểm lấy mẫu; sau khi tắt → hidden (display:none) và tính lại màu; bấm dồn (Đạt → Lùi 380ms) không kẹt', async function(){
+  await run('W4', 'Pill trên màn nghỉ: đang hiện (y ≥ 10) không che điểm lấy mẫu; sau khi tắt → hidden (display:none) và tính lại màu; Menu → window rồi đóng ngay không kẹt (v2.8.1)', async function(){
     await page.click(L+'.c1'); await w(500); await page.click(L+'.film .exl button:first-child'); await w(900);
     await page.click(L+'.c1'); await w(500); await page.click(L+'.j1'); await w(1200); await pillGone(); await expectEdges('đặt giờ nghỉ lần 2', INK, INK, {darkOnly:true});
     await ev(function(){ notify('Kiểm tra pill trên màn nghỉ'); }); await w(500);
@@ -188,14 +188,15 @@ function wkEdgesInPage(){
     var st2=await ev(function(){ var p=document.getElementById('pill'); return {on:p.classList.contains('on'), hidden:p.hidden, disp:getComputedStyle(p).display}; });
     check(!st2.on && st2.hidden && st2.disp==='none', 'pill ẩn hẳn sau 240ms: '+JSON.stringify(st2));
     await expectEdges('pill đã ẩn', INK, INK, {darkOnly:true});
-    await page.click(L+'.g1'); await w(900);                                   /* v2.6: ← lùi về đang tập (bỏ kết quả vừa chấm) */
-    await page.click(L+'.j1'); await w(380); await page.click(L+'.g1'); await w(240);   /* bấm dồn: Đạt → ← lùi */
+    await page.click(L+'.g1'); await w(600);                                   /* v2.8.1: Menu → window "Buổi tập hôm nay" (sheet Ink) */
+    check(await ev(function(){ return WS.open; }), 'Menu ở đặt giờ nghỉ mở window');
+    await expectEdges('window Buổi tập hôm nay mở', INK, INK, {dim:true}); await shot('ws-open-rest');
+    await page.click('#ws-close'); await w(240);                               /* bấm dồn: đóng ngay khi window còn trượt */
     var ov=await ev(function(){ var cs=getComputedStyle(document.documentElement); return {t:cs.getPropertyValue('--edge-t').trim(), b:cs.getPropertyValue('--edge-b').trim()}; });
-    check(/#0A0A0A/i.test(ov.t) && /#0A0A0A/i.test(ov.b), 'bấm dồn: dải vẫn Ink: '+JSON.stringify(ov));
+    check(/#0A0A0A/i.test(ov.t) && /#0A0A0A/i.test(ov.b), 'đóng window giữa chừng: dải vẫn Ink: '+JSON.stringify(ov));
     await w(700); await pillGone();
-    var ov2=await ev(function(){ var s=LOOPS[0].state(); return {ph:state.session.people[0].phase, slices:s.slices, chase:s.chase}; });
-    check(ov2.ph==='active' && ov2.slices===0 && ov2.chase, 'sau Đạt → Lùi: đang tập, vành nhịp, không sót hạt: '+JSON.stringify(ov2)); await expectEdges('sau bấm dồn', INK, INK, {darkOnly:true});
-    await page.click(L+'.j1'); await w(1200); await pillGone(); await expectEdges('đặt giờ nghỉ lần 3', INK, INK, {darkOnly:true});
+    var ov2=await ev(function(){ return {ph:state.session.people[0].phase, ws:WS.open, on:document.getElementById('ws').classList.contains('on')}; });
+    check(ov2.ph==='rest-setup' && !ov2.ws && !ov2.on, 'sau đóng window: vẫn đặt giờ nghỉ: '+JSON.stringify(ov2)); await expectEdges('đặt giờ nghỉ lần 3', INK, INK, {darkOnly:true});
   });
   await run('W5', 'Màng .film v2.5.2: kính Ink 80–90 % + blur 11px (như mép cuộn đáy) → mép Ink/Ink khi mở; vào set mới → Ink', async function(){
     await ev(function(){ state.session.people[0].restTotal=60; saveSession(); });

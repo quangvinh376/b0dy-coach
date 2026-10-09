@@ -1,5 +1,5 @@
 /* Luồng 1:1 đầy đủ với máy chủ MOCK (không ?demo): ipify + worker + apps script + font.
-   Kiểm: check-in gửi 1 lần, SET giữ (hold) suốt vòng nghỉ tới khi sang set kế (v2.6), lùi về đang tập không gửi, offline vẫn ghi, mở lại app khôi phục buổi. */
+   Kiểm: check-in gửi 1 lần, SET giữ (hold) suốt vòng nghỉ tới khi sang set kế (v2.6), nút Menu ở Bắt đầu nghỉ mở window (v2.8.1), offline vẫn ghi, mở lại app khôi phục buổi. */
 var {chromium}=require('playwright'); var serve=require('./serve'); var fs=require('fs'); var assert=require('assert');
 (async function(){
   var PORT=+process.env.PORT||8125; var srv=await serve(PORT), browser=await chromium.launch({executablePath:'/opt/pw-browsers/chromium-1194/chrome-linux/chrome'});
@@ -38,10 +38,10 @@ var {chromium}=require('playwright'); var serve=require('./serve'); var fs=requi
   await page.click('#loop-host .j1'); await shot('rest-setup',900);
   await page.waitForTimeout(4500);
   assert.equal(SRV.logs.length, 0, 'SET đang giữ, chưa gửi'); 
-  await page.click('#loop-host .g1'); await shot('undo',900);                       /* v2.6: ← lùi về đang tập, bỏ kết quả vừa chấm */
-  assert.equal(await page.evaluate(function(){ return OUT.q.length; }), 0, 'lùi về đang tập xoá set khỏi outbox');
-  assert.equal(await page.evaluate(function(){ return state.session.people[0].phase; }), 'active', 'lùi về đúng set đang tập');
-  await page.click('#loop-host .j0'); await shot('rest-setup-fail',900);                /* chấm lại: Chưa đạt */
+  await page.click('#loop-host .g1'); await shot('menu-ws',900);                    /* v2.8.1: Bắt đầu nghỉ → nút Menu mở window "Buổi tập hôm nay" (không còn ← lùi về đang tập) */
+  assert.ok(await page.evaluate(function(){ return WS.open && state.session.people[0].phase==='rest-setup'; }), 'Menu mở window, pha Bắt đầu nghỉ giữ nguyên');
+  assert.equal(await page.evaluate(function(){ return OUT.q.filter(function(e){ return e.hold; }).length; }), 1, 'mở window không gửi set đang giữ');
+  await page.click('#ws-close'); await page.waitForTimeout(700);
   await page.evaluate(function(){ state.session.people[0].restTotal=8; saveSession(); }); await page.click('#loop-host .c1'); await shot('rest-0',300);
   await page.waitForTimeout(4000); await shot('rest-mid',100); await page.waitForTimeout(4600); await shot('rest-end',100);
   assert.ok((await page.textContent('#loop-host .c1')).indexOf('Nghỉ xong')>=0, 'CTA giữ nguyên "Nghỉ xong · kế tiếp" khi hết giờ');
@@ -68,7 +68,7 @@ var {chromium}=require('playwright'); var serve=require('./serve'); var fs=requi
   await page.click('#sm-form button:nth-child(5)'); await page.fill('#sm-note','Tốt'); await page.click('#sm-go'); await shot('done',1300);
   await page.waitForTimeout(1500);
   var types=SRV.logs.map(function(e){return e.type}); console.log('logs:', types.join(','));
-  assert.equal(types.filter(function(t){return t==='SET'}).length, 3, '3 set thật (1 hoàn tác không gửi)');
+  assert.equal(types.filter(function(t){return t==='SET'}).length, 3, '3 set thật');
   assert.equal(types.filter(function(t){return t==='BÀI'}).length, 2); assert.equal(types.filter(function(t){return t==='CHECKOUT'}).length, 1);
   var co=SRV.logs.filter(function(e){return e.type==='CHECKOUT'})[0]; assert.equal(co.form,5); assert.equal(co.note,'Tốt'); assert.equal(co.session,15);
   assert.equal(await page.evaluate(function(){ return localStorage.getItem('lb_session'); }), null, 'buổi đã chốt');

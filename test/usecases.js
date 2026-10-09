@@ -395,7 +395,7 @@ var CLIP={hard:[], ell:[]};
     await page.click('#pl-go'); await h.waitScreen('p-loop'); await h.wait(1300);
   });
 
-  await run('J', 'Loop 1:1: bánh xe, số bay xuống đáy, Đạt, chuỗi lùi từng bước (↩ đang tập → thiết lập · ← đặt giờ → đang tập · ↩ đang nghỉ → đặt giờ), nghỉ "Hạt" (vành thở ra, mỗi giây một hạt, kéo lúc đếm), hết giờ, menu, đổi bài, kết thúc', async function(){
+  await run('J', 'Loop 1:1: bánh xe, số bay xuống đáy, Đạt, chuỗi lùi (↩ đang tập → thiết lập · ↩ đang nghỉ → đặt giờ) + Menu ở thiết lập / đặt giờ → window Buổi tập hôm nay (v2.8.1), nghỉ "Hạt" (vành thở ra, mỗi giây một hạt, kéo lúc đếm), hết giờ, menu, đổi bài, kết thúc', async function(){
     var L='#loop-host .loop:nth-child(1) ';
     check(!(await h.has('#loop-host','two')) && (await h.count('#loop-host .loop'))===1, 'một nửa');
     var plan=await h.ev(function(){ return state.session.plan.map(exShort); });
@@ -424,12 +424,12 @@ var CLIP={hard:[], ell:[]};
     check(gA==='#i-undo|Hoàn tác', 'v2.6 · đang tập: nút trái ↩ "Hoàn tác" (trước: ← quay lại): '+gA);
     await page.click(L+'.g1'); await h.wait(600);
     check((await h.ev(function(){ return state.session.people[0].phase; }))==='setup' && (await h.txt(L+'.lp .head .sub'))==='Thiết lập set 1', 'hoàn tác → thiết lập');
-    check((await h.ev(function(){ var g=document.querySelector('#loop-host .g1'); return g.querySelector('use').getAttribute('href')+'|'+g.getAttribute('aria-label'); }))==='#i-back|Quay lại', 'thiết lập: nút trái ← "Quay lại"');
+    check((await h.ev(function(){ var g=document.querySelector('#loop-host .g1'); return g.querySelector('use').getAttribute('href')+'|'+g.getAttribute('aria-label'); }))==='#i-list|Buổi tập hôm nay', 'v2.8.1 · thiết lập: nút trái = Menu "Buổi tập hôm nay" (trước: ← quay lại)');
     await page.click(L+'.c1'); await h.wait(500); await page.click(L+'.j1'); await h.wait(900);
     check(!(await h.has(L.trim(),'acid')) && (await h.css(L.trim(),'backgroundColor'))==='rgb(10, 10, 10)' && (await h.txt(L+'.lp .head .sub'))==='Bắt đầu nghỉ' && (await h.txt(L+'.ex'))==='Đã đạt set 1', 'màn đặt giờ nghỉ nền Ink (không còn Acid tràn màn): '+(await h.txt(L+'.ex')));
     var hs=await h.ev(function(){ return LOOPS[0].state(); }); check(hs.slices===90 && hs.N===90 && !hs.chase && !hs.acid, 'vành nhịp thở ra thành 90 hạt Paper (1:30): '+JSON.stringify(hs));
     check((await h.txt(L+'.c1'))==='Bắt đầu nghỉ' && (await h.css(L+'.c1','backgroundColor'))==='rgb(250, 250, 250)', 'CTA Paper "Bắt đầu nghỉ" (Figma 561:225)');
-    check((await h.ev(function(){ var g=document.querySelector('#loop-host .g1'); return g.querySelector('use').getAttribute('href')+'|'+g.getAttribute('aria-label'); }))==='#i-back|Quay lại', 'v2.6 · đặt giờ nghỉ: nút trái ← "Quay lại" (trước: ↩ hoàn tác set)');
+    check((await h.ev(function(){ var g=document.querySelector('#loop-host .g1'); return g.querySelector('use').getAttribute('href')+'|'+g.getAttribute('aria-label'); }))==='#i-list|Buổi tập hôm nay', 'v2.8.1 · đặt giờ nghỉ: nút trái = Menu "Buổi tập hôm nay" (trước: ← lùi về đang tập)');
     check((await h.css(L+'.lp .head .t1 .ex','color'))==='rgba(250, 250, 250, 0.55)' && (await h.css(L+'.lp .head .sub > span.on','color'))==='rgb(250, 250, 250)', 'dòng đầu Paper 55 % / Paper');
     check(/^Đã ghi set 1$/.test(await h.pillText()), 'pill ghi set: '+(await h.pillText()));
     /* H2 — pill trên màn nghỉ Ink vẫn có viền, không còn biến thể trên Acid */
@@ -444,20 +444,12 @@ var CLIP={hard:[], ell:[]};
     await h.drag(L+'.clock .w-rest', 0, 80, {steps:8}); await h.wait(700);
     hp=await h.ev(function(){ return {t:state.session.people[0].restTotal, s:LOOPS[0].state().slices}; }); check(hp.t===90 && hp.s===90, 'kéo xuống lại → 90 hạt: '+JSON.stringify(hp));
     await h.clip('loop-rest-setup');
-    /* v2.6 · ← lúc đặt giờ nghỉ = lùi về ĐANG TẬP đúng set đó (bỏ kết quả vừa chấm, set chưa từng rời máy) để chấm lại */
-    await page.click(L+'.g1'); await h.wait(160);
-    var rw=await h.ev(function(){ var s=LOOPS[0].state(); return {inh:s.inhale, slices:s.slices}; });
-    check(rw.inh>0 && rw.slices===0, 'lùi: hạt đang tua ngược về vành nhịp (không hút về tâm, không tắt phụt): '+JSON.stringify(rw));
-    await h.wait(740);
-    var u=await h.ev(function(){ var p=state.session.people[0]; return {ph:p.phase, sets:p.ex[state.session.plan[p.cur]].sets.length, q:OUT.q.filter(function(e){return e.type==='SET'}).length, set:p.setNo}; });
-    check(u.ph==='active' && u.sets===0 && u.q===0 && u.set===1, 'lùi về đang tập: set vừa chấm bị bỏ, không còn trong hàng đợi: '+JSON.stringify(u));
-    check((await h.txt(L+'.lp .head .sub'))==='Đang tập set 1' && (await h.txt(L+'.ex'))===plan[0], 'dòng đầu về "'+plan[0]+'" / "Đang tập set 1": '+(await h.txt(L+'.ex'))+' / '+(await h.txt(L+'.lp .head .sub')));
-    var su=await h.ev(function(){ return LOOPS[0].state(); }); check(su.slices===0 && su.chase && su.calm===0 && su.dot===1 && su.alpha===1, 'vành nhịp đang thức hiện lại (calm 0, chấm tâm): '+JSON.stringify(su));
-    check((await h.hidden(L+'> .clock')) && !(await h.hidden(L+'.foot .nums')) && !(await h.hidden(L+'.j0')) && (await h.has(L+'.c1','j1')) && (await h.txt(L+'.c1'))==='Đạt', 'đồng hồ ẩn, cụm số + Chưa đạt / Đạt hiện lại');
-    check((await h.ev(function(){ return document.querySelector('#loop-host .fld.reps .v:nth-child(5)').textContent+'|'+document.querySelector('#loop-host .fld.kg .v:nth-child(5)').textContent; }))==='11|25', 'giữ reps/kg của set: 11 | 25');
-    check(/^Đã hoàn tác$/.test(await h.pillText()), 'pill hoàn tác: '+(await h.pillText()));
-    await page.click(L+'.j1'); await h.wait(900);
-    check((await h.ev(function(){ var p=state.session.people[0]; return p.phase+'|'+p.ex[state.session.plan[p.cur]].sets.length+'|'+OUT.q.filter(function(e){return e.type==='SET'&&e.hold}).length; }))==='rest-setup|1|1', 'chấm lại → đặt giờ nghỉ, đúng 1 set (đang giữ)');
+    /* v2.8.1 · nút trái lúc đặt giờ nghỉ = Menu → window "Buổi tập hôm nay" (chủ studio 09/10: ← dễ hiểu nhầm; không còn bước lùi về đang tập) */
+    await page.click(L+'.g1'); await h.wait(600);
+    var wo=await h.ev(function(){ var t=document.querySelector('#ws-grid .ptile .pst'); return {ws:WS.open, ph:state.session.people[0].phase, nm:document.getElementById('ws-nm').textContent, st:t?t.textContent:null, held:OUT.q.filter(function(e){return e.type==='SET'&&e.hold}).length}; });
+    check(wo.ws && wo.ph==='rest-setup' && wo.st==='Set 2' && wo.held===1 && wo.nm.length>0, 'Menu → window Buổi tập hôm nay (bài đang tập "Set 2", tên khách), set vẫn giữ: '+JSON.stringify(wo));
+    await page.click('#ws-close'); await h.wait(700);
+    check((await h.ev(function(){ var p=state.session.people[0]; return p.phase+'|'+p.ex[state.session.plan[p.cur]].sets.length+'|'+OUT.q.filter(function(e){return e.type==='SET'&&e.hold}).length+'|'+WS.open; }))==='rest-setup|1|1|false', 'đóng window → vẫn đặt giờ nghỉ, đúng 1 set (đang giữ)');
     await page.click(L+'.c1'); await h.wait(700);
     check((await h.ev(function(){ return state.session.people[0].phase; }))==='rest' && (await h.txt(L+'.lp .head .sub'))==='Đang nghỉ', 'đang nghỉ');
     check((await h.txt(L+'.c1'))==='Nghỉ xong · kế tiếp', 'CTA nghỉ: '+(await h.txt(L+'.c1')));
@@ -487,11 +479,11 @@ var CLIP={hard:[], ell:[]};
     check(!cz.acid && !cz.ghost && cz.n===90 && cz.N===90 && cz.t==='1:30' && cz.op==='1', 'đặt giờ lại: 90 hạt Paper, không bóng số 0, đồng hồ 1:30: '+JSON.stringify(cz));
     check((await h.txt(L+'.lp .head .sub'))==='Bắt đầu nghỉ' && (await h.txt(L+'.rh'))==='ĐẶT THỜI GIAN NGHỈ' && (await h.txt(L+'.c1'))==='Bắt đầu nghỉ' && (await h.css(L+'.c1','backgroundColor'))==='rgb(250, 250, 250)', 'chữ + nút về màn đặt giờ (Paper)');
     check((await h.ev(function(){ return OUT.q.filter(function(e){return e.type==='SET'&&e.hold}).length; }))===1, 'set vẫn giữ sau khi lùi');
-    /* chuỗi lùi tiếp: ← về đang tập — set chưa từng gửi nên bỏ được */
-    await page.click(L+'.g1'); await h.wait(900);
-    check((await h.ev(function(){ var p=state.session.people[0]; return p.phase+'|'+p.ex[state.session.plan[p.cur]].sets.length+'|'+OUT.q.filter(function(e){return e.type==='SET'}).length; }))==='active|0|0', 'đang nghỉ ↩ → đặt giờ ← → đang tập: set bỏ hẳn, hàng đợi trống');
-    await page.click(L+'.j1'); await h.wait(900); await page.click(L+'.c1'); await h.wait(700);
-    check((await h.ev(function(){ return state.session.people[0].phase; }))==='rest', 'chấm lại → nghỉ lại');
+    /* v2.8.1: ở đặt giờ nghỉ nút trái là Menu (không còn ← về đang tập) — mở window rồi đóng, set vẫn giữ, nghỉ lại */
+    await page.click(L+'.g1'); await h.wait(700);
+    check((await h.ev(function(){ var p=state.session.people[0]; return p.phase+'|'+WS.open+'|'+OUT.q.filter(function(e){return e.type==='SET'&&e.hold}).length; }))==='rest-setup|true|1', 'đang nghỉ ↩ → đặt giờ → Menu: window mở, set vẫn giữ');
+    await page.click('#ws-close'); await h.wait(700); await page.click(L+'.c1'); await h.wait(700);
+    check((await h.ev(function(){ return state.session.people[0].phase; }))==='rest', 'đóng window → bắt đầu nghỉ lại');
     await h.ev(function(){ var p=state.session.people[0]; p.restTotal=6; p.restStart=Date.now(); saveSession(); }); await h.wait(3000);
     var l10=await h.ev(function(){ var s=LOOPS[0].state(); return {lt:s.lastTen, mg:s.merge, c:getComputedStyle(document.querySelector('#loop-host .clock .line')).color, N:s.N}; });
     check(l10.lt && l10.mg===1 && l10.c==='rgb(212, 255, 0)' && l10.N===6, '10 giây cuối: hạt gom tròn, con số Acid, vành theo tổng mới: '+JSON.stringify(l10));
@@ -611,7 +603,7 @@ var CLIP={hard:[], ell:[]};
       check(nv.op==='1' && !nv.ovl && nv.g1 && nv.c1 && !nv.j0, 'nửa '+i+' · nav luôn hiện, không còn .ovl: '+JSON.stringify({op:nv.op, ovl:nv.ovl}));
       check(nv.g1.w===48 && nv.g1.h===48 && nv.c1.w===48 && nv.c1.h===48 && nv.g1.iw===24 && nv.c1.iw===24, 'nửa '+i+' · nút tròn 48×48, icon 24: g1 '+nv.g1.w+'×'+nv.g1.h+'/'+nv.g1.iw+' · c1 '+nv.c1.w+'×'+nv.c1.h+'/'+nv.c1.iw);
       check(near(nv.g1.bot,28,.5) && near(nv.c1.bot,28,.5) && near(nv.g1.x,24,.5) && near(nv.c1.r,24,.5), 'nửa '+i+' · đáy nút cách đáy nửa 28, rail 24: g1 bot '+nv.g1.bot+' x '+nv.g1.x+' · c1 bot '+nv.c1.bot+' r '+nv.c1.r);
-      check(nv.g1.icon==='#i-back' && nv.g1.label==='Quay lại' && nv.c1.icon==='#i-play' && nv.c1.label==='Bắt đầu set' && nv.c1.bg==='rgb(212, 255, 0)' && nv.txt==='', 'nửa '+i+' · thiết lập: ← | ▷ Acid, chỉ icon (nhãn ở aria-label)');
+      check(nv.g1.icon==='#i-list' && nv.g1.label==='Buổi tập hôm nay' && nv.c1.icon==='#i-play' && nv.c1.label==='Bắt đầu set' && nv.c1.bg==='rgb(212, 255, 0)' && nv.txt==='', 'nửa '+i+' · thiết lập: Menu ☰ (v2.8.1) | ▷ Acid, chỉ icon (nhãn ở aria-label)');
       check((await hitOk({x:nv.c1.cx, y:nv.c1.cy, s:'.c1'})) && (await hitOk({x:nv.g1.cx, y:nv.g1.cy, s:'.g1'})), 'nửa '+i+' · chạm tâm nút tới đúng nút');
       check((await h.css('#loop-host .loop:nth-child('+i+') .setup .w-reps','filter'))==='none', 'nửa '+i+' · không làm mờ nội dung');
     }
@@ -642,7 +634,7 @@ var CLIP={hard:[], ell:[]};
     await page.click('#loop-host .loop:nth-child(1) .c1'); await h.wait(600);
     await page.click('#loop-host .loop:nth-child(2) .c1'); await h.wait(500); await page.click('#loop-host .loop:nth-child(2) .j1'); await h.wait(900);
     check((await h.ev(function(){ return state.session.people.map(function(p){return p.phase}).join(); }))==='active,rest-setup', 'nửa 2 đặt giờ nghỉ, nửa 1 vẫn tập');
-    var nr=await nav2(2); check(nr.c1.icon==='#i-play' && nr.c1.label==='Bắt đầu nghỉ' && nr.c1.bg==='rgb(250, 250, 250)' && nr.g1.icon==='#i-back' && !nr.j0, 'nửa 2 đặt giờ nghỉ: ← | ▷ Paper');
+    var nr=await nav2(2); check(nr.c1.icon==='#i-play' && nr.c1.label==='Bắt đầu nghỉ' && nr.c1.bg==='rgb(250, 250, 250)' && nr.g1.icon==='#i-list' && !nr.j0, 'nửa 2 đặt giờ nghỉ: Menu ☰ (v2.8.1) | ▷ Paper');
     var s2=await h.ev(function(){ return LOOPS[1].state(); }); check(s2.slices===90 && !s2.chase && s2.s<1 && s2.sx>=s2.s, 'nửa 2: vành hạt thu nhỏ theo nửa màn (s '+s2.s.toFixed(3)+', sx '+s2.sx.toFixed(3)+'): '+JSON.stringify(s2));
     sep=await h.ev(function(){ return getComputedStyle(document.querySelector('#loop-host .loop:nth-child(2)'),'::before').backgroundColor; }); check(sep==='rgba(250, 250, 250, 0.14)', 'vạch ngăn luôn hairline (không còn nửa Acid): '+sep);
     check((await h.ev(function(){ return document.querySelector('meta[name=theme-color]').getAttribute('content'); }))==='#0A0A0A', 'theme-color Ink');
@@ -702,9 +694,12 @@ var CLIP={hard:[], ell:[]};
     check((await h.ev(function(){ return OUT.q.some(function(e){return e.hold}); }))===false, 'mở lại app: không còn hold');
     await page.click('#loop-host .c1'); await h.wait(450); await page.click('#loop-host .film .exl button:nth-child(1)'); await h.wait(900);
     check((await h.txt('#loop-host .ex'))===ex && (await h.txt('#loop-host .lp .head .sub'))==='Thiết lập set 2', 'set 2 sau khôi phục');
-    await page.click('#loop-host .g1'); await h.waitScreen('p-plan'); await h.wait(600);
-    check((await h.txt('#pl-grid .ptile:nth-child(1) .pst'))==='Set 2' && !/SET/.test(await h.txt('#pl-grid .ptile:nth-child(1) .lab')) && (await h.txt('#pl-go'))==='Bắt đầu · 1 bài', 'lưới bài ghi tình trạng dưới tên (v2.7.3: "Set 2", nhãn đáy không còn số set): '+(await h.txt('#pl-grid .ptile:nth-child(1) .pst')));
-    await page.click('#p-plan .nav .ghost'); await h.waitScreen('p-confirm'); await h.wait(1200);
+    /* v2.8.1: Menu → window "Buổi tập hôm nay" (tình trạng dưới tên) → ⌂ về trang chủ → "Tiếp tục buổi tập" */
+    await page.click('#loop-host .g1'); await h.wait(700);
+    check((await h.ev(function(){ return WS.open; })) && (await h.txt('#ws-grid .ptile:nth-child(1) .pst'))==='Set 2' && !/SET/.test(await h.txt('#ws-grid .ptile:nth-child(1) .lab')) && (await h.txt('#ws-nm'))==='Thành Long', 'window Buổi tập hôm nay: "Thành Long", thẻ 01 "Set 2", nhãn đáy không còn số set: '+(await h.txt('#ws-grid .ptile:nth-child(1) .pst')));
+    await page.click('#ws-home'); await h.waitScreen('p-home'); await h.wait(900);
+    check((await h.txt('#h-go'))==='Tiếp tục buổi tập', '⌂ → trang chủ: '+(await h.txt('#h-go')));
+    await h.ev(function(){ state.sel=['Nguyễn Thành Long']; go('p-confirm','fwd'); return 1; }); await h.waitScreen('p-confirm'); await h.wait(1200);
     check((await h.txt('#cf-go'))==='Tiếp tục buổi tập' && /Đang ghi buổi 4/.test(await h.txt('#cf-body .lines')), 'xác nhận: Tiếp tục buổi tập / '+(await h.txt('#cf-body .lines .a')));
     await page.click('#cf-back'); await h.waitScreen('p-pick'); await h.wait(500);
     check(!(await h.has('#pk-list .row[data-name="Nguyễn Thành Long"]','off')), 'khách đang ghi buổi vẫn chọn được');
