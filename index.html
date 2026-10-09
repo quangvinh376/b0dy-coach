@@ -52,6 +52,11 @@
 <symbol id="i-undo" viewBox="0 0 24 24"><path stroke-width="1.6" d="M7 12L3 8L7 4M3 8H14C18.5 8 21 11.5 21 15C21 18.5 18 21 14.5 21H8"/></symbol>
 <!-- icon/bat-dau (Figma 281:27): bắt đầu set / bắt đầu nghỉ ở nav rút gọn 1:2 -->
 <symbol id="i-play" viewBox="0 0 24 24"><path stroke-width="1.5" d="M6 3.5L21 12L6 20.5Z"/></symbol>
+<!-- v2.8.1 (Figma 664:251 · bộ icon 24, nét 1,5): danh-sach · mo-len xoay 180° · trang-chu · quay-lai -->
+<symbol id="i-list" viewBox="0 0 24 24"><path stroke-width="1.5" d="M3 6H6M9 6H21M3 12H6M9 12H21M3 18H6M9 18H21"/></symbol>
+<symbol id="i-down" viewBox="0 0 24 24"><path stroke-width="1.5" d="M4 9L12 17L20 9"/></symbol>
+<symbol id="i-home24" viewBox="0 0 24 24"><path stroke-width="1.5" d="M3 11L12 3L21 11V21H3V11Z"/></symbol>
+<symbol id="i-back24" viewBox="0 0 24 24"><path stroke-width="1.5" d="M21 12H3M10 19L3 12L10 5"/></symbol>
 <symbol id="i-ud13" viewBox="0 0 13 14"><path d="M2.70825 4.87484L6.49992 1.354L10.2916 4.87484M2.70825 8.6665L6.49992 12.1873L10.2916 8.6665"/></symbol>
 <symbol id="i-msg" viewBox="0 0 24 24"><path stroke-width="1.75" d="M4 5H20V16H9L4 20V5Z"/></symbol>
 <symbol id="i-pen" viewBox="0 0 20 20"><path d="M10.4167 6.25033L13.75 9.58366M2.5 17.5003V14.167L12.5 4.16699L15.8333 7.50033L5.83333 17.5003H2.5Z"/></symbol>
@@ -303,12 +308,28 @@
 </section>
 
 <!-- window thư viện bài -->
+<!-- v2.8.1 window "Buổi tập hôm nay" mở từ nút Menu của loop (Figma 664:251): lưới thẻ bài của buổi · ⌄ đóng · tên khách / tên trang · ⌂ trang chủ.
+     Ô Thêm bài → trang "Danh sách bài tập" = window thư viện #lib trượt ngang vào trên cùng window (#lib.wmode, Figma 664:352) -->
+<div class="dimmer" id="ws-dim" onclick="closeWS()"></div>
+<div class="sheet edge" id="ws" role="dialog" aria-modal="true" aria-labelledby="ws-tt">
+  <div class="handle" id="ws-handle"><i></i></div>
+  <div class="scroll ex" id="ws-scroll"><div class="pgrid" id="ws-grid"></div></div>
+  <div class="dropzone" id="ws-drop">Thả vào đây để xoá</div>
+  <div class="foot wnav">
+    <button class="ghost" id="ws-close" onclick="closeWS()" aria-label="Đóng"><svg class="ic s24"><use href="#i-down"/></svg></button>
+    <div class="wtt" id="ws-tt"><span class="wn" id="ws-nm"></span><span class="wp">Buổi tập hôm nay</span></div>
+    <button class="ghost" id="ws-home" onclick="wsHome()" aria-label="Về trang chủ"><svg class="ic s24"><use href="#i-home24"/></svg></button>
+  </div>
+</div>
 <div class="dimmer" id="lib-dim" onclick="closeLib()"></div>
 <div class="sheet edge" id="lib">
   <div class="handle" id="lib-handle"><i></i></div>
   <div class="search g"><svg class="ic"><use href="#i-search"/></svg><input id="lib-q" type="search" placeholder="Tìm bài tập" autocomplete="off" oninput="renderLib(false)"></div>
   <div class="scroll list ex" id="lib-list"></div>
-  <div class="foot"><button class="cta" id="lib-go" onclick="closeLib()">Chọn</button></div>
+  <div class="foot wnav"><button class="cta" id="lib-go" onclick="closeLib()">Chọn</button>
+    <button class="ghost wb" id="lib-back" onclick="wsBack()" aria-label="Quay lại"><svg class="ic s24"><use href="#i-back24"/></svg></button>
+    <div class="wtt"><span class="wn" id="lib-wnm"></span><span class="wp">Danh sách bài tập</span></div>
+    <span class="ghost wph" aria-hidden="true"></span></div>
 </div>
 <!-- window khách từ ô trang chủ (khách tập chậm / khách hôm nay): cùng phong cách window thư viện -->
 <div class="dimmer" id="cs-dim" onclick="closeClientSheet()"></div>

@@ -536,6 +536,24 @@ svg{display:block}
 .sheet .list{flex:1;min-height:0;margin-top:0;padding:32px 0 16px;--lpt:32px;--lpb:16px}
 .sheet .list .sec:first-child{margin-top:0}
 .sheet .foot{flex:none;height:48px;display:flex;justify-content:center;align-items:center}
+/* v2.8.1 · window "Buổi tập hôm nay" (#ws, Figma 664:251) mở từ nút Menu của loop: cùng khung .sheet (y 126, Ink, viền trên, tay nắm);
+   lưới thẻ như trang Bài tập hôm nay (cách tay nắm 14) · nav đáy: ghost ⌄ đóng · cụm tên (khách Ash / tên trang Paper, 16/19, giữa) · ghost ⌂.
+   Trang 2 "Danh sách bài tập" (Figma 664:352) = window thư viện #lib ở chế độ .wmode: trượt NGANG vào trên #ws (#ws lùi 24 % sau nó),
+   nav ← quay lại · cụm tên · ô trống giữ cân. Đóng cả window từ trang 2: #lib.down trượt xuống cùng #ws. */
+#ws-scroll{--lpt:14px;--lpb:16px}
+#ws-grid{padding-bottom:0}
+#ws>.dropzone{bottom:92px;z-index:4}
+#ws.on.under{transform:translateX(-24%)}
+#ws>.foot.wnav,#lib.wmode>.foot{justify-content:space-between}
+#lib.wmode{z-index:32;transform:translateX(100%)}
+#lib.wmode.on{transform:none}
+#lib.wmode.down{transform:translateY(104%)}
+.wtt{flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;text-align:center;font-size:16px;line-height:19px;letter-spacing:-.16px;padding:0 12px}
+.wtt>span{max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.wtt .wn{color:var(--gray)}
+.ghost.wph{border-color:transparent;pointer-events:none}
+#lib:not(.wmode)>.foot>.wb,#lib:not(.wmode)>.foot>.wtt,#lib:not(.wmode)>.foot>.wph{display:none}
+#lib.wmode>.foot>.cta{display:none}
 /* window khách từ ô trang chủ (#csheet): dùng chung .dimmer/.sheet · khách tập chậm = icon xu hướng 13px sau meta, không thêm chữ */
 
 /* ============ VÒNG LẶP SET ============
@@ -763,6 +781,7 @@ body.adm .tab-adm{display:flex}
   .film.on .inner{transition:opacity .2s linear}
   .sheet{transition:opacity .2s linear;transform:none;opacity:0;pointer-events:none}
   .sheet.on{opacity:1;pointer-events:auto}
+  #ws.on.under,#lib.wmode,#lib.wmode.down{transform:none}   /* v2.8.1: trang 2 của window chỉ mờ vào / ra trên trang 1 */
   .dimx{filter:none!important}
   .wkc .wkb i{transition:none;transform:none}
   .wkt.go{transition:none}

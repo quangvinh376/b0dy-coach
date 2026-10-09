@@ -7,7 +7,7 @@
    ===================================================================== */
 'use strict';
 var $=function(id){ return document.getElementById(id); };
-var APP_VER='v2.7.3';
+var APP_VER='v2.8.1';
 
 /* ---------------- tiện ích ---------------- */
 function isoToday(d){ d=d||new Date(); return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2); }
@@ -524,7 +524,7 @@ function show(id, dir){
 }
 var HOOK={};
 function go(id, dir){
-  var prev=state.screen; mqStopAll(); closeLib(true); FX.heroCancel();
+  var prev=state.screen; mqStopAll(); closeLib(true); closeWS(true); FX.heroCancel();
   if(HOOK[id]) HOOK[id](dir);
   show(id, dir);
   var s=$(id);
@@ -574,7 +574,7 @@ var FOG_TOP=32, FOG_BOT=72;
 /* khoảng ghost cuối vùng cuộn = chiều cao đúng bằng phần tử cuối (tạo nhịp với nav bên dưới).
    Danh sách .ex (mép cuộn iOS) tràn tới đáy màn hình → cộng thêm chiều cao thanh đáy (--bz) để phần tử cuối vẫn dừng đúng chỗ cũ. */
 function tailPad(el){
-  if(el.id==='pl-scroll') return;
+  if(el.id==='pl-scroll' || el.id==='ws-scroll') return;   /* lưới thẻ: đệm đáy riêng */
   var lc=el.lastElementChild; while(lc && lc.lastElementChild && /\b(exrows|rows|next|cmdet|cms)\b/.test(lc.className)) lc=lc.lastElementChild;   /* v2.7: trang Hoa hồng → dòng buổi cuối */
   while(lc && /\bxp\b/.test(lc.className)) lc=lc.previousElementSibling;   /* v2.7.1: danh sách dòng + phần mở rộng (Khách tập chậm, Hiệu suất tập) → nhịp = dòng cuối, như Khách hàng */
   var pad=lc ? Math.round(lc.getBoundingClientRect().height) : 0;
@@ -1999,27 +1999,52 @@ function ciFail(m, ci, text, many){
    ===================================================================== */
 HOOK['p-plan']=function(dir, quiet){ renderPlan(!quiet); if(!quiet && !state.session.plan.length) setTimeout(openLib, 380); };
 function planCounts(name){ var s=state.session, n=0; s.people.forEach(function(p){ var e=p.ex[name]; if(e) n=Math.max(n, e.sets.length); }); return n; }
+/* v2.8.1: bỏ một bài khỏi buổi (kéo vào vùng xoá / bỏ chọn trong danh sách) — lý do không được bỏ, '' = được.
+   Đang trong buổi (đã bắt đầu): không bỏ bài một khách đang tập / đang nghỉ dở, và luôn giữ ít nhất 1 bài (loop cần một bài để đứng). */
+function planBusy(name){ var s=state.session; return s.people.some(function(p){ return s.plan[p.cur]===name && p.phase && p.phase!=='setup'; }); }
+function planLock(name){ var s=state.session;
+  if(planCounts(name)) return 'Bài đã có set';
+  if(s.started && planBusy(name)) return 'Bài đang tập';
+  if(s.started && s.plan.length<=1) return 'Cần giữ ít nhất 1 bài';
+  return ''; }
+/* thêm / bỏ một bài (danh sách bài tập) — giữ đúng bài đang chọn của từng khách khi chỉ số dời */
+function planToggle(name){
+  var s=state.session, k=s.plan.indexOf(name);
+  if(k<0){ s.plan.push(name); saveSession(); return true; }
+  var why=planLock(name); if(why){ notify(why, {err:true}); return false; }
+  var cur=s.people.map(function(p){ return s.plan[p.cur]; }); s.plan.splice(k,1);
+  s.people.forEach(function(p,i){ var j=s.plan.indexOf(cur[i]); p.cur=j>=0?j:Math.min(p.cur, Math.max(0,s.plan.length-1)); });
+  saveSession(); return true;
+}
 /* v2.7.3 (Figma 641:1217): tình trạng tập ngay dưới tên bài — "Set n" Acid = bài đang tập dở / đang chọn (n = set kế tiếp),
    "Đã xong n set" xám #9E9E9E = bài đã bấm xong (mọi khách của buổi), chưa tập gì thì không có dòng này. 1:2: số set = khách nhiều set hơn. */
-function planStatus(n, i){
-  var s=state.session, sets=planCounts(n), ps=s.people||[];
+function planStatus(n, i, who){
+  var s=state.session, ps=who ? [who] : (s.people||[]), sets=who ? ((who.ex[n]||{sets:[]}).sets.length) : planCounts(n);
   if(sets && ps.length && ps.every(function(p){ var e=p.ex[n]; return e && e.done; })) return {t:'Đã xong '+sets+' set', done:1};
   if(sets || (s.started && ps.some(function(p){ return p.cur===i; }))) return {t:'Set '+(sets+1), done:0};
   return null;
 }
-function renderPlan(animate){
-  var s=state.session, g=$('pl-grid'); g.innerHTML='';
+/* lưới thẻ bài dùng chung cho trang "Bài tập hôm nay" (p-plan, trước khi bắt đầu) và window "Buổi tập hôm nay" (v2.8.1, mở từ loop):
+   o.who = khách của window (tình trạng theo khách đó) · o.pick(i) = chạm thẻ · o.add() = ô Thêm bài */
+function renderGrid(g, animate, o){
+  var s=state.session; g.innerHTML='';
   s.plan.forEach(function(n,i){
     var t=document.createElement('div'); t.className='ptile'+(animate?' rowin':''); if(animate) t.style.animationDelay=Math.min(i*30,240)+'ms'; t.dataset.i=i;
-    var st=planStatus(n,i);
+    var st=planStatus(n,i,o.who);
     t.setAttribute('role','button'); t.tabIndex=0; t.setAttribute('aria-label', exShort(n)+(st?' — '+st.t:''));
     t.innerHTML='<div><div class="no">'+pad2(i+1)+'</div><div class="nm">'+esc(exShort(n))+'</div>'+(st?'<div class="pst'+(st.done?' done':'')+'">'+esc(st.t)+'</div>':'')+'</div><div class="ft"><span class="lab">'+esc(upper(exGroup(n)))+'</span>'+ico('i-drag')+'</div>';
-    t.addEventListener('keydown', function(e){ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); planOpen(+t.dataset.i); } });
-    t.addEventListener('click', function(){ var k=t._tap; t._tap=0; if(k && Date.now()-k<800) planOpen(+t.dataset.i); });   /* chỉ chạm thật (dragify đánh dấu); nhấc/kéo/cuộn thì không */
+    t.addEventListener('keydown', function(e){ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); o.pick(+t.dataset.i); } });
+    t.addEventListener('click', function(){ var k=t._tap; t._tap=0; if(k && Date.now()-k<800) o.pick(+t.dataset.i); });   /* chỉ chạm thật (dragify đánh dấu); nhấc/kéo/cuộn thì không */
     dragify(t); g.appendChild(t);
   });
   var add=document.createElement('button'); add.className='ptile add'+(animate?' rowin':''); if(animate) add.style.animationDelay=Math.min(s.plan.length*30,240)+'ms';
-  add.innerHTML='<div class="no">'+pad2(s.plan.length+1)+'</div><div class="nm">Thêm bài'+ico('i-plus')+'</div>'; add.onclick=openLib; g.appendChild(add);
+  add.innerHTML='<div class="no">'+pad2(s.plan.length+1)+'</div><div class="nm">Thêm bài'+ico('i-plus')+'</div>'; add.onclick=o.add; g.appendChild(add);
+}
+/* lưới đang kéo thả được (chỉ một lưới hiện ra lúc nào): trang p-plan, hoặc window "Buổi tập hôm nay" khi đang mở */
+var PG_PLAN={grid:'pl-grid', scroll:'pl-scroll', drop:'pl-drop', loop:false, render:function(){ renderPlan(false); }}, PG=PG_PLAN;
+function renderPlan(animate){
+  var s=state.session;
+  renderGrid($('pl-grid'), animate, {who:null, pick:planOpen, add:openLib});
   var go=$('pl-go'); go.textContent=s.plan.length?'Bắt đầu · '+s.plan.length+' bài':'Bắt đầu'; go.classList.toggle('off', !s.plan.length);
 }
 /* kéo thả (chuẩn iOS reorder): giữ ~220ms để nhấc (ngón đã di >6px thì thôi — để cuộn lưới bình thường).
@@ -2029,9 +2054,9 @@ function renderPlan(animate){
    Kéo vào vùng đỏ để xoá (bài đã ghi set thì khoá, thả sẽ bay về). Huỷ (pointercancel) = trả về chỗ cũ. */
 var DRAG=null;
 /* các thẻ bài theo thứ tự lưới (bỏ ô Thêm bài; bản sao đang bay nằm trong khung .gdrag nên không lọt vào đây) */
-function planTiles(){ return Array.prototype.filter.call($('pl-grid').children, function(c){ return c.classList.contains('ptile') && !c.classList.contains('add'); }); }
+function planTiles(){ return Array.prototype.filter.call($(PG.grid).children, function(c){ return c.classList.contains('ptile') && !c.classList.contains('add'); }); }
 /* đánh lại số thứ tự + data-i tại chỗ (không dựng lại DOM) */
-function planRenumber(){ var ts=planTiles(); ts.forEach(function(c,k){ c.dataset.i=k; var no=c.querySelector('.no'); if(no) no.textContent=pad2(k+1); }); var a=$('pl-grid').querySelector('.ptile.add .no'); if(a) a.textContent=pad2(ts.length+1); }
+function planRenumber(){ var ts=planTiles(); ts.forEach(function(c,k){ c.dataset.i=k; var no=c.querySelector('.no'); if(no) no.textContent=pad2(k+1); }); var a=$(PG.grid).querySelector('.ptile.add .no'); if(a) a.textContent=pad2(ts.length+1); }
 /* FLIP: đo vị trí đang thấy → đổi DOM → đo vị trí mới → áp transform ngược (không transition) → trượt về 0 (.26s, ngắt được) */
 function flip(els, mutate){
   var first=els.map(function(el){ return el.getBoundingClientRect(); });
@@ -2039,7 +2064,7 @@ function flip(els, mutate){
   els.forEach(function(el){ el.style.transition='none'; el.style.transform=''; });
   var last=els.map(function(el){ return el.getBoundingClientRect(); }), any=false;
   els.forEach(function(el,i){ var dx=first[i].left-last[i].left, dy=first[i].top-last[i].top; if(Math.abs(dx)<.5 && Math.abs(dy)<.5){ el.style.transition=''; return; } any=true; el.style.transform='translate3d('+dx+'px,'+dy+'px,0)'; });
-  if(any){ var reflow=$('pl-grid').offsetWidth; els.forEach(function(el){ el.style.transition=''; el.style.transform=''; }); }
+  if(any){ var reflow=$(PG.grid).offsetWidth; els.forEach(function(el){ el.style.transition=''; el.style.transform=''; }); }
 }
 function buzz(ms){ if(navigator.vibrate){ try{ navigator.vibrate(ms); }catch(_){} } }
 function dragify(t){
@@ -2074,9 +2099,9 @@ function dragify(t){
       t.classList.add('ph'); g.classList.add('dragging'); t.style.touchAction='none';
       DRAG={t:t, w:w, c:c, g:g, name:name, from:+t.dataset.i, rm:rm(), pid:pid, ox:ev.clientX-r.left, oy:ev.clientY-r.top,
             x0:r.left, y0:r.top, x:r.left, y:r.top, tx:r.left, ty:r.top, rot:0, wd:r.width, ht:r.height,
-            slots:slots, sc:$('pl-scroll').scrollTop, del:false, lock:planCounts(name)>0, done:false, raf:0, finish:null};
+            slots:slots, sc:$(PG.scroll).scrollTop, del:false, lock:planLock(name), done:false, raf:0, finish:null};
       try{ t.setPointerCapture(pid); }catch(_){}
-      var dz=$('pl-drop'); dz.textContent='Thả vào đây để xoá'; dz.classList.remove('hot','lock'); dz.classList.add('show');
+      var dz=$(PG.drop); dz.textContent='Thả vào đây để xoá'; dz.classList.remove('hot','lock'); dz.classList.add('show');
       buzz(8);
       requestAnimationFrame(function(){ if(DRAG && DRAG.c===c) c.classList.add('up'); tick(); });
     }
@@ -2091,10 +2116,10 @@ function dragify(t){
     }
     function move(ev){
       var d=DRAG; d.tx=ev.clientX-d.ox; d.ty=ev.clientY-d.oy;
-      var dz=$('pl-drop'), zr=dz.getBoundingClientRect(), inz=ev.clientY>=zr.top-8 && ev.clientY<=zr.bottom+16;
+      var dz=$(PG.drop), zr=dz.getBoundingClientRect(), inz=ev.clientY>=zr.top-8 && ev.clientY<=zr.bottom+16;
       if(inz!==d.del){
         d.del=inz;
-        if(inz && d.lock){ dz.textContent='Bài đã có set'; dz.classList.add('lock'); }
+        if(inz && d.lock){ dz.textContent=d.lock; dz.classList.add('lock'); }
         else if(inz){ dz.textContent='Thả để xoá '+exShort(d.name); dz.classList.add('hot'); d.c.classList.add('del'); buzz(12); }
         else { dz.textContent='Thả vào đây để xoá'; dz.classList.remove('hot','lock'); d.c.classList.remove('del'); }
       }
@@ -2102,7 +2127,7 @@ function dragify(t){
     /* tâm thẻ bay (cx,cy) vượt qua nửa ô của thẻ khác (tính từ mép gần ô hiện tại; ngưỡng 40% để thả đúng tâm vẫn ăn)
        → thẻ gốc đổi chỗ trong DOM, các thẻ khác trượt (FLIP). Ô đã đổi chỗ thì phải đi ngược 40% mới đổi lại (không rung) */
     function reorder(cx, cy){
-      var d=DRAG, tiles=planTiles(), cur=tiles.indexOf(d.t), n=tiles.length, sy=d.sc-$('pl-scroll').scrollTop, best=-1;
+      var d=DRAG, tiles=planTiles(), cur=tiles.indexOf(d.t), n=tiles.length, sy=d.sc-$(PG.scroll).scrollTop, best=-1;
       if(cur<0) return;
       for(var j=0;j<n;j++){
         if(j===cur) continue; var r=d.slots[j], top=r.top+sy, bot=r.bottom+sy;
@@ -2117,10 +2142,10 @@ function dragify(t){
     function drop(cancel){
       var d=DRAG, s=state.session; if(!d || d.done) return; d.done=true; cancelAnimationFrame(d.raf);
       try{ t.releasePointerCapture(d.pid); }catch(_){}
-      t.style.touchAction=''; d.g.classList.remove('dragging'); $('pl-drop').classList.remove('show','hot','lock');
+      t.style.touchAction=''; d.g.classList.remove('dragging'); $(PG.drop).classList.remove('show','hot','lock');
       if(d.del && !d.lock && !cancel){ deleteDrop(d); return; }
       /* huỷ = trả thẻ về chỗ cũ (các thẻ khác trượt theo) */
-      if(cancel){ var ts=planTiles(); if(ts.indexOf(d.t)!==d.from){ var others=ts.filter(function(c){ return c!==d.t; }); flip(others, function(){ d.g.insertBefore(d.t, others[d.from]||$('pl-grid').querySelector('.ptile.add')); }); } }
+      if(cancel){ var ts=planTiles(); if(ts.indexOf(d.t)!==d.from){ var others=ts.filter(function(c){ return c!==d.t; }); flip(others, function(){ d.g.insertBefore(d.t, others[d.from]||$(PG.grid).querySelector('.ptile.add')); }); } }
       /* chốt thứ tự mới từ DOM, giữ bài đang tập của từng người */
       var order=planTiles().map(function(c){ return s.plan[+c.dataset.i]; }), curName=s.people.map(function(p){ return s.plan[p.cur]; });
       s.plan=order; s.people.forEach(function(p,i){ var k=s.plan.indexOf(curName[i]); if(k>=0) p.cur=k; }); saveSession(); planRenumber();
@@ -2141,7 +2166,7 @@ function dragify(t){
       buzz(16); d.c.classList.add('gone');
       var t1=setTimeout(function(){ var others=planTiles().filter(function(c){ return c!==d.t; }); flip(others, function(){ if(d.t.parentNode) d.t.parentNode.removeChild(d.t); }); planRenumber(); }, d.rm?0:60);
       var t2=setTimeout(finish, d.rm?160:340);
-      function finish(){ clearTimeout(t1); clearTimeout(t2); if(DRAG!==d) return; if(d.t.parentNode) d.t.parentNode.removeChild(d.t); if(d.w.parentNode) d.w.parentNode.removeChild(d.w); DRAG=null; renderPlan(false); }
+      function finish(){ clearTimeout(t1); clearTimeout(t2); if(DRAG!==d) return; if(d.t.parentNode) d.t.parentNode.removeChild(d.t); if(d.w.parentNode) d.w.parentNode.removeChild(d.w); DRAG=null; PG.render(); }
       d.finish=finish;
     }
   });
@@ -2149,8 +2174,10 @@ function dragify(t){
 /* window thư viện bài */
 var LIB_OPEN=false;
 function openLib(){ LIB_OPEN=true; $('lib-q').value=''; renderLib(true); $('lib-dim').classList.add('on'); $('lib').classList.add('on'); syncTheme(); }
-function closeLib(silent){ if(!LIB_OPEN) return; LIB_OPEN=false; $('lib-dim').classList.remove('on'); $('lib').classList.remove('on'); if(!silent && state.session && state.screen==='p-plan') renderPlan(false); setTimeout(syncTheme, 380); }
-function lastFor(name){ var s=state.session, p=s&&s.people[0], m=p&&findClient(p.name); return m&&m.last&&m.last[name]; }
+function closeLib(silent){ if(!LIB_OPEN) return;
+  if(LIB_W){ if(!silent){ closeWS(); return; } LIB_OPEN=false; var lb=$('lib'); lb.classList.add('down'); lb.classList.remove('on'); return; }   /* trang 2 của window: đóng = đóng cả window */
+  LIB_OPEN=false; $('lib-dim').classList.remove('on'); $('lib').classList.remove('on'); if(!silent && state.session && state.screen==='p-plan') renderPlan(false); setTimeout(syncTheme, 380); }
+function lastFor(name){ var s=state.session, p=s&&((WS.open && LIB_W && s.people[WS.idx]) || s.people[0]), m=p&&findClient(p.name); return m&&m.last&&m.last[name]; }
 function renderLib(animate){
   var s=state.session, q=norm($('lib-q').value), el=$('lib-list'); el.innerHTML=''; var i=0, any=false;
   libGroups().forEach(function(g){
@@ -2159,7 +2186,7 @@ function renderLib(animate){
     items.forEach(function(e){
       var sel=s.plan.indexOf(e.name)>=0, l=lastFor(e.name), b=document.createElement('button'); b.className='row'+(sel?' sel':'')+(animate?' rowin':''); if(animate) b.style.animationDelay=Math.min(i++*16,200)+'ms';
       b.innerHTML='<span class="lt"><span class="nm mq"><span>'+esc(exShort(e.name))+'</span></span><span class="lab">'+(l?'LẦN TRƯỚC '+l.rep+' × '+fmtN(l.kg)+' KG':'CHƯA TẬP')+'</span></span>'+ico(sel?'i-check':'i-plus',sel?'acid':'paper');
-      b.onclick=function(){ var k=s.plan.indexOf(e.name); if(k>=0){ if(planCounts(e.name)){ notify('Bài đã có set', {err:true}); return; } s.plan.splice(k,1); } else s.plan.push(e.name); saveSession(); renderLib(false); };
+      b.onclick=function(){ if(planToggle(e.name)) renderLib(false); };
       el.appendChild(b);
     });
   });
@@ -2172,6 +2199,68 @@ function renderLib(animate){
   h.addEventListener('touchmove', function(e){ if(!on) return; var dy=e.touches[0].clientY-y0; if(dy>0) $('lib').style.transform='translateY('+dy+'px)'; }, {passive:true});
   h.addEventListener('touchend', function(e){ if(!on) return; on=false; var dy=(e.changedTouches[0].clientY-y0); $('lib').style.transform=''; if(dy>80) closeLib(); }, {passive:true});
   h.addEventListener('click', function(){ closeLib(); });
+})();
+/* =====================================================================
+   v2.8.1 (Figma 606:233 · 644:1290 / 664:251 / 664:352) — WINDOW "BUỔI TẬP HÔM NAY" TỪ LOOP
+   Nút trái của loop ở "Thiết lập set" và "Bắt đầu nghỉ" là nút MENU (icon danh-sach) thay cho ← (dễ hiểu nhầm là thoát).
+   Trang 1 "Buổi tập hôm nay": lưới thẻ của buổi, tình trạng theo khách của nửa màn vừa mở (1:2 mỗi nửa một khách) —
+     chạm thẻ = vào bài + set đó (switchEx của loop khách đó) · giữ để kéo đổi chỗ / thả vùng xoá · ô Thêm bài → trang 2.
+   Trang 2 "Danh sách bài tập": window thư viện #lib (.wmode) trượt ngang vào trên cùng window, ← quay lại trang 1.
+   Nav: ⌄ đóng · tên khách / tên trang · ⌂ về trang chủ (buổi giữ nguyên; trang chủ "Tiếp tục buổi tập" vào lại loop).
+   Đóng window: loop nào có bài đang chọn bị bỏ (chỉ có thể ở pha thiết lập, chưa set nào) thì dựng lại theo bài mới. */
+var WS={open:false, idx:0, page:1, t:0}, LIB_W=false;
+function wsWho(){ var s=state.session; return (s && s.people[WS.idx]) || null; }
+function wsTitle(){ var p=wsWho(), n=p?firstName(p.name):''; $('ws-nm').textContent=n; $('lib-wnm').textContent=n; }
+function renderWS(animate){ renderGrid($('ws-grid'), animate, {who:wsWho(), pick:wsPick, add:wsLib}); fogUpdate($('ws-scroll')); }
+function openWS(idx){
+  var s=state.session; if(!s || WS.open || state.screen!=='p-loop' || DRAG) return;
+  WS.open=true; WS.idx=idx||0; WS.page=1; clearTimeout(WS.t); libUnW(true);
+  PG={grid:'ws-grid', scroll:'ws-scroll', drop:'ws-drop', loop:true, render:function(){ renderWS(false); }};
+  wsTitle(); renderWS(true); $('ws-scroll').scrollTop=0;
+  var w=$('ws'); w.classList.remove('under'); w.style.transform=''; $('ws-dim').classList.add('on'); w.classList.add('on'); syncTheme();
+  requestAnimationFrame(function(){ edgeFit(w); });
+}
+function closeWS(silent){
+  if(!WS.open) return; WS.open=false; WS.page=1;
+  if(LIB_OPEN && LIB_W) closeLib(true);
+  var w=$('ws'); w.classList.remove('on','under'); w.style.transform=''; $('ws-dim').classList.remove('on');
+  PG=PG_PLAN; clearTimeout(WS.t); WS.t=setTimeout(function(){ if(!WS.open) libUnW(); syncTheme(); }, 380);
+  if(!silent) LOOPS.forEach(function(L){ if(L.resync) L.resync(false); });
+}
+/* trang 2: danh sách bài tập (window thư viện) trượt ngang vào — tắt transition lúc đổi sang .wmode để không trượt chéo từ chỗ ẩn cũ */
+function wsLib(){
+  if(!WS.open || WS.page===2) return; WS.page=2; clearTimeout(WS.t);
+  var lb=$('lib'); lb.style.transition='none'; lb.classList.remove('on','down'); lb.classList.add('wmode'); lb.style.transform=''; void lb.offsetWidth; lb.style.transition='';
+  LIB_W=true; LIB_OPEN=true; $('lib-q').value=''; wsTitle(); renderLib(true);
+  requestAnimationFrame(function(){ if(WS.page!==2) return; lb.classList.add('on'); $('ws').classList.add('under'); edgeFit(lb); });
+}
+function wsBack(){
+  if(!WS.open || WS.page!==2) return; WS.page=1; LIB_OPEN=false;
+  $('lib').classList.remove('on'); $('ws').classList.remove('under'); renderWS(false);
+  clearTimeout(WS.t); WS.t=setTimeout(function(){ if(WS.page===1) libUnW(); }, 380);
+}
+/* trả #lib về window thư viện thường (dùng ở trang Bài tập hôm nay) khi đã khuất */
+function libUnW(force){ var lb=$('lib'); if(!lb.classList.contains('wmode') || (!force && lb.classList.contains('on'))) return;
+  lb.style.transition='none'; lb.classList.remove('wmode','down','on'); lb.style.transform=''; void lb.offsetWidth; lb.style.transition=''; LIB_W=false; if(force) LIB_OPEN=false; }
+/* chạm thẻ trong window → đóng window, vào bài + set đó cho khách của nửa màn đã mở (chặn chạm đúp như trang Bài tập hôm nay) */
+function wsPick(i){
+  var s=state.session; if(!WS.open || !s || !s.plan[i] || DRAG) return;
+  var now=Date.now(); if(now-PLAN_OPEN_T<600) return; PLAN_OPEN_T=now;
+  var L=LOOPS[WS.idx]; closeWS(true);
+  LOOPS.forEach(function(x){ if(x.resync) x.resync(true); });
+  if(L && L.pick) L.pick(i);
+}
+/* ⌂ về trang chủ: set vừa chấm (đang giữ để hoàn tác) gửi luôn — rời loop thì không còn bước lùi nào */
+function wsHome(){
+  if(!WS.open) return; closeWS(true);
+  LOOPS.forEach(function(L){ if(L.resync) L.resync(true); if(L.commit) L.commit(); });
+  saveSession(); go('p-home','back');
+}
+(function(){ var y0=0, on=false, h=$('ws-handle');
+  h.addEventListener('touchstart', function(e){ on=true; y0=e.touches[0].clientY; }, {passive:true});
+  h.addEventListener('touchmove', function(e){ if(!on) return; var dy=e.touches[0].clientY-y0; if(dy>0) $('ws').style.transform='translateY('+dy+'px)'; }, {passive:true});
+  h.addEventListener('touchend', function(e){ if(!on) return; on=false; var dy=(e.changedTouches[0].clientY-y0); $('ws').style.transform=''; if(dy>80) closeWS(); }, {passive:true});
+  h.addEventListener('click', function(){ closeWS(); });
 })();
 function startLoop(){
   var s=state.session; if(!s||!s.plan.length) return;
@@ -2215,16 +2304,18 @@ function primePerson(p){
    v2.6 (28/09) · nút trái là chuỗi LÙI TỪNG BƯỚC — mỗi bước lùi đúng một trạng thái, chuyển động là bước tới tua ngược:
      đang nghỉ ↩ → đặt giờ nghỉ (sóng Acid rút ngược, hạt đã rụng về lại vành) · đặt giờ nghỉ ← → đang tập (bỏ kết quả vừa chấm,
      hạt tua ngược thành vành nhịp đang thức) · đang tập ↩ → thiết lập · thiết lập ← → danh sách bài.
+     v2.8.1 (09/10, chủ studio chốt): ← ở thiết lập và ở đặt giờ nghỉ đổi thành nút MENU mở window "Buổi tập hôm nay" (dễ hiểu nhầm là thoát buổi) —
+     chuỗi lùi còn: đang tập ↩ → thiết lập · đang nghỉ ↩ → đặt giờ nghỉ (bước "đặt giờ nghỉ ← đang tập" không còn).
      Set vừa chấm GIỮ (hold) trong hàng đợi tới khi coach đi tiếp (vào set mới · đổi bài · xong bài · kết thúc) → lùi lúc nào cũng không để lại set ma trên máy chủ.
    · 1:2: mỗi nửa luôn có nav rút gọn ở đáy (nút tròn 48, icon 24, cách đáy nửa màn 28) — nút ở nửa nào tác động nửa đó.
    Mọi thứ chạy theo đồng hồ MT (motFrame) nên khớp từng khung với hạt; giờ nghỉ thật vẫn là Date.now() − restStart.
    ===================================================================== */
 var LOOPS=[], LOOP_ON=false;
-/* nút theo pha — trái: ← quay lại / ↩ hoàn tác (chuỗi lùi ở trên) · phải: chữ (1:1) hoặc icon (1:2 rút gọn); nền Paper chỉ lúc đặt giờ nghỉ */
+/* nút theo pha — trái: ☰ menu "Buổi tập hôm nay" (v2.8.1, thiết lập + bắt đầu nghỉ) / ↩ hoàn tác (đang tập, đang nghỉ) · phải: chữ (1:1) hoặc icon (1:2 rút gọn); nền Paper chỉ lúc đặt giờ nghỉ */
 var LOOP_NAV={
-  'setup':      {g:'i-back', gl:'Quay lại', t:'Bắt đầu set',         i:'i-play'},
+  'setup':      {g:'i-list', gl:'Buổi tập hôm nay', t:'Bắt đầu set', i:'i-play'},
   'active':     {g:'i-undo', gl:'Hoàn tác', t:'Đạt',                 i:'i-check'},
-  'rest-setup': {g:'i-back', gl:'Quay lại', t:'Bắt đầu nghỉ',        i:'i-play', paper:true},
+  'rest-setup': {g:'i-list', gl:'Buổi tập hôm nay', t:'Bắt đầu nghỉ', i:'i-play', paper:true},
   'rest':       {g:'i-undo', gl:'Hoàn tác', t:'Nghỉ xong · kế tiếp', i:'i-check'}
 };
 /* menu bước tiếp đang mở: nút chính nằm dưới màng kính, mang nghĩa "vào set mới" — Paper để kính Ink không pha Acid thành ô liu */
@@ -2432,8 +2523,9 @@ function Loop(host, p, o){
   }
 
   /* ---- trạng thái chữ/nút theo pha (dir: 1 tiến, −1 lùi) ---- */
+  var shownEx=null;   /* bài đang hiện trên màn (window Buổi tập hôm nay có thể bỏ bài đang chọn → dựng lại) */
   function render(dir, instant){
-    var ph=p.phase, rest=(ph==='rest-setup'||ph==='rest'), n=LOOP_NAV[ph];
+    var ph=p.phase, rest=(ph==='rest-setup'||ph==='rest'), n=LOOP_NAV[ph]; shownEx=ex();
     line(t1, rest?setLabel():exShort(ex()), rest?'d55':'', dir, instant, true);
     line(sub, ph==='setup'?'Thiết lập set '+p.setNo : ph==='active'?'Đang tập set '+p.setNo : ph==='rest-setup'?'Bắt đầu nghỉ' : restSub(), rest?'':'ac', dir, instant);
     ctaTo(ctaNow(), instant);
@@ -2617,9 +2709,8 @@ function Loop(host, p, o){
   /* nút trái = chuỗi lùi từng bước: thiết lập → danh sách bài · đang tập → thiết lập · đặt giờ nghỉ → đang tập · đang nghỉ → đặt giờ nghỉ.
      Chặn chạm đúp như nút chính: mỗi bước lùi đổi nghĩa nút ngay dưới ngón tay (chạm đúp = lùi hai bước, có thể xoá set) */
   g1.addEventListener('click', function(e){ e.stopPropagation(); if(filmOn() || guarded()) return;
-    if(p.phase==='setup'){ saveSession(); go('p-plan','back'); }
+    if(p.phase==='setup' || p.phase==='rest-setup'){ saveSession(); openWS(o.idx); }   /* v2.8.1: menu → window Buổi tập hôm nay */
     else if(p.phase==='active') cancelSet();
-    else if(p.phase==='rest-setup') reopenSet();
     else if(p.phase==='rest') cancelRest();
   });
   film.addEventListener('click', function(e){ if(e.target===film) closeFilm(); });
@@ -2671,6 +2762,15 @@ function Loop(host, p, o){
       if(ph==='rest'){ F.ignite(true); if(lastTen) F.merge(true,true); }
     }
   };
+  /* v2.8.1 · window Buổi tập hôm nay: chạm thẻ = switchEx (thiết lập: đổi bài · bắt đầu nghỉ: bài khác → về thiết lập bài đó, chính bài này → vào set mới),
+     dựng lại khi bài đang chọn bị bỏ khỏi buổi, gửi set đang giữ khi về trang chủ */
+  L.pick=function(i){ switchEx(i); };   /* chặn chạm đúp ở wsPick (600 ms) */
+  L.resync=function(instant){
+    if(!s.plan.length) return;
+    if(p.cur>=s.plan.length) p.cur=s.plan.length-1;
+    if(ex()!==shownEx){ if(p.phase==='setup'){ primePerson(p); saveSession(); } render(1, instant); } else renderFilm();
+  };
+  L.commit=function(){ commitLast(); };
   L.state=function(){ var f=F.state(); f.phase=p.phase; f.left=restLeft(); f.shown=shownRest(); f.lastTen=lastTen; f.zeroed=zeroed; f.cta=CTA.t; f.flying=flying.length; return f; };
   /* dựng ban đầu: trạng thái tĩnh của pha hiện tại (mở lại app giữa buổi nghỉ → đúng giờ còn lại, đúng số hạt) */
   (function(){
@@ -2770,7 +2870,7 @@ function ptrMove(d, anim){
   ptr.style.opacity=d?String(Math.min(1, d/24)):'0'; ptr.style.transform='scale('+(0.6+0.4*p).toFixed(3)+')';
 }
 function ptrEligible(t){
-  if(state.screen==='p-loop' || state.screen==='p-pin' || LIB_OPEN || DRAG) return false;
+  if(state.screen==='p-loop' || state.screen==='p-pin' || LIB_OPEN || WS.open || DRAG) return false;
   if(!t || t.closest('.wheel, .fld, input, textarea, .ptr, .sheet, .mtabsx')) return false;
   var sc=t.closest('.scroll'); if(sc && sc.scrollTop>0) return false;
   return true;
