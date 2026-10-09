@@ -7,7 +7,7 @@
    ===================================================================== */
 'use strict';
 var $=function(id){ return document.getElementById(id); };
-var APP_VER='v2.8.1';
+var APP_VER='v2.8.2';
 
 /* ---------------- tiện ích ---------------- */
 function isoToday(d){ d=d||new Date(); return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2); }
@@ -2202,11 +2202,12 @@ function renderLib(animate){
 })();
 /* =====================================================================
    v2.8.1 (Figma 606:233 · 644:1290 / 664:251 / 664:352) — WINDOW "BUỔI TẬP HÔM NAY" TỪ LOOP
-   Nút trái của loop ở "Thiết lập set" và "Bắt đầu nghỉ" là nút MENU (icon danh-sach) thay cho ← (dễ hiểu nhầm là thoát).
+   Nút trái của loop ở "Thiết lập set" là nút MENU (icon danh-sach) thay cho ← (dễ hiểu nhầm là thoát).
+   v2.8.2 (09/10, chủ studio): "Bắt đầu nghỉ" lấy lại ← về Đang tập để chấm lại Đạt / Chưa đạt → window chỉ mở từ thiết lập.
    Trang 1 "Buổi tập hôm nay": lưới thẻ của buổi, tình trạng theo khách của nửa màn vừa mở (1:2 mỗi nửa một khách) —
      chạm thẻ = vào bài + set đó (switchEx của loop khách đó) · giữ để kéo đổi chỗ / thả vùng xoá · ô Thêm bài → trang 2.
    Trang 2 "Danh sách bài tập": window thư viện #lib (.wmode) trượt ngang vào trên cùng window, ← quay lại trang 1.
-   Nav: ⌄ đóng · tên khách / tên trang · ⌂ về trang chủ (buổi giữ nguyên; trang chủ "Tiếp tục buổi tập" vào lại loop).
+   Nav: ⌄ đóng · tên khách / tên trang · ⌂ về trang chủ (buổi giữ nguyên, kể cả set đang giữ của nửa kia; trang chủ "Tiếp tục buổi tập" vào lại loop).
    Đóng window: loop nào có bài đang chọn bị bỏ (chỉ có thể ở pha thiết lập, chưa set nào) thì dựng lại theo bài mới. */
 var WS={open:false, idx:0, page:1, t:0}, LIB_W=false;
 function wsWho(){ var s=state.session; return (s && s.people[WS.idx]) || null; }
@@ -2250,10 +2251,11 @@ function wsPick(i){
   LOOPS.forEach(function(x){ if(x.resync) x.resync(true); });
   if(L && L.pick) L.pick(i);
 }
-/* ⌂ về trang chủ: set vừa chấm (đang giữ để hoàn tác) gửi luôn — rời loop thì không còn bước lùi nào */
+/* ⌂ về trang chủ: buổi giữ nguyên. Set đang GIỮ (1:2: nửa kia đang ở Bắt đầu nghỉ / đang nghỉ) không nhả — "Tiếp tục buổi tập"
+   vào lại đúng chỗ, ← / ↩ vẫn lùi được; set nhả khi coach đi tiếp như mọi lúc (vào set mới · đổi bài · xong bài · kết thúc), hoặc lúc mở lại app */
 function wsHome(){
   if(!WS.open) return; closeWS(true);
-  LOOPS.forEach(function(L){ if(L.resync) L.resync(true); if(L.commit) L.commit(); });
+  LOOPS.forEach(function(L){ if(L.resync) L.resync(true); });
   saveSession(); go('p-home','back');
 }
 (function(){ var y0=0, on=false, h=$('ws-handle');
@@ -2304,18 +2306,18 @@ function primePerson(p){
    v2.6 (28/09) · nút trái là chuỗi LÙI TỪNG BƯỚC — mỗi bước lùi đúng một trạng thái, chuyển động là bước tới tua ngược:
      đang nghỉ ↩ → đặt giờ nghỉ (sóng Acid rút ngược, hạt đã rụng về lại vành) · đặt giờ nghỉ ← → đang tập (bỏ kết quả vừa chấm,
      hạt tua ngược thành vành nhịp đang thức) · đang tập ↩ → thiết lập · thiết lập ← → danh sách bài.
-     v2.8.1 (09/10, chủ studio chốt): ← ở thiết lập và ở đặt giờ nghỉ đổi thành nút MENU mở window "Buổi tập hôm nay" (dễ hiểu nhầm là thoát buổi) —
-     chuỗi lùi còn: đang tập ↩ → thiết lập · đang nghỉ ↩ → đặt giờ nghỉ (bước "đặt giờ nghỉ ← đang tập" không còn).
+     v2.8.1 (09/10, chủ studio chốt): ← ở thiết lập đổi thành nút MENU mở window "Buổi tập hôm nay" (dễ hiểu nhầm là thoát buổi).
+     v2.8.2 (09/10): đặt giờ nghỉ GIỮ ← → đang tập (v2.8.1 từng đổi thành Menu) — chuỗi lùi: đang nghỉ ↩ → đặt giờ nghỉ ← → đang tập ↩ → thiết lập.
      Set vừa chấm GIỮ (hold) trong hàng đợi tới khi coach đi tiếp (vào set mới · đổi bài · xong bài · kết thúc) → lùi lúc nào cũng không để lại set ma trên máy chủ.
    · 1:2: mỗi nửa luôn có nav rút gọn ở đáy (nút tròn 48, icon 24, cách đáy nửa màn 28) — nút ở nửa nào tác động nửa đó.
    Mọi thứ chạy theo đồng hồ MT (motFrame) nên khớp từng khung với hạt; giờ nghỉ thật vẫn là Date.now() − restStart.
    ===================================================================== */
 var LOOPS=[], LOOP_ON=false;
-/* nút theo pha — trái: ☰ menu "Buổi tập hôm nay" (v2.8.1, thiết lập + bắt đầu nghỉ) / ↩ hoàn tác (đang tập, đang nghỉ) · phải: chữ (1:1) hoặc icon (1:2 rút gọn); nền Paper chỉ lúc đặt giờ nghỉ */
+/* nút theo pha — trái: ☰ menu "Buổi tập hôm nay" (thiết lập, v2.8.1) / ← quay lại (đặt giờ nghỉ → đang tập) / ↩ hoàn tác (đang tập, đang nghỉ) · phải: chữ (1:1) hoặc icon (1:2 rút gọn); nền Paper chỉ lúc đặt giờ nghỉ */
 var LOOP_NAV={
   'setup':      {g:'i-list', gl:'Buổi tập hôm nay', t:'Bắt đầu set', i:'i-play'},
   'active':     {g:'i-undo', gl:'Hoàn tác', t:'Đạt',                 i:'i-check'},
-  'rest-setup': {g:'i-list', gl:'Buổi tập hôm nay', t:'Bắt đầu nghỉ', i:'i-play', paper:true},
+  'rest-setup': {g:'i-back', gl:'Quay lại',         t:'Bắt đầu nghỉ', i:'i-play', paper:true},
   'rest':       {g:'i-undo', gl:'Hoàn tác', t:'Nghỉ xong · kế tiếp', i:'i-check'}
 };
 /* menu bước tiếp đang mở: nút chính nằm dưới màng kính, mang nghĩa "vào set mới" — Paper để kính Ink không pha Acid thành ô liu */
@@ -2706,11 +2708,12 @@ function Loop(host, p, o){
   c1.addEventListener('click', function(e){ e.stopPropagation(); if(filmOn() || guarded()) return;
     if(p.phase==='setup') begin(); else if(p.phase==='active') judgeSet(true); else if(p.phase==='rest-setup') startRest(); else if(p.phase==='rest') openFilm(c1); });
   j0.addEventListener('click', function(e){ e.stopPropagation(); if(guarded()) return; judgeSet(false); });
-  /* nút trái = chuỗi lùi từng bước: thiết lập → danh sách bài · đang tập → thiết lập · đặt giờ nghỉ → đang tập · đang nghỉ → đặt giờ nghỉ.
+  /* nút trái: thiết lập → ☰ window Buổi tập hôm nay (v2.8.1) · chuỗi lùi từng bước: đang tập → thiết lập · đặt giờ nghỉ → đang tập · đang nghỉ → đặt giờ nghỉ.
      Chặn chạm đúp như nút chính: mỗi bước lùi đổi nghĩa nút ngay dưới ngón tay (chạm đúp = lùi hai bước, có thể xoá set) */
   g1.addEventListener('click', function(e){ e.stopPropagation(); if(filmOn() || guarded()) return;
-    if(p.phase==='setup' || p.phase==='rest-setup'){ saveSession(); openWS(o.idx); }   /* v2.8.1: menu → window Buổi tập hôm nay */
+    if(p.phase==='setup'){ saveSession(); openWS(o.idx); }   /* v2.8.1: menu → window Buổi tập hôm nay */
     else if(p.phase==='active') cancelSet();
+    else if(p.phase==='rest-setup') reopenSet();              /* v2.8.2: ← về đang tập, chấm lại */
     else if(p.phase==='rest') cancelRest();
   });
   film.addEventListener('click', function(e){ if(e.target===film) closeFilm(); });
@@ -2762,15 +2765,14 @@ function Loop(host, p, o){
       if(ph==='rest'){ F.ignite(true); if(lastTen) F.merge(true,true); }
     }
   };
-  /* v2.8.1 · window Buổi tập hôm nay: chạm thẻ = switchEx (thiết lập: đổi bài · bắt đầu nghỉ: bài khác → về thiết lập bài đó, chính bài này → vào set mới),
-     dựng lại khi bài đang chọn bị bỏ khỏi buổi, gửi set đang giữ khi về trang chủ */
+  /* v2.8.1 · window Buổi tập hôm nay (chỉ mở từ thiết lập — v2.8.2): chạm thẻ = switchEx sang bài đó, set kế tiếp;
+     dựng lại khi bài đang chọn bị bỏ khỏi buổi / đổi chỗ (nửa kia 1:2 chỉ cập nhật menu bước tiếp) */
   L.pick=function(i){ switchEx(i); };   /* chặn chạm đúp ở wsPick (600 ms) */
   L.resync=function(instant){
     if(!s.plan.length) return;
     if(p.cur>=s.plan.length) p.cur=s.plan.length-1;
     if(ex()!==shownEx){ if(p.phase==='setup'){ primePerson(p); saveSession(); } render(1, instant); } else renderFilm();
   };
-  L.commit=function(){ commitLast(); };
   L.state=function(){ var f=F.state(); f.phase=p.phase; f.left=restLeft(); f.shown=shownRest(); f.lastTen=lastTen; f.zeroed=zeroed; f.cta=CTA.t; f.flying=flying.length; return f; };
   /* dựng ban đầu: trạng thái tĩnh của pha hiện tại (mở lại app giữa buổi nghỉ → đúng giờ còn lại, đúng số hạt) */
   (function(){
