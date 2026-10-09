@@ -1,8 +1,8 @@
 /* v2.8.1 — nút Menu ở loop + window "Buổi tập hôm nay" (Figma 606:233 · 644:1290 / 664:251 / 664:352)
-   · Thiết lập set + Bắt đầu nghỉ: nút trái = Menu (☰), không còn ← ; đang tập / đang nghỉ vẫn ↩
+   · Thiết lập set: nút trái = Menu (☰) · v2.8.2: Bắt đầu nghỉ giữ ← về Đang tập (chấm lại) · đang tập / đang nghỉ vẫn ↩
    · Menu → window: lưới thẻ của buổi (tình trạng theo khách), tên khách + "Buổi tập hôm nay", ⌄ đóng, ⌂ trang chủ
    · chạm thẻ = vào bài + set · giữ kéo = đổi chỗ · vùng xoá có khoá · Thêm bài → trang "Danh sách bài tập" trong cùng window, ← quay lại
-   · ⌂ → trang chủ "Tiếp tục buổi tập" → vào lại loop đúng chỗ · 1:2 mỗi nửa mở window của khách mình
+   · ⌂ → trang chủ "Tiếp tục buổi tập" → vào lại loop đúng chỗ, set đang giữ KHÔNG nhả (v2.8.2) · 1:2 mỗi nửa mở window của khách mình
    Chạy: node test/ws_menu.js   (BASE=… để chạy trên bản cũ — phải trượt) */
 var {chromium}=require('playwright'); var path=require('path');
 var ROOT=process.env.BASE||path.resolve(__dirname,'..'), serve=require(path.join(ROOT,'test','serve'));
@@ -25,6 +25,7 @@ var ROOT=process.env.BASE||path.resolve(__dirname,'..'), serve=require(path.join
     await page.evaluate(function(a){
       var names=a.two ? state.clients.slice(0,2).map(function(c){ return c.name; }) : ['Bùi Doãn Quang'];
       var people=names.map(function(n){ return {name:n, no:1, cur:a.cur, setNo:1, phase:'setup', reps:10, kg:20, restTotal:90, restStart:0, ex:{}, form:0, note:'', okDone:false}; });
+      OUT.q=[]; outSave();   /* mỗi kịch bản bắt đầu với hàng đợi trống (đếm set đang giữ cho đúng) */
       state.session={day:TODAY_ISO, coach:state.coach, kind:names.length>1?'1:2':'1:1', people:people, plan:a.plan.slice(), started:1, startedAt:Date.now()};
       if(a.fill) people.forEach(function(p){
         p.ex[a.plan[0]]={sets:[[40,12,1,'x0']], done:false};
@@ -48,9 +49,20 @@ var ROOT=process.env.BASE||path.resolve(__dirname,'..'), serve=require(path.join
   a=await g1(); check(a.href==='#i-undo', 'W1b đang tập: ↩ hoàn tác (không đổi): '+a.href);
   await page.click('#loop-host .c1'); await W(900);
   a=await g1(); var s1=await st();
-  check(s1.ph[0]==='rest-setup' && a.href==='#i-list', 'W1c bắt đầu nghỉ: nút trái = Menu: '+JSON.stringify([s1.ph[0], a.href]));
+  check(s1.ph[0]==='rest-setup' && a.href==='#i-back' && a.label==='Quay lại', 'W1c v2.8.2 · bắt đầu nghỉ: nút trái ← "Quay lại": '+JSON.stringify([s1.ph[0], a]));
+  async function q1(){ return page.evaluate(function(){ var p=state.session.people[0], e=p.ex[state.session.plan[p.cur]], l=e.sets[e.sets.length-1];
+    return {ph:p.phase, sets:e.sets.length, ok:l?l[2]:null, setNo:p.setNo, held:OUT.q.filter(function(x){ return x.hold; }).length, ws:WS.open}; }); }
+  var j1=await q1();
+  check(j1.sets===2 && j1.ok===1 && j1.held===1, 'W1d chấm Đạt: set 2 ghi (Đạt), đang giữ: '+JSON.stringify(j1));
+  await page.click('#loop-host .g1'); await W(900);
+  var j2=await q1();
+  check(j2.ph==='active' && j2.sets===1 && j2.setNo===2 && j2.held===0 && !j2.ws, 'W1e ← về Đang tập set 2: bỏ kết quả vừa chấm, không mở window: '+JSON.stringify(j2));
+  await page.click('#loop-host .j0'); await W(900);
+  var j3=await q1();
+  check(j3.ph==='rest-setup' && j3.sets===2 && j3.ok===0 && j3.held===1, 'W1f chấm lại "Chưa đạt" → Bắt đầu nghỉ, set 2 = Chưa đạt, đang giữ: '+JSON.stringify(j3));
 
-  /* W2 — mở window từ "Bắt đầu nghỉ": khung, tên, lưới */
+  /* W2 — mở window từ "Thiết lập set": khung, tên, lưới */
+  await loopAt();
   await page.click('#loop-host .g1'); await W(700);
   var w2=await page.evaluate(function(){ var w=document.getElementById('ws'), r=w.getBoundingClientRect(), nm=document.getElementById('ws-nm'), tt=document.querySelector('#ws .wtt .wp'),
     tiles=[].map.call(document.querySelectorAll('#ws-grid .ptile:not(.add)'), function(t){ var p=t.querySelector('.pst'); return [t.querySelector('.nm').textContent, p?p.textContent:null]; }),
@@ -61,14 +73,14 @@ var ROOT=process.env.BASE||path.resolve(__dirname,'..'), serve=require(path.join
   console.log('    ', JSON.stringify(w2));
   check(w2.on && w2.dim && w2.top===126 && w2.h===726, 'W2a window y 126, cao 726, lớp làm mờ bật');
   check(w2.nm==='Doãn Quang' && w2.nmCol==='rgb(158, 158, 158)' && w2.tt==='Buổi tập hôm nay', 'W2b cụm tên: "Doãn Quang" (Ash) / "Buổi tập hôm nay"');
-  check(w2.tiles.length===4 && w2.tiles[0][1]==='Set 3' && w2.tiles[1][1]==='Đã xong 3 set' && w2.tiles[3][1]===null && w2.add, 'W2c lưới thẻ + tình trạng (bài đang nghỉ: set kế = 3) + ô Thêm bài: '+JSON.stringify(w2.tiles));
+  check(w2.tiles.length===4 && w2.tiles[0][1]==='Set 2' && w2.tiles[1][1]==='Đã xong 3 set' && w2.tiles[3][1]===null && w2.add, 'W2c lưới thẻ + tình trạng (bài đang chọn: set kế = 2) + ô Thêm bài: '+JSON.stringify(w2.tiles));
   check(w2.left[0]===12 && w2.left[1]===824 && w2.left[2]===48 && w2.home[0]===28 && w2.home[1]===12 && w2.down==='#i-down' && w2.hm==='#i-home24', 'W2d nav: ⌄ trái (12, đáy 824) · ⌂ phải (cách đáy 28, phải 12)');
   check(w2.gTop===166 && w2.gLeft===12, 'W2e lưới cách tay nắm 14 (Figma: 126 + 8 + 6 + 12 + 14 = y 166), rail 12: '+w2.gTop+' / '+w2.gLeft);
   await page.screenshot({path:__dirname+'/out_ws_1.png'});
-  /* W3 — ở "Bắt đầu nghỉ" chạm chính bài đang tập → vào set mới (set 3), set vừa chấm được gửi */
+  /* W3 — chạm chính bài đang chọn → đóng window, vẫn Thiết lập set 2 của bài đó */
   await clickBox('#ws-grid .ptile', 0); await W(1300);
-  var s3=await st(), held=await page.evaluate(function(){ return OUT.q.filter(function(e){ return e.hold; }).length; });
-  check(!s3.ws && s3.cur[0]===0 && s3.ph[0]==='setup' && s3.setNo[0]===3 && held===0, 'W3 chạm bài đang tập lúc Bắt đầu nghỉ → Thiết lập set 3, set vừa chấm đã nhả: '+JSON.stringify([s3.ph[0], s3.setNo[0], held]));
+  var s3=await st();
+  check(!s3.ws && s3.cur[0]===0 && s3.ph[0]==='setup' && s3.setNo[0]===2, 'W3 chạm bài đang chọn → Thiết lập set 2 bài 01: '+JSON.stringify([s3.cur[0], s3.ph[0], s3.setNo[0]]));
 
   /* W4 — từ Thiết lập: Menu → chạm thẻ 03 → bài 03 set 2 */
   await page.click('#loop-host .g1'); await W(700);
@@ -132,15 +144,13 @@ var ROOT=process.env.BASE||path.resolve(__dirname,'..'), serve=require(path.join
   await page.click('#loop-host .g1'); await W(700); await page.mouse.click(196, 60); await W(800);
   check(!(await st()).ws, 'W8b chạm vùng làm mờ phía trên → đóng');
 
-  /* W9 — ⌂ về trang chủ → "Tiếp tục buổi tập" → vào lại loop đúng bài / pha; set đang giữ đã gửi */
-  await page.click('#loop-host .c1'); await W(700); await page.click('#loop-host .c1'); await W(900);   /* chấm Đạt → Bắt đầu nghỉ, set giữ */
-  var h9=await page.evaluate(function(){ return OUT.q.filter(function(e){ return e.hold; }).length; });
+  /* W9 — ⌂ về trang chủ → "Tiếp tục buổi tập" → vào lại loop đúng bài / pha */
   await page.click('#loop-host .g1'); await W(700); await page.click('#ws-home'); await W(1300);
-  var s9=await page.evaluate(function(){ return {scr:state.screen, go:document.getElementById('h-go').textContent, held:OUT.q.filter(function(e){ return e.hold; }).length, ws:WS.open}; });
-  check(h9===1 && s9.scr==='p-home' && s9.go==='Tiếp tục buổi tập' && s9.held===0 && !s9.ws, 'W9a ⌂ → trang chủ "Tiếp tục buổi tập", set giữ đã nhả: '+JSON.stringify([h9, s9]));
+  var s9=await page.evaluate(function(){ return {scr:state.screen, go:document.getElementById('h-go').textContent, ws:WS.open}; });
+  check(s9.scr==='p-home' && s9.go==='Tiếp tục buổi tập' && !s9.ws, 'W9a ⌂ → trang chủ "Tiếp tục buổi tập": '+JSON.stringify(s9));
   await page.click('#h-go'); await W(1500);
   var s9b=await st();
-  check(s9b.scr==='p-loop' && s9b.cur[0]===3 && s9b.ph[0]==='rest-setup', 'W9b Tiếp tục buổi tập → loop đúng bài 04, Bắt đầu nghỉ: '+JSON.stringify([s9b.cur[0], s9b.ph[0]]));
+  check(s9b.scr==='p-loop' && s9b.cur[0]===3 && s9b.ph[0]==='setup', 'W9b Tiếp tục buổi tập → loop đúng bài 04, Thiết lập set: '+JSON.stringify([s9b.cur[0], s9b.ph[0]]));
 
   /* W10 — đóng cả window từ trang 2 (tay nắm) · trang Bài tập hôm nay (trước khi bắt đầu) vẫn mở thư viện kiểu cũ (trượt lên, CTA Chọn) */
   await page.click('#loop-host .g1'); await W(700); await clickBox('#ws-grid .ptile.add', 0); await W(700);
@@ -169,6 +179,16 @@ var ROOT=process.env.BASE||path.resolve(__dirname,'..'), serve=require(path.join
   var w11d=await page.evaluate(function(){ return {nm:document.getElementById('ws-nm').textContent, st:[].map.call(document.querySelectorAll('#ws-grid .ptile:not(.add)'), function(t){ var p=t.querySelector('.pst'); return p?p.textContent:null; })}; });
   check(w11d.nm!==nm2 && w11d.st[0]==='Set 2' && w11d.st[3]===null, 'W11d window nửa trên: tình trạng theo khách 1 (thẻ 04 chưa tập): '+JSON.stringify(w11d));
   await page.click('#ws-close'); await W(700);
+  /* W11e — v2.8.2: nửa dưới chấm Đạt → Bắt đầu nghỉ (←, set giữ); nửa trên Menu → ⌂ → Tiếp tục: set nửa dưới VẪN giữ, ← vẫn lùi được */
+  await page.locator('#loop-host .lp .c1').nth(1).click(); await W(800); await page.locator('#loop-host .lp .c1').nth(1).click(); await W(1000);
+  var ic11=await g1(1), h11=await page.evaluate(function(){ var p=state.session.people[1]; return {ph:p.phase, sets:p.ex[state.session.plan[p.cur]].sets.length, held:OUT.q.filter(function(e){ return e.hold; }).length}; });
+  check(h11.ph==='rest-setup' && h11.sets===1 && h11.held===1 && ic11.href==='#i-back', 'W11e nửa dưới Bắt đầu nghỉ: nút ←, 1 set đang giữ: '+JSON.stringify([h11, ic11.href]));
+  await page.locator('#loop-host .lp .g1').nth(0).click(); await W(800); await page.click('#ws-home'); await W(1300);
+  var h11b=await page.evaluate(function(){ return {scr:state.screen, held:OUT.q.filter(function(e){ return e.hold; }).length}; });
+  await page.click('#h-go'); await W(1500);
+  await page.locator('#loop-host .lp .g1').nth(1).click(); await W(1000);
+  var h11c=await page.evaluate(function(){ var ps=state.session.people; return {ph:ps.map(function(p){ return p.phase; }), sets:ps[1].ex[state.session.plan[ps[1].cur]].sets.length, held:OUT.q.filter(function(e){ return e.hold; }).length}; });
+  check(h11b.scr==='p-home' && h11b.held===1 && h11c.ph[0]==='setup' && h11c.ph[1]==='active' && h11c.sets===0 && h11c.held===0, 'W11f ⌂ → trang chủ giữ set nửa dưới → Tiếp tục → ← về Đang tập, set bỏ: '+JSON.stringify([h11b, h11c]));
 
   /* W12 — buổi chỉ còn 1 bài: không bỏ được bài cuối */
   await loopAt({plan:['Dip'], fill:false});

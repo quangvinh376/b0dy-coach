@@ -81,9 +81,9 @@ function hex(c){ return '#'+c.map(function(v){ return ('0'+v.toString(16)).slice
 
   /* ================= 1:1 ================= */
   var A=await mk(false), page=A.page, L=await toRestSetup(page, ['Thành Công'], [1], false);
-  await run('N1', '1:1 · đặt giờ nghỉ: pill Paper "Bắt đầu nghỉ", nút Menu ☰ (v2.8.1), nền Ink', async function(){
+  await run('N1', '1:1 · đặt giờ nghỉ: pill Paper "Bắt đầu nghỉ", nút ← (v2.6 · v2.8.2), nền Ink', async function(){
     check((await page.evaluate(function(){ return state.session.people[0].phase; }))==='rest-setup', 'đang đặt giờ');
-    await navOk(page, L, 'n1 dat gio', '#i-list', 'Bắt đầu nghỉ', 'paper');   /* v2.8.1: ← → nút Menu */
+    await navOk(page, L, 'n1 dat gio', '#i-back', 'Bắt đầu nghỉ', 'paper');
   });
   await run('N2', '1:1 · đang nghỉ: pill Acid "Nghỉ xong · kế tiếp", nút ↩ (v2.6) — đầu / giữa / 10 giây cuối / 0:00 nav KHÔNG đổi tông', async function(){
     await page.evaluate(function(){ state.session.people[0].restTotal=14; }); await page.click(L+'.c1'); await page.waitForTimeout(900);
@@ -101,10 +101,10 @@ function hex(c){ return '#'+c.map(function(v){ return ('0'+v.toString(16)).slice
 
   /* ================= 1:2 ================= */
   var B=await mk(false); page=B.page; L=await toRestSetup(page, ['Doãn Quang','Quang Vinh'], [1,2], true);
-  await run('N4', '1:2 · đặt giờ nghỉ: nav rút gọn luôn hiện — ▷ Paper tròn 48 + Menu ☰, không cần chạm mở, bấm tới đúng nút', async function(){
+  await run('N4', '1:2 · đặt giờ nghỉ: nav rút gọn luôn hiện — ▷ Paper tròn 48 + ←, không cần chạm mở, bấm tới đúng nút', async function(){
     var g=await geo(page, L), f=path.join(OUT,'n4-'+TAG+'.png'); await page.screenshot({path:f});
-    check(g.navOp==='1' && g.c1.w===48 && g.c1.h===48 && g.c1icon==='#i-play' && g.icon==='#i-list' && g.txt==='Bắt đầu nghỉ', 'nav hiện sẵn: '+JSON.stringify({op:g.navOp, w:g.c1.w, c1:g.c1icon, g1:g.icon, label:g.txt}));
-    await navOk(page, L, 'n4 dat gio 1-2', '#i-list', 'Bắt đầu nghỉ', 'paper');   /* v2.8.1 */
+    check(g.navOp==='1' && g.c1.w===48 && g.c1.h===48 && g.c1icon==='#i-play' && g.icon==='#i-back' && g.txt==='Bắt đầu nghỉ', 'nav hiện sẵn: '+JSON.stringify({op:g.navOp, w:g.c1.w, c1:g.c1icon, g1:g.icon, label:g.txt}));
+    await navOk(page, L, 'n4 dat gio 1-2', '#i-back', 'Bắt đầu nghỉ', 'paper');
     var s=px(f, [[g.c1.x+g.c1.w/2-12, g.c1.y+g.c1.h/2]]); check(isPaper(s[0]), 'điểm ảnh trong nút tròn Paper: '+hex(s[0]));
     var hit=await page.evaluate(function(p){ var e=document.elementFromPoint(p.x,p.y); return e && e.closest('.c1') ? 'c1' : (e && e.className) || ''; }, {x:g.c1.x+g.c1.w/2, y:g.c1.y+g.c1.h/2});
     check(hit==='c1', 'chạm giữa nút tới nút: '+hit);

@@ -2,7 +2,7 @@
    Lỗi v2.5.0–v2.6.0: tween/after khởi động NGAY TRONG khung (nửa sau của fadeSwap / swapIcon, mốc 10 giây cuối, 0:00) hẹn thêm một
    vòng rAF → mỗi set thêm ~6 vòng, ~100 vòng sau 16 set; mỗi khung vẽ lại cùng một hình hàng chục lần (dt = 0) → nóng máy, rớt khung.
    M1 1:1 · 6 vòng set → nghỉ → set mới: mỗi khung đúng 1 lần motFrame, không khung dt = 0, MT chạy đúng giờ thật
-   M2 1:1 · chuỗi lùi (↩ đang tập · Menu ở đặt giờ (v2.8.1) · ↩ đang nghỉ) + 10 giây cuối + 0:00: vẫn 1 vòng
+   M2 1:1 · chuỗi lùi (↩ đang tập · ← đặt giờ · ↩ đang nghỉ) + 10 giây cuối + 0:00: vẫn 1 vòng
    M3 1:2 · hai nửa, mỗi nửa 4 vòng: vẫn 1 vòng cho cả hai nửa
    M4 rời loop (Menu → ⌂ trang chủ (v2.8.1) · kết thúc buổi → tổng kết): vòng vẽ tự ngủ, 0 lần motFrame khi hết tween
    M5 __mot.hold/step (quay từng khung) vẫn đúng: giữ = 0 khung, step tiến đúng ms, thả = 1 vòng
@@ -79,11 +79,9 @@ async function run(id, name, fn){ CUR={id:id,name:name,fails:[]}; RES.push(CUR);
   await run('M2', '1:1 · chuỗi lùi + 10 giây cuối + 0:00: vẫn một vòng', async function(){
     await tap(page, L+'.c1'); await tap(page, L+'.g1');                          /* đang tập ↩ → thiết lập */
     check(await page.evaluate(function(){ return state.session.people[0].phase; })==='setup', '↩ đang tập không về thiết lập');
-    await tap(page, L+'.c1'); await tap(page, L+'.c1'); await tap(page, L+'.g1'); /* Đạt → đặt giờ · v2.8.1: Menu mở window Buổi tập hôm nay */
-    check(await page.evaluate(function(){ return WS.open && state.session.people[0].phase==='rest-setup'; }), 'Menu ở đặt giờ không mở window');
-    one(await sample(page, 1200), 'window mở trên màn đặt giờ');
-    await page.click('#ws-close'); await page.waitForTimeout(600);
-    await tap(page, L+'.c1'); await page.waitForTimeout(600); await tap(page, L+'.g1');   /* nghỉ ↩ → đặt giờ */
+    await tap(page, L+'.c1'); await tap(page, L+'.c1'); await tap(page, L+'.g1'); /* Đạt → đặt giờ ← → đang tập */
+    check(await page.evaluate(function(){ return state.session.people[0].phase; })==='active', '← đặt giờ không về đang tập');
+    await tap(page, L+'.c1'); await tap(page, L+'.c1'); await page.waitForTimeout(600); await tap(page, L+'.g1');   /* nghỉ ↩ → đặt giờ */
     check(await page.evaluate(function(){ return state.session.people[0].phase; })==='rest-setup', '↩ đang nghỉ không về đặt giờ');
     await tap(page, L+'.c1'); await page.waitForTimeout(800);                    /* nghỉ lại */
     one(await sample(page, 1500), 'sau chuỗi lùi');
