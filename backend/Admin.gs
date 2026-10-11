@@ -358,9 +358,26 @@ function admStats_(p) {
    Nguồn sự thật: Script Property STUDIO_IP = danh sách ngăn bằng dấu phẩy
    (đúng định dạng ipOk_ đang đọc). Không bao giờ để danh sách RỖNG: ipOk_
    coi rỗng là "tắt khoá IP" → ai có PIN coach cũng check-in được từ bất kỳ đâu.
-   Lưu ý: Worker Cloudflare đọc biến ALLOW_IP riêng — đổi ở đây chỉ đổi phía
-   Apps Script (app tự lui về Apps Script khi Worker trả wrong_ip).
+   v2.10 (11/10): MỘT nguồn cho cả hai máy chủ — mỗi lần đọc / thêm / xoá, danh sách
+   được chép sang tab "Cấu hình" ô B1 của Customer database; Worker Cloudflare đọc ô đó
+   (nhớ 60 giây), biến ALLOW_IP của Worker chỉ còn là dự phòng khi ô trống / chưa có tab.
+   (Trước 11/10 Worker chỉ đọc ALLOW_IP → hai danh sách lệch nhau, mọi check-in từ phòng
+   bị Worker từ chối rồi phải lùi về Apps Script.)
    ===================================================================== */
+var ADM_CFG_TAB = 'Cấu hình';
+/* chép danh sách sang tab Cấu hình (B1, dạng chữ). Lỗi chép không chặn việc đổi IP. */
+function admIpMirror_(list) {
+  try {
+    var ss = lbDb_(), sh = ss.getSheetByName(ADM_CFG_TAB);
+    if (!sh) {
+      sh = ss.insertSheet(ADM_CFG_TAB);
+      sh.getRange(1, 1, 2, 1).setValues([['IP phòng được check-in'], ['Sửa ở app coach: đăng nhập Admin → Cài đặt. Worker và Apps Script cùng đọc ô B1 — không sửa tay.']]);
+    }
+    var want = list.join(','), cell = sh.getRange(1, 2);
+    if (String(cell.getDisplayValue() || '') !== want) cell.setNumberFormat('@').setValue(want);
+    return true;
+  } catch (e) { return false; }
+}
 function admIpGet_() {
   var raw = String(PropertiesService.getScriptProperties().getProperty('STUDIO_IP') || '');
   var out = [];
@@ -369,7 +386,9 @@ function admIpGet_() {
 }
 function admIpList_(p) {
   if (!adminOk_(p)) return { ok: false, error: 'sai_pin' };
-  return { ok: true, ips: admIpGet_(), max: ADM_IP_MAX };
+  var list = admIpGet_();
+  if (list.length) admIpMirror_(list);                    /* mở tab Cài đặt = đồng bộ sang Worker */
+  return { ok: true, ips: list, max: ADM_IP_MAX };
 }
 /* thêm IP của THIẾT BỊ ĐANG GỌI (p.ip do app lấy từ ipify) */
 function admIpAdd_(p) {
@@ -386,6 +405,7 @@ function admIpAdd_(p) {
       list.push(ip);
       PropertiesService.getScriptProperties().setProperty('STUDIO_IP', list.join(','));
     }
+    admIpMirror_(list);
     return { ok: true, ips: list, max: ADM_IP_MAX };
   } finally { lock.releaseLock(); }
 }
@@ -402,6 +422,7 @@ function admIpDel_(p) {
     if (list.length <= 1) return { ok: false, error: 'con_1_ip', ips: list, max: ADM_IP_MAX };
     list.splice(k, 1);
     PropertiesService.getScriptProperties().setProperty('STUDIO_IP', list.join(','));
+    admIpMirror_(list);
     return { ok: true, ips: list, max: ADM_IP_MAX };
   } finally { lock.releaseLock(); }
 }

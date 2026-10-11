@@ -48,6 +48,7 @@ Sheet.prototype.getRange = function (r, c, nr, nc) {
   return {
     getValues: function () { var out = []; for (var i = 0; i < nr; i++) { var row = []; for (var j = 0; j < nc; j++) row.push(sh.cell(r + i, c + j)); out.push(row); } return out; },
     getValue: function () { return sh.cell(r, c); },
+    getDisplayValue: function () { return String(sh.cell(r, c)); },
     setValue: function (v) { if (typeof v === 'string' && /^\d{1,2}\/\d{1,2}\/\d{4}$/.test(v) && sh.name === 'SESSION LOG' && c === 2 + M) v = sheetDate(v, sh.ss.tz); sh.put(r, c, v); sh.ss.writes.push([sh.name, r, c, v]); return this; },
     setValues: function (vals) { if (vals.length !== nr || vals[0].length !== nc) throw new Error('setValues kích thước lệch'); for (var i = 0; i < nr; i++) for (var j = 0; j < nc; j++) sh.put(r + i, c + j, vals[i][j]); sh.ss.writes.push([sh.name, r, c, 'x' + nr]); return this; },
     setFontWeight: function () { return this; }, setNumberFormat: function () { return this; }
@@ -266,6 +267,25 @@ check('IP rác bị chặn', call({ action: 'addip', apin: 'ZZZZ', ip: '<script>
 check('xoá IP không có → ok, giữ nguyên', call({ action: 'delip', apin: 'ZZZZ', del: '8.8.8.8' }).ok && PROPS.STUDIO_IP === '203.0.113.7,2001:db8:1f2::1');
 check('ipOk_ của coach đọc được danh sách mới', sandbox.ipOk_({ ip: '2001:db8:1f2::1' }) === true && sandbox.ipOk_({ ip: '1.1.1.1' }) === false);
 check('khoá được nhả', LOCKS.held === 0, LOCKS);
+/* v2.10: danh sách được chép sang tab "Cấu hình" B1 của Customer database (Worker đọc ô này) */
+var cfg = FILES[DB_ID].getSheetByName('Cấu hình');
+check('v2.10 · tab Cấu hình được tạo, B1 = danh sách hiện hành', cfg && cfg.cell(1, 2) === '203.0.113.7,2001:db8:1f2::1' && cfg.cell(1, 1) === 'IP phòng được check-in', cfg && cfg.rows);
+call({ action: 'delip', apin: 'ZZZZ', del: '2001:db8:1f2::1' });
+check('v2.10 · xoá IP → B1 cập nhật', cfg.cell(1, 2) === '203.0.113.7', cfg.cell(1, 2));
+call({ action: 'addip', apin: 'ZZZZ', ip: '198.51.100.40' });
+check('v2.10 · thêm IP → B1 cập nhật', cfg.cell(1, 2) === '203.0.113.7,198.51.100.40', cfg.cell(1, 2));
+cfg.put(1, 2, 'sửa tay'); var w0 = FILES[DB_ID].writes.length;
+r = call({ action: 'iplist', apin: 'ZZZZ' });
+check('v2.10 · mở tab Cài đặt (iplist) → B1 đồng bộ lại theo STUDIO_IP', r.ok && cfg.cell(1, 2) === '203.0.113.7,198.51.100.40', cfg.cell(1, 2));
+var w1 = FILES[DB_ID].writes.length; call({ action: 'iplist', apin: 'ZZZZ' });
+check('v2.10 · iplist khi B1 đã đúng → không ghi lại', FILES[DB_ID].writes.length === w1 && w1 > w0, [w0, w1, FILES[DB_ID].writes.length]);
+check('v2.10 · chỉ một tab Cấu hình', FILES[DB_ID].sheets.filter(function (x) { return x.name === 'Cấu hình'; }).length === 1);
+check('v2.10 · iplist sai PIN không chép gì', call({ action: 'iplist', apin: 'XXXX' }).error === 'sai_pin' && FILES[DB_ID].writes.length === w1);
+var dbSave = FILES[DB_ID]; delete FILES[DB_ID];
+r = call({ action: 'addip', apin: 'ZZZZ', ip: '203.0.113.7' });
+FILES[DB_ID] = dbSave;
+check('v2.10 · không mở được Customer database → đổi IP vẫn ok (chép lỗi bỏ qua)', r.ok && PROPS.STUDIO_IP === '203.0.113.7,198.51.100.40', r);
+check('v2.10 · khoá được nhả', LOCKS.held === 0, LOCKS);
 
 console.log('\n== 7. không phá lệnh cũ ==');
 reset();
