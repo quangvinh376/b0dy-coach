@@ -7,7 +7,7 @@
    ===================================================================== */
 'use strict';
 var $=function(id){ return document.getElementById(id); };
-var APP_VER='v2.8.2';
+var APP_VER='v2.8.3';
 
 /* ---------------- tiện ích ---------------- */
 function isoToday(d){ d=d||new Date(); return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2); }
@@ -187,6 +187,8 @@ function exGroup(name){ var e=libEntries().filter(function(x){return x.name===na
 var API='https://script.google.com/macros/s/AKfycbyyCRs0JkV1k8npUpprP44RN-rgNnagWELRBwncBKAiiRKO6hNLDqFcnUrJz7hC_To41g/exec'; /* deployment "Coach API v1" */
 var API_WK='https://b0dy-kiosk-api.little-bonus-1d87.workers.dev/';
 var WK_ON={coach:1,log:1,checkin_coach:1}, WK_OFF={wk_unconfigured:1,wrong_ip:1,unknown_action:1,wk_no_sheet_coach:1}, WK_SAFE={coach:1,log:1};
+/* v2.8.3 (11/10): Worker v7 trả wrong_ip kèm IP + ASN nó thấy (relay = iCloud Private Relay) → nhớ để báo đúng lý do nếu Apps Script cũng chặn */
+var WK_SEEN=null, IP_P=null;
 var DEMO=!API || /[?&]demo\b/.test(location.search);
 /* ADMIN (v2.4): PIN admin → "Admin": mọi khách của phòng, check-in không khoá IP, tab Cài đặt (IP phòng).
    Cùng các màn và luồng của coach; api() đổi tên lệnh sang bản admin (backend Admin.gs, chỉ có ở Apps Script → không đi Worker). */
@@ -212,8 +214,10 @@ function api(body, tries, wait, t0, tmo){
   if(WK_ON[body.action] && !body._gas){
     var wtmo=(body.action==='checkin_coach')?20000:15000;
     return fetchJson(API_WK,{method:'POST',credentials:'omit',headers:{'Content-Type':'text/plain;charset=utf-8'},body:payload}, wtmo)
-      .then(function(r){ if(r && WK_OFF[r.error]) throw new Error('wk_off'); return r; })
-      .catch(function(e){ if(e.message!=='wk_off' && !WK_SAFE[body.action]) throw e; var b2=JSON.parse(payload); b2._gas=1; return api(b2, tries, wait, Date.now(), tmo); });
+      .then(function(r){ if(r && WK_OFF[r.error]){ if(r.error==='wrong_ip' && r.seen) WK_SEEN={ip:String(r.seen), asn:+r.asn||0, relay:!!r.relay, t:Date.now()}; throw new Error('wk_off'); } return r; })
+      .catch(function(e){ if(e.message!=='wk_off' && !WK_SAFE[body.action]) throw e; var b2=JSON.parse(payload); b2._gas=1;
+        /* lùi về Apps Script: Apps Script so IP do app tự lấy (ipify) → chờ lượt lấy IP đang chạy (tối đa 2,5 s) để không gửi IP của mạng cũ */
+        return ipWait().then(function(){ return api(b2, tries, wait, Date.now(), tmo); }); });
   }
   return fetchJson(API,{method:'POST',credentials:'omit',headers:{'Content-Type':'text/plain;charset=utf-8'},body:payload}, tmo)
     .catch(function(e){
@@ -226,7 +230,15 @@ function api(body, tries, wait, t0, tmo){
 function warm(){ if(DEMO) return; var wo=function(){ return {method:'POST',credentials:'omit',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({action:'ping'})}; }; fetchJson(API,wo(),6000).catch(function(){}); fetchJson(API_WK,wo(),6000).catch(function(){}); }
 function refreshIp(){
   if(DEMO) return Promise.resolve();
-  return fetchJson('https://api.ipify.org?format=json',{},5000).then(function(j){ if(j&&j.ip){ state.ip=j.ip; SS('lb_ip',j.ip); } }).catch(function(){});
+  var p=IP_P=fetchJson('https://api.ipify.org?format=json',{},5000).then(function(j){ if(j&&j.ip){ state.ip=j.ip; SS('lb_ip',j.ip); } }).catch(function(){}).then(function(){ if(IP_P===p) IP_P=null; });
+  return p;
+}
+function ipWait(){ return IP_P ? Promise.race([IP_P, new Promise(function(r){ setTimeout(r, 2500); })]) : Promise.resolve(); }
+/* lý do khi máy chủ chặn vì IP: Worker cho biết IP + ASN nó thấy (≤ 2 phút trước) */
+function ipWhy(){
+  var w=WK_SEEN; if(!w || Date.now()-w.t>120000) return {text:'Chỉ check-in được ở phòng', retry:true};
+  if(w.relay) return {text:'Tắt Giới hạn theo dõi IP ở Wi-Fi phòng', retry:false};
+  return {text:'Mạng chưa được phép check-in', retry:true};
 }
 
 /* ---- khách của coach: members (BA) + snapshot (Customer database) → state.clients ---- */
@@ -1947,6 +1959,7 @@ function doCheckin(){
   var todo=names.filter(function(n){ var ci=ciFor(n); return !(ci && ci.status==='ok'); });
   if(!todo.length){ startSession(names); return; }
   state.ciBusy=true; var btn=$('cf-go'); btn.classList.add('off'); notify('Đang check-in', {spin:true, ms:40000});
+  WK_SEEN=null; refreshIp();             /* v2.8.3: lấy lại IP ngay lúc check-in (máy vừa chuyển 4G → Wi-Fi phòng) */
   Promise.all(todo.map(function(n){ return sendCheckin(findClient(n), todo.length>1); })).then(function(rs){
     state.ciBusy=false; btn.classList.remove('off');
     if(rs.every(Boolean) && state.screen==='p-confirm') startSession(names);
@@ -1977,7 +1990,8 @@ function sendCheckin(m, many){
     }
     if(err==='da_checkin'){ ciOk(m, ci, ci.no, res.at||m.signed||'', many); return true; }
     if(err==='sai_pin'){ delete CI[m.name]; ciSave(); pinGone(); return false; }
-    ciFail(m, ci, err==='wrong_ip' ? 'Chỉ check-in được ở phòng' : err==='khong_phai_khach_cua_ban' ? 'Không phải khách của bạn' : err==='khong_thay_khach' ? 'Không thấy khách trong MEMBERS' : 'Chưa check-in', many);
+    if(err==='wrong_ip'){ var why=ipWhy(); ciFail(m, ci, why.text, many, !why.retry); return false; }
+    ciFail(m, ci, err==='khong_phai_khach_cua_ban' ? 'Không phải khách của bạn' : err==='khong_thay_khach' ? 'Không thấy khách trong MEMBERS' : 'Chưa check-in', many);
     return false;
   }).catch(function(){ busyLine(false); m=live(); var ci=ciFor(m.name); if(ci) ciFail(m, ci, 'Chưa check-in', many); return false; });
 }
@@ -1989,9 +2003,10 @@ function ciOk(m, ci, no, at, many){
   if(state.screen!=='p-pin') notify('Đã check-in'+(many?' '+firstName(m.name):''));
   if(state.screen==='p-done') HOOK['p-done']();
 }
-function ciFail(m, ci, text, many){
+function ciFail(m, ci, text, many, noRetry){
   ci.status='fail'; ciSave();
-  notify(text+(many?' · '+firstName(m.name):''), {err:true, action:{label:'Thử lại', fn:function(){ if(state.screen==='p-confirm') doCheckin(); }}});
+  /* noRetry: thử lại không giúp gì (máy đang bật iCloud Private Relay) → không nút, pill ở lâu hơn để kịp đọc */
+  notify(text+(many&&!noRetry?' · '+firstName(m.name):''), noRetry ? {err:true, ms:9000} : {err:true, action:{label:'Thử lại', fn:function(){ if(state.screen==='p-confirm') doCheckin(); }}});
 }
 
 /* =====================================================================
