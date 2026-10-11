@@ -11,3 +11,4 @@ test/out_ink/
 test/uc/
 gas_live/
 lab/
+test/out_*.png
