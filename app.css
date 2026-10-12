@@ -797,7 +797,12 @@ body.adm .tab-adm{display:flex}
 
 /* ============ BÁN CHO KHÁCH MỚI (v2.9.0 · sell.js) — Figma "Hỗ trợ bán hàng" 644:1276, vòng 10 ============
    Ba dải mỗi màn: câu hỏi (khối đỉnh) · số 0 lộ trình (canvas #sv-dial NẰM DƯỚI trang) · trả lời + điều hướng neo đáy.
-   Mono luôn VIẾT HOA, tiền ₫; nút chính luôn ở giữa (ghost giữ chỗ khi không có ⌂). */
+   Mono luôn VIẾT HOA, tiền ₫; nút chính luôn ở giữa (ghost giữ chỗ khi không có ⌂).
+   v2.10.0 — biên đạo theo reel v10: trang KHÔNG trượt, từng phần tử đổi tại chỗ. Tiêu đề trồi 46 pt trong khung che (.46 s, trễ .14 s) /
+   rút lên −46 (.22 s) · dãy số trồi 80 pt trong ô (.48 s + 35 ms mỗi số) · hàng trả lời trồi 24 pt (.5 s + 50 ms mỗi hàng), kẻ mảnh vẽ từ
+   trái · bước cũ rút −18 pt so le 25 ms · lùi = ngược chiều. Vào: fill backwards (hết hiệu ứng thì trả lại :active / mờ chọn); ra: fill both.
+   Trang lật không chạy biên đạo phần tử. Giảm chuyển động: chỉ mờ cả trang (khối biên đạo nằm trong no-preference). */
+.page.sv,.svctr,.svfly{--eb:cubic-bezier(.2,0,0,1);--ein:cubic-bezier(.55,0,.8,.2);--eout:cubic-bezier(.16,1,.3,1)}
 .hrow{display:flex;align-items:center;justify-content:space-between;gap:12px;min-width:0}
 .hrow>.t1{flex:1 1 auto;min-width:0}
 /* nút Sell (Figma 688:650): viền Paper 14 %, bo 16, chữ 0 có chấm 10,9 × 14,3 + "Sell" Switzer 14 · chạm: nền Paper 7 % */
@@ -809,9 +814,9 @@ body.adm .tab-adm{display:flex}
 .svdial{position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none}
 .svctr{position:absolute;left:0;right:0;top:0;height:0;pointer-events:none;transition:transform .36s var(--eio)}
 .svctr .ly{position:absolute;left:0;right:0;top:0}
-.svctr .ly.in{animation:svin .26s var(--eo) both}
-.svctr .ly.out{animation:fadeout .15s linear both}
-@keyframes svin{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+.svctr .ly.out{animation:svCout .16s var(--ein) both}
+.svctr .ly.rmin{animation:fadein .15s linear both}
+@keyframes svCout{to{opacity:0;transform:translateY(-10px)}}
 .svctr .k{position:absolute;left:0;right:0;display:flex;justify-content:center;align-items:baseline;gap:8px;white-space:nowrap}
 .svctr .lb{font-family:var(--mono);font-size:11px;line-height:13px;letter-spacing:.88px;color:var(--gray)}
 .svctr .n72{font-family:var(--mono);font-size:72px;line-height:68px;letter-spacing:-2.16px}
@@ -823,28 +828,50 @@ body.adm .tab-adm{display:flex}
 .svctr .m14+.m12,.svctr .m12+.lb{margin-left:-2px}
 .svctr .ac{color:var(--acid)}
 .svctr .pp{color:var(--paper)}
+.svctr .z{opacity:.24}   /* chữ số giữ chỗ lúc đếm lên (08 → 12): con số không xô lệch */
+/* chữ số lăn (reel slotStr / rollTo): chữ thật ẩn giữ bề ngang + chân chữ; lớp .rr đè lên, mỗi ký tự một ô cao đúng một dòng */
+.rl{display:inline-block;position:relative}
+.rl>.gh{visibility:hidden}
+.rl>.rr{position:absolute;left:0;top:0;white-space:nowrap;pointer-events:none}
+.rl .rc{display:inline-block;overflow:hidden;vertical-align:top}
+.rl .sp{display:block;white-space:pre}
+/* lớp bay (fixed, ngoài trang): dòng nội dung, số phải trả, nhãn gói · chấm Acid lúc kết về nút Sell · mép máy sáng lúc lật */
+.svfly{position:fixed;white-space:nowrap;pointer-events:none;transform-origin:0 0;font-weight:500;will-change:transform}
+.svdotf{position:fixed;background:var(--acid);z-index:60;pointer-events:none;will-change:transform}
+.svedge{position:absolute;inset:0;pointer-events:none;background:linear-gradient(to left,rgba(250,250,250,.9),rgba(250,250,250,0) 55%);opacity:0}
 /* khung bước */
 .page.sv>.body{display:flex;flex-direction:column}
+.page.sv>.head{overflow:hidden;padding-top:12px;margin-top:-12px}   /* khung che tiêu đề: nới 12 pt lên trên cho dấu chồng rồi mới cắt */
+.page.sv .head .tt,.page.sv .head .ac{display:inline-block}
+.page.sv.flyac .head .ac{visibility:hidden;animation:none}             /* "36 buổi" đang bay từ hàng gói lên cuối tiêu đề */
+.page.sv.flyac.landed .head .ac{visibility:visible}
 .sv-sp{flex:1 1 auto;min-height:0}
 .sv-ans{flex:none;position:relative;margin-bottom:28px}
 .sv-nav{transition:transform .25s var(--eo)}
 .sv-nav .cta{width:225px;padding:0}
 .sv-nav .gh0{width:48px;height:48px;flex:none}
-/* dãy số (câu 01–03): đơn vị Mono 20 · số Mono 72/68 · chấm Acid 8 dưới số chọn, kéo qua nhiều số = viên con nhộng */
+/* dãy số (câu 01–03): đơn vị Mono 20 · số Mono 72/68 trong ô che · viên Acid dưới số chọn (2 đầu tròn + thân co giãn), kéo qua nhiều số = một khoảng */
 .sv-q{height:124px}
 .sv-unit{height:24px;font-family:var(--mono);font-size:20px;line-height:24px;color:var(--gray);text-align:center}
 .sv-row{position:absolute;left:0;right:0;top:36px;height:68px;display:flex;justify-content:center;gap:12px;touch-action:none}
 .sv-q.w .sv-row{gap:36px}
-.sv-n{width:44px;height:68px;font-family:var(--mono);font-size:72px;line-height:68px;letter-spacing:-2.16px;text-align:center;color:var(--paper);transition:opacity .2s ease}
+.sv-n{width:44px;height:68px;overflow:hidden;font-family:var(--mono);font-size:72px;line-height:68px;letter-spacing:-2.16px;text-align:center;color:var(--paper);transition:opacity .2s ease}
+.sv-n>span{display:block}
 .sv-q.w .sv-n{width:126px}
 .sv-n.dim{opacity:.35}
-.sv-dot{position:absolute;top:116px;left:0;width:8px;height:8px;border-radius:4px;background:var(--acid);opacity:0;transform:scale(.6);transition:opacity .12s linear,transform .2s var(--eo)}
-.sv-dot.on{opacity:1;transform:none}
-.page.sv .sv-q>.sv-dot{animation:none}   /* chấm là con của .st: không nhận rise (rise kết thúc ở opacity 1 → chấm hiện khi chưa chọn) */
-/* hàng trả lời: Lớn 70 (Switzer 28) · Nhỏ 57 (Switzer 22) · giá trị Mono 14 + đơn vị Mono 12 · chấm Acid ở lề trái */
-.sv-rows{border-bottom:1px solid var(--hair)}
-.sv-r{position:relative;width:100%;height:70px;display:flex;align-items:baseline;justify-content:space-between;gap:16px;border-top:1px solid var(--hair);padding-top:18px;color:var(--paper);
+.sv-cap{position:absolute;left:0;right:0;top:116px;height:8px;opacity:0;pointer-events:none;transition:opacity .12s linear}
+.sv-cap.on{opacity:1}
+.sv-cap>i{position:absolute;left:0;top:0;height:8px;background:var(--acid);transition:transform .2s cubic-bezier(.2,0,0,1)}
+.sv-cap .cl,.sv-cap .cr{width:8px;border-radius:4px}
+.sv-cap .cm{width:1px;transform-origin:0 0}
+.sv-cap.nt>i{transition:none}
+/* hàng trả lời: Lớn 70 (Switzer 28) · Nhỏ 57 (Switzer 22) · giá trị Mono 14 + đơn vị Mono 12 · chấm Acid ở lề trái.
+   Kẻ mảnh là lớp giả (vẽ từ trái được) đặt đè lên viền trong suốt → bố cục y như viền thật */
+.sv-rows{border-bottom:1px solid transparent}
+.sv-rows::after{content:'';position:absolute;left:0;right:0;bottom:-1px;height:1px;background:var(--hair);transform-origin:0 0}
+.sv-r{position:relative;width:100%;height:70px;display:flex;align-items:baseline;justify-content:space-between;gap:16px;border-top:1px solid transparent;padding-top:18px;color:var(--paper);
       transition:opacity .2s ease,transform .12s var(--eo)}
+.sv-r::before{content:'';position:absolute;left:0;right:0;top:-1px;height:1px;background:var(--hair);transform-origin:0 0}
 .sv-rows.S .sv-r{height:57px;padding-top:15px}
 .sv-r:active{transform:scale(.985)}
 .sv-r .l{display:flex;flex-direction:column;gap:6px;min-width:0}
@@ -854,18 +881,24 @@ body.adm .tab-adm{display:flex}
 .sv-r .v{display:flex;align-items:baseline;gap:6px;white-space:nowrap;flex:none}
 .sv-r .v b{font-weight:500;font-family:var(--mono);font-size:14px;line-height:17px}
 .sv-r .v em{font-style:normal;font-family:var(--mono);font-size:12px;line-height:14px;letter-spacing:.48px;color:var(--gray)}
-.sv-r .sd{position:absolute;left:-16px;top:31.5px;width:8px;height:8px;border-radius:4px;background:var(--acid);opacity:0;transform:scale(.6);transition:opacity .12s linear,transform .2s var(--eo)}
+.sv-r>.v.wait{visibility:hidden}   /* số phải trả đang bay từ phiếu xuống hàng "Một lần" */
+/* chấm chọn: nảy từ .9 (chuẩn #5 — không bao giờ từ 0) */
+.sv-r .sd{position:absolute;left:-16px;top:31.5px;width:8px;height:8px;border-radius:4px;background:var(--acid);opacity:0;transform:scale(.9);transition:opacity .12s linear,transform .2s cubic-bezier(.2,0,0,1)}
 .sv-rows.S .sv-r .sd{top:25px}
 .sv-r.on .sd{opacity:1;transform:none}
-/* mờ phần chữ chứ không mờ cả hàng: hàng con của .st chạy rise (fill forwards) → opacity trên hàng bị animation đè; hairline giữ 14 % */
+/* mờ phần chữ chứ không mờ cả hàng; hairline giữ 14 % */
 .sv-r>.l,.sv-r>.v{transition:opacity .2s ease}
 .sv-rows.pick .sv-r:not(.on)>.l,.sv-rows.pick .sv-r:not(.on)>.v{opacity:.35}
 .svlogo{display:inline-flex;gap:6px}
 .svlogo svg{width:23px;height:16px;display:block}
-/* Ưu đãi: vòng tặng 44 (Acid đã tặng · + kế tiếp · nét đứt = khoá) + thanh giảm (rãnh Paper 16 % · nét đứt 3/3 = phần đã đổi ra tặng) */
-.sv-lev{border-top:1px solid var(--hair);border-bottom:1px solid var(--hair)}
+/* Ưu đãi: vòng tặng 44 (Acid lan từ tâm khi tặng · + kế tiếp · nét đứt = khoá) + thanh giảm (rãnh Paper 16 % co theo phần đã đổi ra tặng · nét đứt 3/3) */
+.sv-lev{border-top:1px solid transparent;border-bottom:1px solid transparent}
+.sv-lev::before,.sv-lev::after,.sv-lv+.sv-lv::before{content:'';position:absolute;left:0;right:0;height:1px;background:var(--hair);transform-origin:0 0}
+.sv-lev::before{top:-1px}
+.sv-lev::after{bottom:-1px}
 .sv-lv{position:relative;height:116px}
-.sv-lv+.sv-lv{height:97px;border-top:1px solid var(--hair)}
+.sv-lv+.sv-lv{height:97px;border-top:1px solid transparent}
+.sv-lv+.sv-lv::before{top:-1px}
 .sv-lv .h{display:flex;justify-content:space-between;align-items:baseline;padding-top:21px}
 .sv-lv .h .t{font-size:16px;line-height:19px;letter-spacing:-.16px}
 .sv-lv .h .v{display:flex;align-items:baseline;gap:6px}
@@ -873,26 +906,31 @@ body.adm .tab-adm{display:flex}
 .sv-lv .h .v em{font-style:normal;font-family:var(--mono);font-size:12px;line-height:14px;letter-spacing:.48px;color:var(--gray)}
 .sv-gs{position:absolute;left:0;top:54px;display:flex;gap:12px}
 .sv-gs.n7{gap:6px}
-.sv-g{width:44px;height:44px;border-radius:22px;border:1px solid var(--hair);display:flex;align-items:center;justify-content:center;color:var(--paper);flex:none;
-      transition:background-color .16s linear,border-color .16s linear,transform .12s var(--eo)}
-.sv-g .ic{opacity:0;transition:opacity .12s linear}
+.sv-g{position:relative;width:44px;height:44px;border-radius:22px;border:1px solid var(--hair);display:flex;align-items:center;justify-content:center;color:var(--paper);flex:none;
+      transition:border-color .16s linear,transform .12s var(--eo)}
+.sv-g .fl{position:absolute;inset:-1px;border-radius:50%;background:var(--acid);clip-path:circle(0% at 50% 50%);transition:clip-path .3s cubic-bezier(.2,0,0,1)}
+.sv-g.on .fl{clip-path:circle(50% at 50% 50%)}
+.sv-g .ic{position:relative;opacity:0;transition:opacity .12s linear}
 .sv-g.nx .ic{opacity:1}
-.sv-g.on{background:var(--acid);border-color:var(--acid)}
+.sv-g.on{border-color:var(--acid)}
 .sv-g.lk{border-style:dashed;border-color:rgba(250,250,250,.24)}
 .sv-g:active{transform:scale(.94)}
-.sv-g.no{animation:shake .42s cubic-bezier(.36,.07,.19,.97)}   /* cùng nhịp lắc PIN sai */
 .sv-sl{position:absolute;left:0;right:0;top:44px;height:44px;touch-action:none}
-.sv-sl .tk{position:absolute;left:0;top:20px;height:4px;width:100%;border-radius:2px;background:rgba(250,250,250,.16)}
-.sv-sl .bk{position:absolute;right:0;top:21.5px;height:1px;background-image:linear-gradient(to right,rgba(250,250,250,.24) 50%,transparent 50%);background-size:6px 1px}
-.sv-sl .kn{position:absolute;left:0;top:10px;width:24px;height:24px;border-radius:12px;background:var(--paper);transition:transform .2s var(--eo)}
+.sv-sl .tw{position:absolute;left:0;right:0;top:0;height:44px;overflow:hidden;transform-origin:0 0}
+.sv-sl .tk{position:absolute;left:0;top:20px;height:4px;width:100%;border-radius:2px;background:rgba(250,250,250,.16);transform-origin:0 0;transition:transform .3s cubic-bezier(.2,0,0,1)}
+.sv-sl .bk{position:absolute;left:0;top:21.5px;width:100%;height:1px;background-image:linear-gradient(to right,rgba(250,250,250,.24) 50%,transparent 50%);background-size:6px 1px;
+           transition:transform .3s cubic-bezier(.2,0,0,1),opacity .2s linear}
+.sv-sl .bk.off{opacity:0}
+.sv-sl .kn{position:absolute;left:0;top:10px;width:24px;height:24px;transition:transform .2s var(--eo)}
+.sv-sl .kn>i{display:block;width:24px;height:24px;border-radius:12px;background:var(--paper)}
 .sv-sl.drag .kn{transition:none}
-/* phiếu đề xuất = tờ bill: giấy Paper 313 trồi lên khỏi khe in (khe 345 × 2, Paper 24 %), mép trên răng cưa; không Acid trên Paper */
+/* phiếu đề xuất = tờ bill: giấy Paper 313 in từng nấc khỏi khe in (khe 345 × 2, Paper 24 %), mép trên răng cưa; xé = mép dưới răng cưa; không Acid trên Paper */
 .sv-billw{flex:1 1 auto;min-height:0;position:relative;overflow:hidden}
 .sv-slot{position:absolute;left:0;right:0;bottom:0;height:2px;border-radius:1px;background:rgba(250,250,250,.24)}
 .sv-bill{position:absolute;left:16px;right:16px;bottom:2px;background:var(--paper);color:var(--ink);padding:44px 18px;transform:translateY(calc(100% + 8px))}
-.sv-billw.in .sv-bill{transform:none;transition:transform .42s var(--eo) .08s}
-.sv-billw.rm .sv-bill{transition:none}
 .sv-bill .zz{position:absolute;left:0;top:-5px;width:100%;height:6px;display:block;fill:var(--paper)}
+.sv-bill .zz2{position:absolute;left:0;bottom:-5px;width:100%;height:6px;display:none;fill:var(--paper)}
+.sv-bill.torn .zz2{display:block}
 .sv-bill .wm{display:block;width:56px;height:18.24px;margin:0 auto;fill:currentColor}
 .sv-bill .dt{margin-top:12px;text-align:center;font-family:var(--mono);font-size:11px;line-height:13px;letter-spacing:.88px;color:var(--graphite)}
 .sv-bill .dl{display:block;height:1px;margin-top:36px;background-image:linear-gradient(to right,rgba(10,10,10,.4) 50%,transparent 50%);background-size:6px 1px}
@@ -917,8 +955,7 @@ body.adm .tab-adm{display:flex}
 /* Họ tên khách (Figma 811:499): ô nhập Switzer 28 ở y 236, con trỏ + gạch dưới Acid, dòng NỘI DUNG CHUYỂN KHOẢN viết theo từng chữ */
 .sv-nm{flex:none;margin-top:142px}
 .sv-in{display:block;width:100%;height:33px;font-size:28px;line-height:33px;letter-spacing:-.56px;color:var(--paper);caret-color:var(--acid);padding:0}
-.sv-ul{display:block;position:relative;height:2px;margin-top:14px;background:var(--acid)}
-.sv-ul.err{animation:shake .42s cubic-bezier(.36,.07,.19,.97)}
+.sv-ul{display:block;position:relative;height:2px;margin-top:14px;background:var(--acid);transform-origin:0 0}
 /* báo đỏ = lớp Red phủ lên rồi mờ đi (chỉ animate opacity, không animate màu nền) */
 .sv-ul.err::after{content:'';position:absolute;left:0;top:0;width:100%;height:100%;background:var(--red);animation:svred .7s linear both}
 @keyframes svred{0%,70%{opacity:1}to{opacity:0}}
@@ -938,13 +975,93 @@ body.adm .tab-adm{display:flex}
 .sv-amt em{font-style:normal;font-family:var(--mono);font-size:20px;line-height:24px;color:var(--graphite)}
 .sv-mm{position:absolute;left:0;right:0;top:62px;font-family:var(--mono);font-size:12px;line-height:14px;letter-spacing:.48px;color:var(--graphite);white-space:nowrap}
 .sv-bank{margin-top:20px;text-align:center}
+/* ⌂ nở thành Xong (màn mã): ⌂ ".phantom" trùng chữ ký với ⌂ màn trước → đứng yên; nút chính ẩn tới lúc nở; nền Paper .mf lan từ vòng ⌂ sang trái */
+.sv-nav .svc{position:relative;isolation:isolate}
+.sv-nav .svh.phantom{visibility:hidden}
+.page.sv.rv .sv-nav .svh.phantom,.sv-nav .svh.phantom.fading{visibility:visible}
+.page.sv.rv .sv-nav .svc{visibility:hidden}
+.sv-nav .svc.mph{background:transparent;overflow:visible;transition:none}
+.sv-nav .svc .mf{position:absolute;left:0;top:0;height:48px;border-radius:24px;background:var(--paper);z-index:-1;pointer-events:none}
+/* lật máy (deal ⇄ phiếu): cả trang quay, phần tử không chạy biên đạo riêng (không .in / .out); nút nav khớp vẫn hiện ở mặt đang quay đi */
+.page.sv.flipout .nav .gone{visibility:visible}
+.page.sv.flipout .nav .fade,.page.sv:not(.in) .nav .swap{animation:none}
+/* trang tự biên đạo từng phần tử → tắt trượt + mờ chung của .page (giảm chuyển động: chỉ còn mờ cả trang) */
+.page.sv.enter-fwd>*:not(.nav):not(.split):not(.sfoot),.page.sv.enter-back>*:not(.nav):not(.split):not(.sfoot),
+.page.sv.leave-fwd>*:not(.nav):not(.split):not(.sfoot),.page.sv.leave-back>*:not(.nav):not(.split):not(.sfoot){animation:none}
+
+/* pha do sell.js gắn: .in = bước mới · .out = bước cũ · .bk = đang lùi (ngược chiều) — hai pha không bao giờ cùng lúc trên một trang */
+@media (prefers-reduced-motion:no-preference){
+  /* ---- vào ---- */
+  .sv.in .head .tt{animation:svTin .46s var(--eb) .14s backwards}
+  .sv.in .head .ac{animation:svTin .46s var(--eb) .18s backwards}
+  .sv.in.bk .head .tt{animation:svTinB .46s var(--eb) .14s backwards}
+  .sv.in.bk .head .ac{animation:svTinB .46s var(--eb) .18s backwards}
+  .sv.in .sv-n>span{animation:svNin .48s var(--eout) var(--d) backwards}
+  .sv.in.bk .sv-n>span{animation:svNinB .48s var(--eout) var(--d) backwards}
+  .sv.in .sv-unit{animation:svUin .36s var(--eb) .1s backwards}
+  .sv.in .sv-cap.on{animation:fadein .2s linear .32s backwards}
+  .sv.in .sv-r::before{animation:svLine .5s var(--eb) var(--dl) backwards}
+  .sv.in .sv-rows::after{animation:svLine .5s var(--eb) calc(var(--dl) + .05s) backwards}
+  .sv.in .sv-r>.l,.sv.in .sv-r>.v{animation:svRin .5s var(--eb) var(--d) backwards}
+  .sv.in.bk .sv-r>.l,.sv.in.bk .sv-r>.v{animation:svRinB .5s var(--eb) var(--d) backwards}
+  .sv.in .sv-lev::before{animation:svLine .5s var(--eb) .08s backwards}
+  .sv.in .sv-lv+.sv-lv::before{animation:svLine .5s var(--eb) .2s backwards}
+  .sv.in .sv-lev::after{animation:svLine .5s var(--eb) .3s backwards}
+  .sv.in .sv-lv .h{animation:svRin .5s var(--eb) .14s backwards}
+  .sv.in .sv-lv+.sv-lv .h{animation-delay:.26s}
+  .sv.in .sv-g{animation:svGin .4s var(--eb) var(--d) backwards}
+  .sv.in .sv-sl .tw{animation:svLine .5s var(--eb) .4s backwards}
+  .sv.in .sv-sl .kn>i{animation:svPop .32s var(--eb) .62s backwards}
+  .sv.in .sv-in{animation:svRin .5s var(--eb) .2s backwards}
+  .sv.in .sv-ul{animation:svLine .5s var(--eb) .3s backwards}
+  .sv.in .sv-nm .lab{animation:svUin .36s var(--eb) .4s backwards}
+  .sv.in .sv-memo{animation:svUin .36s var(--eb) .44s backwards}
+  .sv.in.bk .sv-qrw{animation:svUin .4s var(--eb) .12s backwards}
+  /* nút chính mọc từ chấm 48 thành viên 225 (reel ctaGrow) · .gro do sell.js gắn (bền hơn .swap — app dọn .swap sau .7 s) */
+  .page.sv.in .nav .svc.gro:not(.away){animation:svCin .46s var(--eb) var(--cd) backwards}
+  .page.sv.in .nav .svc.gro:not(.away)>span{animation:fadein .22s linear calc(var(--cd) + .2s) backwards}
+  /* chọn: viên Acid / chấm hàng nảy từ .9 (chuẩn #5) · chọn sẵn khi quay lại: nảy sau khi hàng đã trồi (--sdd) */
+  .sv .sv-cap.on.pop{animation:svPop .32s var(--eb) both}
+  .sv .sv-r.on .sd{animation:svPop .32s var(--eb) var(--sdd,0s) backwards}
+  /* lỗi: lắc cùng nhịp PIN sai */
+  .sv .sv-gs .sv-g.no{animation:shake .42s cubic-bezier(.36,.07,.19,.97)}
+  .sv .sv-nm .sv-ul.err{animation:shake .42s cubic-bezier(.36,.07,.19,.97)}
+  /* ---- ra (bước cũ: rút lên, so le; lùi thì rút xuống) ---- */
+  .sv.out .head .tt,.sv.out .head .ac{animation:svTout .22s var(--ein) both}
+  .sv.out.bk .head .tt,.sv.out.bk .head .ac{animation:svToutB .22s var(--ein) both}
+  .sv.out .sv-n>span{animation:svNout .26s var(--ein) var(--o) both}
+  .sv.out.bk .sv-n>span{animation:svNoutB .26s var(--ein) var(--o) both}
+  .sv.out .sv-unit{animation:fadeout .16s linear both}
+  .sv.out .sv-cap.on{animation:fadeout .12s linear both}
+  .sv.out .sv-r>.l,.sv.out .sv-r>.v,.sv.out .sv-r.on .sd{animation:svRout .24s var(--ein) var(--o) both}
+  .sv.out.bk .sv-r>.l,.sv.out.bk .sv-r>.v,.sv.out.bk .sv-r.on .sd{animation:svRoutB .24s var(--ein) var(--o) both}
+  .sv.out .sv-r::before,.sv.out .sv-rows::after{animation:fadeout .2s linear both}
+  .sv.out .sv-lev,.sv.out .sv-nm>*,.sv.out .sv-qrw,.sv.out .sv-billw{animation:svRout .24s var(--ein) both}
+  .sv.out.bk .sv-lev,.sv.out.bk .sv-nm>*,.sv.out.bk .sv-qrw,.sv.out.bk .sv-billw{animation:svRoutB .24s var(--ein) both}
+  @keyframes svTin{from{transform:translateY(46px);opacity:0}25%{opacity:1}}
+  @keyframes svTinB{from{transform:translateY(-46px);opacity:0}25%{opacity:1}}
+  @keyframes svTout{to{transform:translateY(-46px);opacity:0}}
+  @keyframes svToutB{to{transform:translateY(46px);opacity:0}}
+  @keyframes svNin{from{transform:translateY(80px)}}
+  @keyframes svNinB{from{transform:translateY(-80px)}}
+  @keyframes svNout{to{transform:translateY(-80px)}}
+  @keyframes svNoutB{to{transform:translateY(80px)}}
+  @keyframes svUin{from{opacity:0;transform:translateY(8px)}}
+  @keyframes svRin{from{opacity:0;transform:translateY(24px)}}
+  @keyframes svRinB{from{opacity:0;transform:translateY(-24px)}}
+  @keyframes svRout{to{opacity:0;transform:translateY(-18px)}}
+  @keyframes svRoutB{to{opacity:0;transform:translateY(18px)}}
+  @keyframes svLine{from{transform:scaleX(0)}}
+  @keyframes svGin{0%{opacity:0;transform:scale(.9)}60%{opacity:1;transform:scale(1.03)}to{opacity:1;transform:none}}
+  @keyframes svPop{0%{opacity:0;transform:scale(.9)}45%{opacity:1;transform:scale(1.14)}75%{transform:scale(.98)}to{opacity:1;transform:none}}
+  @keyframes svCin{0%{opacity:0;clip-path:inset(0 88.5px round 24px)}25%{opacity:1;clip-path:inset(0 88.5px round 24px)}to{opacity:1;clip-path:inset(0 0 round 24px)}}
+}
 @media (prefers-reduced-motion:reduce){
   .svctr{transition:none}
-  .svctr .ly.in{animation:fadein .15s linear both}
-  .sv-bill,.sv-billw.in .sv-bill{transform:none;transition:none}
-  .sv-dot,.sv-r .sd{transition:opacity .12s linear;transform:none}
+  .sv-bill{transform:none;transition:none}
+  .sv-r .sd,.sv-cap{transition:opacity .12s linear;transform:none}
+  .sv-cap>i,.sv-g .fl,.sv-sl .tk,.sv-sl .bk{transition:none}
   .sv-nav,.sv-sl .kn{transition:none}
   .sv-g.no{animation:svdip .42s linear}   /* không lắc: vòng bị khoá nháy mờ một nhịp; gạch dưới họ tên chỉ báo đỏ */
-  .sv-ul.err{animation:none}
   @keyframes svdip{50%{opacity:.4}}
 }

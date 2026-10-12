@@ -7,7 +7,7 @@
    ===================================================================== */
 'use strict';
 var $=function(id){ return document.getElementById(id); };
-var APP_VER='v2.9.1';
+var APP_VER='v2.10.0';
 
 /* ---------------- tiện ích ---------------- */
 function isoToday(d){ d=d||new Date(); return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2); }
@@ -500,7 +500,7 @@ function rm(){ return !!(RM_MQ && RM_MQ.matches); }
 /* Chỉ animate phần THAY ĐỔI: nội dung (head/body) trượt + mờ; nav đáy đứng yên nếu nút giống nhau giữa hai màn
    (so chữ ký từng nút: class + nhãn); nút mới/khác thì hiện mờ vào, nút biến mất thì mờ ra; nút tab đổi trạng thái .cur thì đổi màu mềm. */
 function navOf(pg){ return pg.querySelector(':scope>.nav, :scope>.sfoot>.nav'); }
-function navSig(b){ return b.tagName+'|'+b.className.replace(/\b(cur|away|off|paper|dark|still|swap|gone|curswap|fade)\b/g,'').replace(/\s+/g,' ').trim()+'|'+(b.getAttribute('aria-label')||b.textContent.trim()); }
+function navSig(b){ return b.tagName+'|'+b.className.replace(/\b(cur|away|off|paper|dark|still|swap|gone|curswap|fade|phantom|fading|mph|gro)\b/g,'').replace(/\s+/g,' ').trim()+'|'+(b.getAttribute('aria-label')||b.textContent.trim()); }
 function navMatch(cur, el){
   var a=cur?navOf(cur):null, b=navOf(el); if(!b) return;
   var ab=a?[].slice.call(a.querySelectorAll('button')):[], used=[];
@@ -525,7 +525,8 @@ function show(id, dir){
     cur.classList.remove('leave-fwd','leave-back','hlead');
     void cur.offsetWidth;
     cur.classList.add(dir==='fwd'?'leave-fwd':'leave-back');
-    cur._t=(function(c){ return setTimeout(function(){ c.classList.remove('on','leave-fwd','leave-back','enter-fwd','enter-back'); navClean(c); c._t=0; }, 230); })(cur);
+    /* v2.10.0: trang Bán (.sv) tự biên đạo phần tử rút đi so le (tới ~.36 s) → giữ trang cũ lâu hơn */
+    cur._t=(function(c){ return setTimeout(function(){ c.classList.remove('on','leave-fwd','leave-back','enter-fwd','enter-back'); navClean(c); c._t=0; }, c.classList.contains('sv') ? 380 : 230); })(cur);
   }
   if(el._t){ clearTimeout(el._t); el._t=0; }
   el.classList.remove('leave-fwd','leave-back','enter-fwd','enter-back','hlead');
