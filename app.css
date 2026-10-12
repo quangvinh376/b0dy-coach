@@ -804,7 +804,9 @@ body.adm .tab-adm{display:flex}
    v2.13.0 — thứ đang có trên màn biến thành thứ của bước sau: số 0 ⇄ gạch dưới họ tên / khe in phiếu, nút chính giữ chỗ đổi chữ, hàng
    điều hướng trượt theo bàn phím, "36 buổi" bay lên tiêu đề, số đếm theo tuần sáng (ô cố định, không chữ số giữ chỗ), ô giữa mã Ink + chữ 0 Paper.
    v2.14.0 — bỏ vành ⇄ đường kẻ: Ưu đãi → Đề xuất ghi ĐƠN GIÁ lên tờ phiếu trắng đang trồi (.svrise), rời phiếu thì giấy chìm lại vào
-   khe (.svsink, màn sau .svafter); Hình thức trả → Họ tên: chấm Acid thành gạch dưới (.svln). */
+   khe (.svsink, màn sau .svafter); Hình thức trả → Họ tên: chấm Acid thành gạch dưới (.svln).
+   v2.15.0 — phiếu theo Figma 13/10 (gạch dưới SAU ƯU ĐÃI CÒN .u/.uin), máy in 3D (.sv-slot mặt máy + khe, .sv-bc khung cắt ở mép dưới
+   khe), thanh giảm tô Acid (.sv-sl .fl), số lăn bánh xe (.ntk), logo B0DY giữa mã (svg.wmq); biểu đồ buổi vẽ trên canvas (sell.js). */
 .page.sv,.svctr,.svfly{--eb:cubic-bezier(.2,0,0,1);--ein:cubic-bezier(.55,0,.8,.2);--eout:cubic-bezier(.16,1,.3,1)}
 .hrow{display:flex;align-items:center;justify-content:space-between;gap:12px;min-width:0}
 .hrow>.t1{flex:1 1 auto;min-width:0}
@@ -815,7 +817,7 @@ body.adm .tab-adm{display:flex}
 .svchip:active{transform:scale(.97);background:rgba(250,250,250,.07)}
 /* số 0 + số ở tâm: lớp tuyệt đối trong body, trước các .page trong DOM → nằm dưới trang (trang trong suốt) */
 .svdial{position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none}
-.svctr{position:absolute;left:0;right:0;top:0;height:0;pointer-events:none;transition:transform .3s var(--eb)}
+.svctr{position:absolute;left:0;right:0;top:0;height:0;pointer-events:none}   /* dời bằng tween trên đồng hồ MT (sell.js ctrMove) — cùng nhịp hạt / biểu đồ */
 .svctr .ly{position:absolute;left:0;right:0;top:0}
 .svctr .k{position:absolute;left:0;right:0;display:flex;justify-content:center;align-items:baseline;gap:8px;white-space:nowrap}
 .svctr .lb{font-family:var(--mono);font-size:11px;line-height:13px;letter-spacing:.88px;color:var(--gray)}
@@ -913,10 +915,26 @@ body.adm .tab-adm{display:flex}
 .sv-sl .bk.off{opacity:0}
 .sv-sl .kn{position:absolute;left:0;top:10px;width:24px;height:24px;border-radius:12px;background:var(--paper);transition:transform .2s var(--eo)}
 .sv-sl.drag .kn{transition:none}
-/* phiếu đề xuất = tờ bill: giấy Paper 313 trồi lên khỏi khe in (khe 345 × 2, Paper 24 %), mép trên răng cưa; không Acid trên Paper */
+/* v2.15 phần đã giảm tô Acid tới đúng tâm núm (chủ studio 13/10) — cắt bằng clip-path, cùng nhịp với núm (.2 s --eo; đang kéo: theo tay) */
+.sv-sl .fl{position:absolute;left:0;top:20px;height:4px;width:100%;border-radius:2px;background:var(--acid);clip-path:inset(0 100% 0 0 round 2px);-webkit-clip-path:inset(0 100% 0 0 round 2px);transition:clip-path .2s var(--eo),-webkit-clip-path .2s var(--eo)}
+.sv-sl.drag .fl{transition:none}
+/* số đổi giá trị: bánh xe từng chữ số (sell.js tickTo) — chữ thật ẩn giữ bề ngang + chân chữ; lớp .nr đè lên, mỗi ký tự một ô cao một dòng */
+.ntk{display:inline-block;position:relative}
+.ntk>.gh{visibility:hidden}
+.ntk>.nr{position:absolute;left:0;top:0;white-space:nowrap;pointer-events:none}
+.ntk .nc{display:inline-block;position:relative;overflow:hidden;vertical-align:top}
+.ntk .nc>.nph{visibility:hidden}
+.ntk .nc>i{position:absolute;left:0;top:0;font-style:normal}   /* không will-change: ~50 ô chữ số nhỏ mỗi lần kéo — tách lớp ghép từng ô tốn hơn vẽ lại */
+/* phiếu đề xuất = tờ bill: giấy Paper 313 trồi lên khỏi khe in (v2.15, chủ studio 13/10: khe in 3D như đang in thật — theo ảnh minh hoạ):
+   mặt máy là một tấm bo 12 (Ink sáng hơn nền một bậc, mép trên bắt sáng) có khe tối khoét ngang; tờ giấy chui ra từ khe, nằm TRƯỚC mặt máy
+   (khung .sv-bc cắt đúng mép dưới khe → chân giấy luôn ở trong khe), chân giấy tối dần vào khe, mép dưới khe bắt sáng một nét, giấy đổ bóng
+   nhẹ lên mặt máy. Mép trên răng cưa; không Acid trên Paper */
 .sv-billw{flex:1 1 auto;min-height:0;position:relative;overflow:hidden}
-.sv-slot{position:absolute;left:0;right:0;bottom:0;height:2px;border-radius:1px;background:rgba(250,250,250,.24)}
-.sv-bill{position:absolute;left:16px;right:16px;bottom:2px;background:var(--paper);color:var(--ink);padding:44px 18px;transform:translateY(calc(100% + 8px))}
+.sv-slot{position:absolute;left:0;right:0;bottom:0;height:44px;border-radius:12px;background:linear-gradient(180deg,#1d1d1d 0%,#141414 100%);box-shadow:inset 0 1px 0 rgba(250,250,250,.08)}
+.sv-slot::before{content:'';position:absolute;left:6px;right:6px;bottom:22px;height:8px;border-radius:4px;background:#040404;box-shadow:inset 0 2px 3px rgba(0,0,0,.9),0 1px 0 rgba(250,250,250,.11)}
+.sv-bc{position:absolute;left:0;right:0;top:0;bottom:22px;overflow:hidden;z-index:1}
+.sv-bill{position:absolute;left:16px;right:16px;bottom:0;background:var(--paper);color:var(--ink);padding:44px 18px;transform:translateY(calc(100% + 8px));box-shadow:0 0 10px rgba(0,0,0,.45)}
+.sv-bill::after{content:'';position:absolute;left:0;right:0;bottom:0;height:40px;pointer-events:none;background:linear-gradient(to top,rgba(10,10,10,.26) 0,rgba(10,10,10,.08) 40%,rgba(10,10,10,0) 100%)}
 .sv-bill .zz{position:absolute;left:0;top:-5px;width:100%;height:6px;display:block;fill:var(--paper)}
 .sv-bill .wm{display:block;width:56px;height:18.24px;margin:0 auto;fill:currentColor}
 .sv-bill .dt{margin-top:12px;text-align:center;font-family:var(--mono);font-size:11px;line-height:13px;letter-spacing:.88px;color:var(--graphite)}
@@ -927,6 +945,11 @@ body.adm .tab-adm{display:flex}
 .sv-bill .r .l{font-family:var(--mono);font-size:12px;line-height:14px;letter-spacing:.48px;color:var(--graphite);white-space:nowrap}
 .sv-bill .r .v{display:flex;align-items:baseline;gap:6px;white-space:nowrap}
 .sv-bill .r .v b{font-weight:500;font-family:var(--mono);font-size:14px;line-height:17px}
+/* SAU ƯU ĐÃI CÒN: gạch dưới con số (Figma 13/10) — vẽ từ trái khi ĐƠN GIÁ vừa hạ xuống phiếu (.uin) */
+.sv-bill .r .v b.u{position:relative}
+.sv-bill .r .v b.u::after{content:'';position:absolute;left:0;right:0;bottom:.5px;height:1px;background:currentColor;transform-origin:0 50%}
+.sv-bill .r .v b.u.uin::after{animation:svUl .3s var(--eb) both}
+@keyframes svUl{from{transform:scaleX(0)}to{transform:scaleX(1)}}
 .sv-bill .r .v em{font-style:normal;font-family:var(--mono);font-size:12px;line-height:14px;letter-spacing:.48px;color:var(--graphite)}
 .sv-bill .rs+.dl{margin-top:16px}
 .sv-bill .tl{margin-top:36px;font-family:var(--mono);font-size:11px;line-height:13px;letter-spacing:.88px;color:var(--graphite)}
@@ -957,7 +980,8 @@ body.adm .tab-adm{display:flex}
 .sv-qq{position:relative;width:100%;aspect-ratio:1/1}
 .sv-qrc{position:absolute;left:0;top:0;width:100%;height:100%;display:block}
 .sv-badge{position:absolute;left:37.73%;top:37.73%;width:24.54%;height:24.54%;border-radius:22%;background:var(--ink);color:var(--paper);display:flex;align-items:center;justify-content:center}
-.sv-badge svg{width:36.8%;height:48%;fill:currentColor}
+.sv-badge svg.wmq{display:block;width:100%;height:100%;fill:currentColor;overflow:visible}   /* logo B0DY Branding (06-b0dy-on-ink-square): chữ rộng 62,8 % ô */
+.sv-badge .wmq path{transform-box:fill-box;transform-origin:50% 50%}
 .sv-qe{position:absolute;left:0;right:0;top:12%;text-align:center;color:var(--graphite)}
 .sv-strip{position:relative;margin:16px -16px 0;height:96px;background:var(--acid);color:var(--ink);text-align:center}
 .sv-amt{position:absolute;left:0;right:0;top:14px;display:flex;justify-content:center;align-items:baseline;gap:8px}
@@ -1002,7 +1026,8 @@ body.adm .tab-adm{display:flex}
   .svctr .ly.out,.svctr .k.out{animation:fadeout .12s linear both}
   .sv-bill{transform:none;transition:none}
   .sv-cap.pop,.sv-r.pop .sd{animation:none}
-  .sv-cap>i,.sv-sl .tk,.sv-sl .bk{transition:none}
+  .sv-cap>i,.sv-sl .tk,.sv-sl .bk,.sv-sl .fl{transition:none}
+  .sv-bill .r .v b.u.uin::after{animation:none}
   .sv-nav,.sv-sl .kn{transition:none}
   .sv-g.no{animation:svdip .42s linear}   /* không lắc: vòng bị khoá nháy mờ một nhịp; gạch dưới họ tên chỉ báo đỏ */
   .sv-ul.err{animation:none}
