@@ -112,3 +112,27 @@ Cài đặt (Apps Script **B0DY Discord KPI**):
 ⚠️ **IP phòng nằm ở HAI chỗ.** Tab Cài đặt chỉ sửa `STUDIO_IP` (Apps Script). Worker Cloudflare gác bằng biến `ALLOW_IP` riêng:
 - **Thêm** IP ở app → coach check-in từ IP đó vẫn được (Worker từ chối → app tự lui về Apps Script, chậm hơn vài giây). Muốn nhanh: thêm IP đó vào `ALLOW_IP`.
 - **Xoá** IP ở app **không** rút quyền phía Worker. Muốn chặn hẳn một IP: xoá cả trong `ALLOW_IP` (Cloudflare → Workers & Pages → `b0dy-kiosk-api` → Settings → Variables and secrets).
+
+## 8. Bán cho khách mới — `backend/Sales.gs` (v2.9.0, cho màn Quét mã QR)
+
+Luồng **Sell** (nút ở khối đỉnh Home, `sell.js`) chỉ **tính**, không ghi gì lên máy chủ. Riêng màn **Quét mã QR** cần tài khoản nhận chuyển khoản. Số tài khoản **không** nằm trong repo (repo công khai): app hỏi lệnh `bank`, Apps Script đọc Script Properties.
+
+Cài đặt (Apps Script **B0DY Discord KPI**):
+
+1. Files ▸ **+** ▸ Script ▸ đặt tên `Sales` ▸ dán toàn bộ `backend/Sales.gs` ▸ Save.
+2. `Code.gs` ▸ trong `switch` của `api_()`, cạnh các case khác, thêm:
+   ```js
+         case 'bank':          out = salesBank_(p);  break;
+   ```
+3. **Deploy ▸ Manage deployments ▸ ✏️ ▸ Version: New version ▸ Deploy.**
+4. **Project Settings ▸ Script Properties** (chủ studio tự điền):
+
+| Key | Giá trị | Bắt buộc |
+|---|---|---|
+| `VIETQR_ACCOUNT` | số tài khoản nhận (chỉ chữ số; dấu cách / chấm / gạch tự bỏ) | có — thiếu thì app báo "Chưa cài tài khoản nhận chuyển khoản" và không vẽ mã |
+| `VIETQR_BIN` | mã ngân hàng NAPAS 6 số | không — mặc định `970407` (Techcombank) |
+| `VIETQR_NAME` | tên hiện dưới thẻ mã, không dấu, ví dụ `HO KINH DOANH B0DY STUDIO` | không |
+
+Lệnh `bank` (POST `{action:'bank', pin}` hoặc `{action:'bank', apin}`) → `{ok:true, bin, acc, bank, name}` · `sai_pin` · `no_bank`. Không khoá IP (mã dùng được cả ngoài phòng), không ghi log. App nhớ kết quả vào `localStorage.lb_bank` (mất mạng vẫn vẽ được mã), hỏi lại mỗi lần bấm **Sell**; máy chủ báo `no_bank` thì xoá bản nhớ.
+
+Mã do app dựng là **VietQR động** (NAPAS 247 · EMVCo MPM): tài khoản + số tiền kỳ này + nội dung `HỌ TÊN + GÓI + TRA GOP` (≤ 25 ký tự; dài hơn thì họ và tên đệm rút còn chữ cái đầu). Kiểm thử: `node test/gas_sales.js` (chạy thật `Sales.gs` với PropertiesService giả) và `node test/sell.js`.
