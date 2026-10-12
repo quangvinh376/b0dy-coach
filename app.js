@@ -7,7 +7,7 @@
    ===================================================================== */
 'use strict';
 var $=function(id){ return document.getElementById(id); };
-var APP_VER='v2.11.0';
+var APP_VER='v2.12.0';
 
 /* ---------------- tiện ích ---------------- */
 function isoToday(d){ d=d||new Date(); return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2); }
@@ -500,7 +500,7 @@ function rm(){ return !!(RM_MQ && RM_MQ.matches); }
 /* Chỉ animate phần THAY ĐỔI: nội dung (head/body) trượt + mờ; nav đáy đứng yên nếu nút giống nhau giữa hai màn
    (so chữ ký từng nút: class + nhãn); nút mới/khác thì hiện mờ vào, nút biến mất thì mờ ra; nút tab đổi trạng thái .cur thì đổi màu mềm. */
 function navOf(pg){ return pg.querySelector(':scope>.nav, :scope>.sfoot>.nav'); }
-function navSig(b){ return b.tagName+'|'+b.className.replace(/\b(cur|away|off|paper|dark|still|swap|gone|curswap|fade)\b/g,'').replace(/\s+/g,' ').trim()+'|'+(b.getAttribute('aria-label')||b.textContent.trim()); }
+function navSig(b){ return b.tagName+'|'+b.className.replace(/\b(cur|away|off|paper|dark|still|swap|gone|curswap|fade|phantom|fading|mph)\b/g,'').replace(/\s+/g,' ').trim()+'|'+(b.getAttribute('aria-label')||b.textContent.trim()); }
 function navMatch(cur, el){
   var a=cur?navOf(cur):null, b=navOf(el); if(!b) return;
   var ab=a?[].slice.call(a.querySelectorAll('button')):[], used=[];

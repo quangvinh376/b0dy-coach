@@ -798,10 +798,10 @@ body.adm .tab-adm{display:flex}
 /* ============ BÁN CHO KHÁCH MỚI (v2.9.0 · sell.js) — Figma "Hỗ trợ bán hàng" 644:1276, vòng 10 ============
    Ba dải mỗi màn: câu hỏi (khối đỉnh) · số 0 lộ trình (canvas #sv-dial NẰM DƯỚI trang) · trả lời + điều hướng neo đáy.
    Mono luôn VIẾT HOA, tiền ₫; nút chính luôn ở giữa (ghost giữ chỗ khi không có ⌂).
-   v2.11.0 — chuyển động tiết chế: MỘT nhịp cho mọi bước — nội dung cũ mờ 120 ms (không dịch chuyển), nội dung mới hiện + trồi 8 pt
-   trong 220 ms sau 60 ms (lùi: từ trên xuống), đường cong B0DY (.2,0,0,1). Chuyển động kể chuyện duy nhất của mỗi bước nằm trên số 0
-   (sell.js). Chỉ transform / opacity. Giảm chuyển động: chỉ mờ. */
-.page.sv,.svctr{--eb:cubic-bezier(.2,0,0,1)}
+   v2.12.0 — cân bằng theo main flow buổi tập: số 0 (canvas, sell.js) gánh chuyển động liên tục như vành nhịp; UI đổi tại chỗ theo nhịp
+   dòng chữ của loop (app.js line(): 240 ms, trượt 7 pt, chữ cũ tắt ở 45 %, chữ mới hiện từ 30 %). Không biên đạo từng phần tử, không
+   khung che, không kẻ mảnh tự vẽ. Mã QR hiện ra như reel v10 (sell.js reveal). Giảm chuyển động: chỉ mờ. */
+.page.sv,.svctr,.svfly{--eb:cubic-bezier(.2,0,0,1);--ein:cubic-bezier(.55,0,.8,.2);--eout:cubic-bezier(.16,1,.3,1)}
 .hrow{display:flex;align-items:center;justify-content:space-between;gap:12px;min-width:0}
 .hrow>.t1{flex:1 1 auto;min-width:0}
 /* nút Sell (Figma 688:650): viền Paper 14 %, bo 16, chữ 0 có chấm 10,9 × 14,3 + "Sell" Switzer 14 · chạm: nền Paper 7 % */
@@ -824,12 +824,23 @@ body.adm .tab-adm{display:flex}
 .svctr .m14+.m12,.svctr .m12+.lb{margin-left:-2px}
 .svctr .ac{color:var(--acid)}
 .svctr .pp{color:var(--paper)}
+.svctr .z{opacity:.24}   /* chữ số giữ chỗ lúc đếm lên (08 → 12): con số không xô lệch */
+/* chữ số lăn: chữ thật ẩn giữ bề ngang + chân chữ; lớp .rr đè lên, mỗi ký tự một ô cao đúng một dòng */
+.rl{display:inline-block;position:relative}
+.rl>.gh{visibility:hidden}
+.rl>.rr{position:absolute;left:0;top:0;white-space:nowrap;pointer-events:none}
+.rl .rc{display:inline-block;overflow:hidden;vertical-align:top}
+.rl .sp{display:block;white-space:pre}
+/* lớp bay (fixed, ngoài trang): dòng nội dung rơi xuống thẻ mã · chấm Acid lúc Xong bay về nút Sell */
+.svfly{position:fixed;white-space:nowrap;pointer-events:none;transform-origin:0 0;font-weight:500;will-change:transform}
+.svdotf{position:fixed;background:var(--acid);z-index:60;pointer-events:none;will-change:transform}
 /* khung bước */
 .page.sv>.body{display:flex;flex-direction:column}
 .page.sv .head .ac{white-space:nowrap}   /* "36 buổi" không bị ngắt dòng giữa số và chữ */
 .sv-sp{flex:1 1 auto;min-height:0}
 .sv-ans{flex:none;position:relative;margin-bottom:28px}
 .sv-nav{transition:transform .25s var(--eo)}
+.sv-nav .svc{position:relative;isolation:isolate}
 .sv-nav .cta{width:225px;padding:0}
 .sv-nav .gh0{width:48px;height:48px;flex:none}
 /* dãy số (câu 01–03): đơn vị Mono 20 · số Mono 72/68 · viên Acid 8 dưới số chọn (2 đầu tròn + thân 1 pt co giãn bằng transform), kéo qua nhiều số = một khoảng */
@@ -945,27 +956,38 @@ body.adm .tab-adm{display:flex}
 .sv-amt em{font-style:normal;font-family:var(--mono);font-size:20px;line-height:24px;color:var(--graphite)}
 .sv-mm{position:absolute;left:0;right:0;top:62px;font-family:var(--mono);font-size:12px;line-height:14px;letter-spacing:.48px;color:var(--graphite);white-space:nowrap}
 .sv-bank{margin-top:20px;text-align:center}
-/* chuyển bước: một nhịp cho mọi bước (thay trượt 24 pt chung của .page — số 0 nằm dưới đứng yên nên nội dung không trượt ngang qua nó).
-   Fade-through: nội dung cũ tắt hẳn trong 100 ms rồi nội dung mới mới vào (220 ms, trồi 8 pt) — không lúc nào hai lớp chữ chồng nhau.
-   Trang đang rời vẫn giữ enter-* → quy tắc rời đứng sau, cùng độ đặc hiệu */
-.page.sv.enter-fwd>*:not(.nav):not(.split):not(.sfoot),.page.sv.enter-back>*:not(.nav):not(.split):not(.sfoot){animation:svIn .22s var(--eb) .1s backwards}
-.page.sv.enter-back>*:not(.nav):not(.split):not(.sfoot){animation-name:svInB}
-.page.sv.leave-fwd>*:not(.nav):not(.split):not(.sfoot),.page.sv.leave-back>*:not(.nav):not(.split):not(.sfoot){animation:fadeout .1s linear both}
-@keyframes svIn{from{opacity:0;transform:translateY(8px)}}
-@keyframes svInB{from{opacity:0;transform:translateY(-8px)}}
-/* số ở tâm: lớp cũ tắt 100 ms, lớp mới hiện + trồi 4 pt 200 ms ngay khi lớp cũ vừa tắt (không chồng chữ) */
-.svctr .ly{animation:svLy .2s var(--eb) backwards}
-.svctr .ly.x{animation-delay:.1s}
-.svctr .ly.out{animation:fadeout .1s linear both}
-@keyframes svLy{from{opacity:0;transform:translateY(4px)}}
-/* chọn: viên Acid / chấm hàng nảy từ .9 (chuẩn #5; mục B chủ studio 12/10 16:06) — vượt 6 % rồi về, 240 ms */
-.sv-cap.pop,.sv-r.pop .sd{animation:svPop .24s var(--eb) both}
-@keyframes svPop{0%{opacity:0;transform:scale(.9)}60%{opacity:1;transform:scale(1.06)}to{opacity:1;transform:none}}
+/* ⌂ nở thành Xong (màn mã, reel v10): ⌂ ".phantom" trùng chữ ký với ⌂ màn trước → đứng yên; nút chính ẩn tới lúc nở; nền Paper .mf lan từ vòng ⌂ sang trái */
+.sv-nav .svh.phantom{visibility:hidden}
+.page.sv.rv .sv-nav .svh.phantom,.sv-nav .svh.phantom.fading{visibility:visible}
+.page.sv.rv .sv-nav .svc{visibility:hidden}
+.sv-nav .svc.mph{background:transparent;overflow:visible;transition:none}
+.sv-nav .svc .mf{position:absolute;left:0;top:0;height:48px;border-radius:24px;background:var(--paper);z-index:-1;pointer-events:none}
+/* chuyển bước = dòng chữ của loop (app.js line()): trang KHÔNG trượt ngang (số 0 nằm dưới, đứng yên) — tiêu đề + khối trả lời đổi tại chỗ,
+   240 ms, trượt 7 pt; chữ cũ tắt ở 45 %, chữ mới hiện từ 30 % (lùi: ngược chiều). Dùng chính enter-* / leave-* của show(); trang đang rời
+   vẫn giữ enter-* → quy tắc rời đứng sau, cùng độ đặc hiệu. Rời không có khung 0 % → đi tiếp từ chỗ đang thấy (freeze) */
+.page.sv.enter-fwd>*:not(.nav):not(.split):not(.sfoot),.page.sv.enter-back>*:not(.nav):not(.split):not(.sfoot){animation:svLiO .24s linear backwards,svLiT .24s var(--eo) backwards}
+.page.sv.enter-back>*:not(.nav):not(.split):not(.sfoot){animation-name:svLiO,svLiTB}
+.page.sv.leave-fwd>*:not(.nav):not(.split):not(.sfoot),.page.sv.leave-back>*:not(.nav):not(.split):not(.sfoot){animation:svLoO .24s linear both,svLoT .24s var(--eo) both}
+.page.sv.leave-back>*:not(.nav):not(.split):not(.sfoot){animation-name:svLoO,svLoTB}
+@keyframes svLiO{0%,30%{opacity:0}to{opacity:1}}
+@keyframes svLiT{from{transform:translateY(7px)}to{transform:none}}
+@keyframes svLiTB{from{transform:translateY(-7px)}to{transform:none}}
+@keyframes svLoO{45%,to{opacity:0}}
+@keyframes svLoT{to{transform:translateY(-7px)}}
+@keyframes svLoTB{to{transform:translateY(7px)}}
+/* số ở tâm: đổi cùng nhịp (lớp / hàng mới vào, lớp / hàng cũ rời); chữ số đổi giá trị lăn tại chỗ (sell.js rollTo) */
+.svctr .ly,.svctr .k.in{animation:svLiO .24s linear backwards,svLiT .24s var(--eo) backwards}
+.svctr .ly.out,.svctr .k.out{animation:svLoO .24s linear both,svLoT .24s var(--eo) both}
+.svctr .ly.rmin{animation:fadein .15s linear both}
+/* chọn: viên Acid / chấm hàng nảy từ .9 (chuẩn #5; mục B chủ studio 12/10 16:06) — vượt rồi về, .32 s */
+.sv-cap.pop,.sv-r.pop .sd{animation:svPop .32s var(--eb) both}
+@keyframes svPop{0%{opacity:0;transform:scale(.9)}45%{opacity:1;transform:scale(1.14)}75%{transform:scale(.98)}to{opacity:1;transform:none}}
 @media (prefers-reduced-motion:reduce){
   .page.sv.enter-fwd>*:not(.nav):not(.split):not(.sfoot),.page.sv.enter-back>*:not(.nav):not(.split):not(.sfoot){animation:none}   /* trang tự mờ cả khối (.page) */
   .page.sv.leave-fwd>*:not(.nav):not(.split):not(.sfoot),.page.sv.leave-back>*:not(.nav):not(.split):not(.sfoot){animation:none}
   .svctr{transition:none}
-  .svctr .ly,.svctr .ly.x{animation:fadein .15s linear backwards}
+  .svctr .ly,.svctr .k.in{animation:fadein .15s linear backwards}
+  .svctr .ly.out,.svctr .k.out{animation:fadeout .12s linear both}
   .sv-bill{transform:none;transition:none}
   .sv-cap.pop,.sv-r.pop .sd{animation:none}
   .sv-cap>i,.sv-sl .tk,.sv-sl .bk{transition:none}
