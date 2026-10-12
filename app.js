@@ -7,7 +7,7 @@
    ===================================================================== */
 'use strict';
 var $=function(id){ return document.getElementById(id); };
-var APP_VER='v2.8.3';
+var APP_VER='v2.9.0';
 
 /* ---------------- tiện ích ---------------- */
 function isoToday(d){ d=d||new Date(); return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2); }
@@ -537,6 +537,7 @@ function show(id, dir){
 var HOOK={};
 function go(id, dir){
   var prev=state.screen; mqStopAll(); closeLib(true); closeWS(true); FX.heroCancel();
+  if(window.SVX) SVX.onGo(id);                   /* v2.9.0: rời luồng bán hàng (sell.js) bằng bất kỳ đường nào → tắt số 0 */
   if(HOOK[id]) HOOK[id](dir);
   show(id, dir);
   var s=$(id);
@@ -783,7 +784,7 @@ function motTick(now){
   finally{
     MOT.inFrame=false;
     if(S && LOOP_ON){ S.n++; S.ms+=performance.now()-t0; if(now===S.at) S.dup++; else { S.at=now; S.f++; S.sec+=Math.min(dt,.25); } }
-    if(LOOP_ON || MTW.length || MTT.length || FX.busy()){ if(!MOT.raf && !MOT.hold) MOT.raf=requestAnimationFrame(motTick); }
+    if(LOOP_ON || MTW.length || MTT.length || FX.busy() || (window.SVX && SVX.busy())){ if(!MOT.raf && !MOT.hold) MOT.raf=requestAnimationFrame(motTick); }
     else MOT.last=0;
   }
 }
@@ -795,6 +796,7 @@ function motFrame(dt){
   twRun();
   if(LOOP_ON) for(var j=0;j<LOOPS.length;j++) LOOPS[j].draw(dv);
   FX.draw(dv);
+  if(window.SVX) SVX.draw(dv);                    /* v2.9.0: số 0 lộ trình của luồng bán hàng (sell.js) — cùng một rAF */
 }
 document.addEventListener('visibilitychange', function(){ MOT.last=0; });
 /* kiểm chứng chuyển động (test/quay khung): giữ MT rồi tự bước từng khung — __mot.hold(true); __mot.step(1000/60) */
@@ -2887,7 +2889,7 @@ function ptrMove(d, anim){
   ptr.style.opacity=d?String(Math.min(1, d/24)):'0'; ptr.style.transform='scale('+(0.6+0.4*p).toFixed(3)+')';
 }
 function ptrEligible(t){
-  if(state.screen==='p-loop' || state.screen==='p-pin' || LIB_OPEN || WS.open || DRAG) return false;
+  if(state.screen==='p-loop' || state.screen==='p-pin' || /^p-sv/.test(state.screen||'') || LIB_OPEN || WS.open || DRAG) return false;   /* v2.9.0: luồng bán hàng không vuốt làm mới (mất phương án đang tính) */
   if(!t || t.closest('.wheel, .fld, input, textarea, .ptr, .sheet, .mtabsx')) return false;
   var sc=t.closest('.scroll'); if(sc && sc.scrollTop>0) return false;
   return true;

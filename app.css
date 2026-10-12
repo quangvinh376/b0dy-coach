@@ -794,3 +794,157 @@ body.adm .tab-adm{display:flex}
 
 /* thẻ trong vùng cuộn hồ sơ không co */
 #pf-scroll>*{flex:none}
+
+/* ============ BÁN CHO KHÁCH MỚI (v2.9.0 · sell.js) — Figma "Hỗ trợ bán hàng" 644:1276, vòng 10 ============
+   Ba dải mỗi màn: câu hỏi (khối đỉnh) · số 0 lộ trình (canvas #sv-dial NẰM DƯỚI trang) · trả lời + điều hướng neo đáy.
+   Mono luôn VIẾT HOA, tiền ₫; nút chính luôn ở giữa (ghost giữ chỗ khi không có ⌂). */
+.hrow{display:flex;align-items:center;justify-content:space-between;gap:12px;min-width:0}
+.hrow>.t1{flex:1 1 auto;min-width:0}
+/* nút Sell (Figma 688:650): viền Paper 14 %, bo 16, chữ 0 có chấm 10,9 × 14,3 + "Sell" Switzer 14 · chạm: nền Paper 7 % */
+.svchip{flex:none;height:32px;border-radius:16px;border:1px solid var(--hair);display:flex;align-items:center;gap:8px;padding:0 16px 0 12px;
+        font-size:14px;line-height:17px;letter-spacing:-.14px;color:var(--paper);transition:transform .12s var(--eo),background-color .1s linear}
+.svchip svg{width:10.95px;height:14.27px;fill:currentColor;flex:none}
+.svchip:active{transform:scale(.97);background:rgba(250,250,250,.07)}
+/* số 0 + số ở tâm: lớp tuyệt đối trong body, trước các .page trong DOM → nằm dưới trang (trang trong suốt) */
+.svdial{position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none}
+.svctr{position:absolute;left:0;right:0;top:0;height:0;pointer-events:none;transition:transform .36s var(--eio)}
+.svctr .ly{position:absolute;left:0;right:0;top:0}
+.svctr .ly.in{animation:svin .26s var(--eo) both}
+.svctr .ly.out{animation:fadeout .15s linear both}
+@keyframes svin{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+.svctr .k{position:absolute;left:0;right:0;display:flex;justify-content:center;align-items:baseline;gap:8px;white-space:nowrap}
+.svctr .lb{font-family:var(--mono);font-size:11px;line-height:13px;letter-spacing:.88px;color:var(--gray)}
+.svctr .n72{font-family:var(--mono);font-size:72px;line-height:68px;letter-spacing:-2.16px}
+.svctr .n112{font-family:var(--mono);font-size:112px;line-height:105px;letter-spacing:-3.36px}
+.svctr .n44{font-family:var(--mono);font-size:44px;line-height:42px;letter-spacing:-1.32px}
+.svctr .u20{font-family:var(--mono);font-size:20px;line-height:24px;color:var(--gray)}
+.svctr .m12{font-family:var(--mono);font-size:12px;line-height:14px;letter-spacing:.48px;color:var(--gray)}
+.svctr .m14{font-family:var(--mono);font-size:14px;line-height:17px}
+.svctr .m14+.m12,.svctr .m12+.lb{margin-left:-2px}
+.svctr .ac{color:var(--acid)}
+.svctr .pp{color:var(--paper)}
+/* khung bước */
+.page.sv>.body{display:flex;flex-direction:column}
+.sv-sp{flex:1 1 auto;min-height:0}
+.sv-ans{flex:none;position:relative;margin-bottom:28px}
+.sv-nav{transition:transform .25s var(--eo)}
+.sv-nav .cta{width:225px;padding:0}
+.sv-nav .gh0{width:48px;height:48px;flex:none}
+/* dãy số (câu 01–03): đơn vị Mono 20 · số Mono 72/68 · chấm Acid 8 dưới số chọn, kéo qua nhiều số = viên con nhộng */
+.sv-q{height:124px}
+.sv-unit{height:24px;font-family:var(--mono);font-size:20px;line-height:24px;color:var(--gray);text-align:center}
+.sv-row{position:absolute;left:0;right:0;top:36px;height:68px;display:flex;justify-content:center;gap:12px;touch-action:none}
+.sv-q.w .sv-row{gap:36px}
+.sv-n{width:44px;height:68px;font-family:var(--mono);font-size:72px;line-height:68px;letter-spacing:-2.16px;text-align:center;color:var(--paper);transition:opacity .2s ease}
+.sv-q.w .sv-n{width:126px}
+.sv-n.dim{opacity:.35}
+.sv-dot{position:absolute;top:116px;left:0;width:8px;height:8px;border-radius:4px;background:var(--acid);opacity:0;transform:scale(.6);transition:opacity .12s linear,transform .2s var(--eo)}
+.sv-dot.on{opacity:1;transform:none}
+.page.sv .sv-q>.sv-dot{animation:none}   /* chấm là con của .st: không nhận rise (rise kết thúc ở opacity 1 → chấm hiện khi chưa chọn) */
+/* hàng trả lời: Lớn 70 (Switzer 28) · Nhỏ 57 (Switzer 22) · giá trị Mono 14 + đơn vị Mono 12 · chấm Acid ở lề trái */
+.sv-rows{border-bottom:1px solid var(--hair)}
+.sv-r{position:relative;width:100%;height:70px;display:flex;align-items:baseline;justify-content:space-between;gap:16px;border-top:1px solid var(--hair);padding-top:18px;color:var(--paper);
+      transition:opacity .2s ease,transform .12s var(--eo)}
+.sv-rows.S .sv-r{height:57px;padding-top:15px}
+.sv-r:active{transform:scale(.985)}
+.sv-r .l{display:flex;flex-direction:column;gap:6px;min-width:0}
+.sv-r .t{display:flex;align-items:center;gap:6px;font-size:28px;line-height:33px;letter-spacing:-.56px;white-space:nowrap}
+.sv-rows.S .sv-r .t{font-size:22px;line-height:26px;letter-spacing:-.33px}
+.sv-r .sub{font-family:var(--mono);font-size:11px;line-height:13px;letter-spacing:.88px;color:var(--gray);white-space:nowrap}
+.sv-r .v{display:flex;align-items:baseline;gap:6px;white-space:nowrap;flex:none}
+.sv-r .v b{font-weight:500;font-family:var(--mono);font-size:14px;line-height:17px}
+.sv-r .v em{font-style:normal;font-family:var(--mono);font-size:12px;line-height:14px;letter-spacing:.48px;color:var(--gray)}
+.sv-r .sd{position:absolute;left:-16px;top:31.5px;width:8px;height:8px;border-radius:4px;background:var(--acid);opacity:0;transform:scale(.6);transition:opacity .12s linear,transform .2s var(--eo)}
+.sv-rows.S .sv-r .sd{top:25px}
+.sv-r.on .sd{opacity:1;transform:none}
+/* mờ phần chữ chứ không mờ cả hàng: hàng con của .st chạy rise (fill forwards) → opacity trên hàng bị animation đè; hairline giữ 14 % */
+.sv-r>.l,.sv-r>.v{transition:opacity .2s ease}
+.sv-rows.pick .sv-r:not(.on)>.l,.sv-rows.pick .sv-r:not(.on)>.v{opacity:.35}
+.svlogo{display:inline-flex;gap:6px}
+.svlogo svg{width:23px;height:16px;display:block}
+/* Ưu đãi: vòng tặng 44 (Acid đã tặng · + kế tiếp · nét đứt = khoá) + thanh giảm (rãnh Paper 16 % · nét đứt 3/3 = phần đã đổi ra tặng) */
+.sv-lev{border-top:1px solid var(--hair);border-bottom:1px solid var(--hair)}
+.sv-lv{position:relative;height:116px}
+.sv-lv+.sv-lv{height:97px;border-top:1px solid var(--hair)}
+.sv-lv .h{display:flex;justify-content:space-between;align-items:baseline;padding-top:21px}
+.sv-lv .h .t{font-size:16px;line-height:19px;letter-spacing:-.16px}
+.sv-lv .h .v{display:flex;align-items:baseline;gap:6px}
+.sv-lv .h .v b{font-weight:500;font-family:var(--mono);font-size:24px;line-height:23px;letter-spacing:-.72px}
+.sv-lv .h .v em{font-style:normal;font-family:var(--mono);font-size:12px;line-height:14px;letter-spacing:.48px;color:var(--gray)}
+.sv-gs{position:absolute;left:0;top:54px;display:flex;gap:12px}
+.sv-gs.n7{gap:6px}
+.sv-g{width:44px;height:44px;border-radius:22px;border:1px solid var(--hair);display:flex;align-items:center;justify-content:center;color:var(--paper);flex:none;
+      transition:background-color .16s linear,border-color .16s linear,transform .12s var(--eo)}
+.sv-g .ic{opacity:0;transition:opacity .12s linear}
+.sv-g.nx .ic{opacity:1}
+.sv-g.on{background:var(--acid);border-color:var(--acid)}
+.sv-g.lk{border-style:dashed;border-color:rgba(250,250,250,.24)}
+.sv-g:active{transform:scale(.94)}
+.sv-g.no{animation:shake .32s linear}
+.sv-sl{position:absolute;left:0;right:0;top:44px;height:44px;touch-action:none}
+.sv-sl .tk{position:absolute;left:0;top:20px;height:4px;width:100%;border-radius:2px;background:rgba(250,250,250,.16)}
+.sv-sl .bk{position:absolute;right:0;top:21.5px;height:1px;background-image:linear-gradient(to right,rgba(250,250,250,.24) 50%,transparent 50%);background-size:6px 1px}
+.sv-sl .kn{position:absolute;left:0;top:10px;width:24px;height:24px;border-radius:12px;background:var(--paper);transition:transform .2s var(--eo)}
+.sv-sl.drag .kn{transition:none}
+/* phiếu đề xuất = tờ bill: giấy Paper 313 trồi lên khỏi khe in (khe 345 × 2, Paper 24 %), mép trên răng cưa; không Acid trên Paper */
+.sv-billw{flex:1 1 auto;min-height:0;position:relative;overflow:hidden}
+.sv-slot{position:absolute;left:0;right:0;bottom:0;height:2px;border-radius:1px;background:rgba(250,250,250,.24)}
+.sv-bill{position:absolute;left:16px;right:16px;bottom:2px;background:var(--paper);color:var(--ink);padding:44px 18px;transform:translateY(calc(100% + 8px))}
+.sv-billw.in .sv-bill{transform:none;transition:transform .42s var(--eo) .08s}
+.sv-billw.rm .sv-bill{transition:none}
+.sv-bill .zz{position:absolute;left:0;top:-5px;width:100%;height:6px;display:block;fill:var(--paper)}
+.sv-bill .wm{display:block;width:56px;height:18.24px;margin:0 auto;fill:currentColor}
+.sv-bill .dt{margin-top:12px;text-align:center;font-family:var(--mono);font-size:11px;line-height:13px;letter-spacing:.88px;color:var(--graphite)}
+.sv-bill .dl{display:block;height:1px;margin-top:36px;background-image:linear-gradient(to right,rgba(10,10,10,.4) 50%,transparent 50%);background-size:6px 1px}
+.sv-bill .pk{margin-top:35px;font-family:var(--mono);font-size:24px;line-height:23px;letter-spacing:-.72px}
+.sv-bill .rs{margin-top:24px}
+.sv-bill .r{display:flex;justify-content:space-between;align-items:baseline;gap:12px;height:37px}
+.sv-bill .r .l{font-family:var(--mono);font-size:12px;line-height:14px;letter-spacing:.48px;color:var(--graphite);white-space:nowrap}
+.sv-bill .r .v{display:flex;align-items:baseline;gap:6px;white-space:nowrap}
+.sv-bill .r .v b{font-weight:500;font-family:var(--mono);font-size:14px;line-height:17px}
+.sv-bill .r .v em{font-style:normal;font-family:var(--mono);font-size:12px;line-height:14px;letter-spacing:.48px;color:var(--graphite)}
+.sv-bill .rs+.dl{margin-top:16px}
+.sv-bill .tl{margin-top:36px;font-family:var(--mono);font-size:11px;line-height:13px;letter-spacing:.88px;color:var(--graphite)}
+.sv-bill .tt{margin-top:10px;display:flex;align-items:baseline;gap:8px}
+.sv-bill .tt b{font-weight:500;font-family:var(--mono);font-size:44px;line-height:42px;letter-spacing:-1.32px}
+.sv-bill .tt em{font-style:normal;font-family:var(--mono);font-size:20px;line-height:24px;color:var(--graphite)}
+/* màn thấp (≤ 667): phiếu gọn — bớt khoảng, không bớt chữ */
+.sv-bill.tight{padding:26px 18px 28px}
+.sv-bill.tight .dl,.sv-bill.tight .pk,.sv-bill.tight .tl{margin-top:18px}
+.sv-bill.tight .rs{margin-top:14px}
+.sv-bill.tight .r{height:31px}
+.sv-bill.tight .rs+.dl{margin-top:10px}
+/* Họ tên khách (Figma 811:499): ô nhập Switzer 28 ở y 236, con trỏ + gạch dưới Acid, dòng NỘI DUNG CHUYỂN KHOẢN viết theo từng chữ */
+.sv-nm{flex:none;margin-top:142px}
+.sv-in{display:block;width:100%;height:33px;font-size:28px;line-height:33px;letter-spacing:-.56px;color:var(--paper);caret-color:var(--acid);padding:0}
+.sv-ul{display:block;position:relative;height:2px;margin-top:14px;background:var(--acid)}
+.sv-ul.err{animation:shake .32s linear}
+/* báo đỏ = lớp Red phủ lên rồi mờ đi (chỉ animate opacity, không animate màu nền) */
+.sv-ul.err::after{content:'';position:absolute;left:0;top:0;width:100%;height:100%;background:var(--red);animation:svred .7s linear both}
+@keyframes svred{0%,70%{opacity:1}to{opacity:0}}
+.sv-nm .lab{margin-top:20px}
+.sv-memo{margin-top:6px;min-height:17px;font-family:var(--mono);font-size:14px;line-height:17px;color:var(--paper);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* Quét mã QR (Figma 811:844 · thẻ 812:535): thẻ Paper bo 24, mã chấm tròn, ô logo Acid giữa mã, dải Acid số tiền + nội dung */
+.sv-qrw{flex:none;margin-top:78px}
+.sv-card{border-radius:24px;background:var(--paper);overflow:hidden;padding:16px 16px 0}
+.sv-qq{position:relative;width:100%;aspect-ratio:1/1}
+.sv-qrc{position:absolute;left:0;top:0;width:100%;height:100%;display:block}
+.sv-badge{position:absolute;left:37.73%;top:37.73%;width:24.54%;height:24.54%;border-radius:22%;background:var(--acid);color:var(--ink);display:flex;align-items:center;justify-content:center}
+.sv-badge svg{width:62.8%;height:auto;aspect-ratio:132/43;fill:currentColor;transform:translateX(1.4px)}
+.sv-qe{position:absolute;left:0;right:0;top:12%;text-align:center;color:var(--graphite)}
+.sv-strip{position:relative;margin:16px -16px 0;height:96px;background:var(--acid);color:var(--ink);text-align:center}
+.sv-amt{position:absolute;left:0;right:0;top:14px;display:flex;justify-content:center;align-items:baseline;gap:8px}
+.sv-amt b{font-weight:500;font-family:var(--mono);font-size:44px;line-height:42px;letter-spacing:-1.32px}
+.sv-amt em{font-style:normal;font-family:var(--mono);font-size:20px;line-height:24px;color:var(--graphite)}
+.sv-mm{position:absolute;left:0;right:0;top:62px;font-family:var(--mono);font-size:12px;line-height:14px;letter-spacing:.48px;color:var(--graphite);white-space:nowrap}
+.sv-bank{margin-top:20px;text-align:center}
+@media (prefers-reduced-motion:reduce){
+  .svctr{transition:none}
+  .svctr .ly.in{animation:fadein .15s linear both}
+  .sv-bill,.sv-billw.in .sv-bill{transform:none;transition:none}
+  .sv-dot,.sv-r .sd{transition:opacity .12s linear;transform:none}
+  .sv-nav,.sv-sl .kn{transition:none}
+  .sv-g.no{animation:svdip .32s linear}   /* không lắc: vòng bị khoá nháy mờ một nhịp; gạch dưới họ tên chỉ báo đỏ */
+  .sv-ul.err{animation:none}
+  @keyframes svdip{50%{opacity:.4}}
+}

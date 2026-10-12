@@ -36,6 +36,8 @@
 <path fill-rule="evenodd" clip-rule="evenodd" d="M69.3 6.41667V35.75H83.9667C94.9667 35.75 102.3 29.8833 102.3 21.0833C102.3 12.2833 94.9667 6.41667 83.9667 6.41667H69.3ZM76.6333 13.0167H83.6C90.2 13.0167 94.9667 16.6833 94.9667 21.0833C94.9667 25.4833 90.2 29.15 83.6 29.15H76.6333V13.0167Z" fill="#FAFAFA"/>
 <path fill-rule="evenodd" clip-rule="evenodd" d="M102.3 6.41667H110.367L116.967 19.25L123.567 6.41667H131.633L120.633 26.5833V35.75H113.3V26.5833L102.3 6.41667Z" fill="#FAFAFA"/>
 </symbol>
+<!-- v2.9.0: chữ 0 có chấm của wordmark (nút Sell ở Home, Figma 688:651) -->
+<symbol id="i-zero" viewBox="32.45 0 32.2667 42.1667"><path fill-rule="evenodd" clip-rule="evenodd" d="M32.45 21.0833C32.45 15.4917 34.1498 10.1291 37.1753 6.17517C40.2009 2.22127 44.3045 0 48.5833 0C52.8622 0 56.9657 2.22127 59.9913 6.17517C63.0169 10.1291 64.7167 15.4917 64.7167 21.0833C64.7167 23.852 64.2994 26.5936 63.4886 29.1516C62.6778 31.7095 61.4894 34.0339 59.9913 35.9915C58.4931 37.9491 56.7146 39.5019 54.7573 40.5614C52.8 41.6209 50.702 42.1667 48.5833 42.1667C46.4647 42.1667 44.3667 41.6209 42.4094 40.5614C40.4521 39.5019 38.6735 37.9491 37.1753 35.9915C35.6772 34.0339 34.4888 31.7095 33.678 29.1516C32.8672 26.5936 32.45 23.852 32.45 21.0833ZM48.5833 7.33333C43.2383 7.33333 39.7833 13.4917 39.7833 21.0833C39.7833 28.675 43.2383 34.8333 48.5833 34.8333C53.9283 34.8333 57.3833 28.675 57.3833 21.0833C57.3833 13.4917 53.9283 7.33333 48.5833 7.33333ZM48.5833 25.6667C51.1146 25.6667 53.1667 23.6146 53.1667 21.0833C53.1667 18.5521 51.1146 16.5 48.5833 16.5C46.0521 16.5 44 18.5521 44 21.0833C44 23.6146 46.0521 25.6667 48.5833 25.6667Z"/></symbol>
 <!-- bộ icon lấy nguyên hình học từ file Figma (nét 1,5 · đầu vuông) -->
 <symbol id="i-home" viewBox="0 0 20 20"><path d="M10 2.5L2.5 9.16667V17.5H17.5V9.16667L10 2.5Z"/></symbol>
 <!-- icon/cai-dat (Figma 280:19, bánh răng) quy về khung 20 như các icon nav khác -->
@@ -89,6 +91,10 @@
 <div class="wkedge b" id="wk-b" aria-hidden="true"></div>
 <i class="wkkick" id="wk-k" hidden aria-hidden="true"></i>
 
+<!-- v2.9.0 · BÁN CHO KHÁCH MỚI: số 0 lộ trình (canvas) + số ở tâm nằm DƯỚI các trang (trang trong suốt) → không trượt theo nội dung lúc chuyển bước -->
+<canvas class="svdial" id="sv-dial" aria-hidden="true" hidden></canvas>
+<div class="svctr" id="sv-ctr" aria-hidden="true" hidden></div>
+
 <!-- ================= 0 · PIN ================= -->
 <section class="page g12" id="p-pin">
   <div class="head st"><span class="t1">Nhập mã PIN</span></div>
@@ -124,7 +130,8 @@
 
 <!-- ================= 1 · TRANG CHỦ ================= -->
 <section class="page g12" id="p-home">
-  <div class="head st"><span class="t1 mq"><span id="h-name">—</span></span></div>
+  <!-- v2.9.0: nút Sell (bán cho khách mới) ở góc phải khối đỉnh — Figma "Hỗ trợ bán hàng" 688:650 -->
+  <div class="head st"><div class="hrow"><span class="t1 mq"><span id="h-name">—</span></span><button class="svchip" id="h-sell" onclick="window.SVX&&SVX.open()" aria-label="Bán cho khách mới"><svg aria-hidden="true"><use href="#i-zero"/></svg><span>Sell</span></button></div></div>
   <div class="body st">
     <div class="in12">
       <div class="hero"><div class="l1" id="h-month">Tháng —</div><div class="l2" id="h-taught">—</div></div>
@@ -366,6 +373,11 @@
   <div class="nav"><span class="sp"></span><button class="cta paper" onclick="finish()">Về trang chủ</button></div>
 </section>
 
+<!-- ================= BÁN CHO KHÁCH MỚI (v2.9.0 · sell.js): hai khung dùng luân phiên cho từng bước ================= -->
+<section class="page sv" id="p-sv"></section>
+<section class="page sv" id="p-sv2"></section>
+
 <script src="app.js"></script>
+<script src="sell.js"></script>
 </body>
 </html>
