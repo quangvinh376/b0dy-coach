@@ -1,4 +1,4 @@
-/* Bán cho khách mới (v2.9.0 · sell.js; chuyển động liền mạch v2.13.0) — Playwright, Chromium, iPhone 393×852 dpr2 touch + 375×667 / 430×932 + giảm chuyển động.
+/* Bán cho khách mới (v2.9.0 · sell.js; chuyển động liền mạch v2.13.0; giảm theo % + phần tử chung v2.14.0) — Playwright, Chromium, iPhone 393×852 dpr2 touch + 375×667 / 430×932 + giảm chuyển động.
    Chạy: NODE_PATH=/opt/node22/lib/node_modules node test/sell.js
    - Bộ tính (Node, không trình duyệt): trần ưu đãi, đơn giá, thời hạn, chia kỳ, phí quẹt, nội dung chuyển khoản, VietQR, mã QR.
    - DEMO (?demo): luồng đầy đủ 1:1 (chuyển khoản · thẻ · tiền mặt), lùi từng bước giữ lựa chọn, gói 12 bỏ ưu đãi, gói 48 chia 3 kỳ lệch,
@@ -9,6 +9,9 @@
      khe in rồi phiếu trồi + lịch thu dựng lên từ khe, số 0 nghiêng thành gạch dưới họ tên, nút chính giữ chỗ đổi chữ (Tiếp → Xong), hàng điều
      hướng trượt theo bàn phím, ô giữa mã Ink + chữ 0 Paper, Xong → chữ 0 bay về đúng chữ 0 nút Sell, thẻ → giá trị phải trả không nảy,
      rảnh 10 s thì số 0 thôi "thở".
+   - v2.14.0 (chủ studio 23:08): nhãn tâm ĐƠN GIÁ GỐC ⇄ ĐƠN GIÁ SAU ƯU ĐÃI theo ưu đãi · giảm theo % (bước 0,25 %) · bỏ vành ⇄ đường kẻ: ĐƠN GIÁ
+     ở tâm bay xuống ô của nó trên tờ phiếu trắng đang trồi, chữ trên phiếu hiện lan ra từ dòng đó; tờ phiếu chìm lại vào khe khi rời; chấm
+     Acid của "Chuyển khoản" thành gạch dưới họ tên (lùi: gạch co thành chấm rơi về chỗ cũ); lùi về Ưu đãi: con số rời phiếu bay về tâm.
    - MOCK API (không ?demo): lệnh 'bank' → mã VietQR đúng tài khoản giả, cache, chưa cài tài khoản → báo lỗi.
    Số tài khoản trong test là SỐ GIẢ (repo công khai). Mã thoát 1 nếu có FAIL hoặc PAGEERR. */
 var {chromium}=require('playwright'); var serve=require('./serve'); var fs=require('fs'); var path=require('path'); var assert=require('assert');
@@ -31,6 +34,7 @@ async function mkctx(browser, vp, extra){
   await ctx.route(/fontshare|fonts\.googleapis|fonts\.gstatic/, function(r){ r.fulfill({status:200, contentType:'text/css', body:''}); });
   return ctx;
 }
+function nowPg0(){ return '.page.sv.on:not(.leave-fwd):not(.leave-back)'; }
 function H(page){
   var h={};
   h.wait=function(ms){ return page.waitForTimeout(ms); };
@@ -67,13 +71,18 @@ function H(page){
   CUR={id:'E', name:'bộ tính', fails:[]}; RES.push(CUR);
   try{
     assert.deepEqual(SVE.match(3,4,3,3),[36,48]); assert.deepEqual(SVE.match(3,3,1,6),[12,24,36,48,72]); assert.deepEqual(SVE.match(2,3,2,2),[24]); assert.deepEqual(SVE.match(5,5,6,6),[72]);
-    [[24,540000],[36,900000],[48,1330000],[72,2520000],[12,0]].forEach(function(x){ assert.equal(SVE.dMax('1:1',x[0]),x[1]); });
-    [[24,400000],[36,670000],[48,970000],[72,1800000]].forEach(function(x){ assert.equal(SVE.dMax('1:2',x[0]),x[1]); });   /* xuống bước 10.000 ₫ */
-    assert.equal(SVE.dCap('1:1',36,1),600000); assert.equal(SVE.dCap('1:1',36,2),300000); assert.equal(SVE.dCap('1:1',48,1),990000); assert.equal(SVE.dCap('1:1',24,1),270000); assert.equal(SVE.dCap('1:1',72,3),1440000);
-    var q=SVE.quote('1:1',36,2,0); assert.equal(q.unit,378947); assert.equal(q.sessions,38); assert.equal(q.weeks,13);
-    assert.equal(SVE.quote('1:1',36,2,300000).unit,371053); q=SVE.quote('1:1',24,1,270000); assert.equal(q.unit,421200); assert.equal(q.total,10530000); assert.equal(q.weeks,null);
+    /* v2.14: giảm theo % — phần vạn (625 = 6,25 %), bước 0,25 %; số tiền giảm xuống bước 1.000 ₫ */
+    [[24,500],[36,625],[48,750],[72,1000],[12,0]].forEach(function(x){ assert.equal(SVE.pMax(x[0]),x[1]); }); assert.equal(SVE.PSTEP,25);
+    assert.equal(SVE.pCap(36,0),625); assert.equal(SVE.pCap(36,1),400); assert.equal(SVE.pCap(36,2),200); assert.equal(SVE.pCap(36,3),0); assert.equal(SVE.pCap(48,1),550); assert.equal(SVE.pCap(24,1),250); assert.equal(SVE.pCap(72,3),550);
+    assert.equal(SVE.dOf('1:1',36,150),216000); assert.equal(SVE.dOf('1:1',48,25),44000);
+    assert.equal(SVE.pcTxt(625),'6,25'); assert.equal(SVE.pcTxt(250),'2,5'); assert.equal(SVE.pcTxt(25),'0,25'); assert.equal(SVE.pcTxt(0),'0'); assert.equal(SVE.pcTxt(1000),'10');
+    assert.ok(SVE.locked(36,3,25) && !SVE.locked(36,2,200) && SVE.locked(36,2,225) && !SVE.locked(36,1,400) && SVE.locked(36,1,425), 'vòng tặng khoá khi % giảm đã chiếm chỗ');
+    var q=SVE.quote('1:1',36,2,0); assert.equal(q.unit,378947); assert.equal(q.sessions,38); assert.equal(q.weeks,13); assert.equal(q.pc,0); assert.equal(q.pcap,200);
+    q=SVE.quote('1:1',36,2,200); assert.equal(q.unit,371368); assert.equal(q.d,288000); assert.equal(q.total,14112000);
+    q=SVE.quote('1:1',24,1,250); assert.equal(q.unit,421200); assert.equal(q.total,10530000); assert.equal(q.weeks,null);
+    q=SVE.quote('1:1',36,2,150); assert.equal(q.unit,373263); assert.equal(q.total,14184000);
     q=SVE.quote('1:1',72,3,0); assert.equal(q.unit,336000); assert.equal(q.weeks,25); assert.equal(SVE.quote('1:1',48,4,0).weeks,18); assert.equal(SVE.quote('1:1',72,7,0).weeks,27);
-    assert.equal(SVE.quote('1:1',36,2,500000).d,300000, 'giảm vượt trần bị kẹp');
+    q=SVE.quote('1:1',36,2,500); assert.equal(q.pc,200, 'giảm vượt trần bị kẹp'); assert.equal(q.d,288000);
     assert.deepEqual(SVE.split(14400000,2),[7200000,7200000]); assert.deepEqual(SVE.split(17750000,3),[5918000,5916000,5916000]);
     assert.equal(SVE.gross(7200000,1815),7333096); assert.equal(SVE.gross(1000000,0),1000000);
     assert.equal(SVE.memo('Nguyễn Quang Vinh',36,true),'N Q VINH 36B TRA GOP'); assert.equal(SVE.memo('Nguyễn Quang Vinh',36,false),'NGUYEN QUANG VINH 36B');
@@ -122,26 +131,32 @@ function H(page){
     await h.wait(500); d=await h.ev(function(){ return SVX._dots(); }); check(d.p===36 && d.o===12, 'q3: 12 tuần × 3 + 12 rỗng: '+JSON.stringify(d));
     await shot(page,'B-pk');
   });
-  await run('C', 'Ưu đãi: vòng tặng · thanh giảm · khoá · tâm đơn giá', async function(){
+  await run('C', 'Ưu đãi: vòng tặng · thanh giảm theo % · khoá · tâm ĐƠN GIÁ GỐC ⇄ ĐƠN GIÁ SAU ƯU ĐÃI', async function(){
     await h.tap('.sv-r[data-i="0"]'); check(await h.waitStep('deal'), 'sang ưu đãi');
     check((await h.txt(h.cur+'.t1 .ac'))==='36 buổi', 'tiêu đề Acid "36 buổi"');
-    check((await h.ctr())==='ĐƠN GIÁ SAU ƯU ĐÃI 400.000₫ Σ 14.400.000 ₫ / 36 BUỔI', 'tâm chưa ưu đãi: '+(await h.ctr()));
+    check((await h.ctr())==='ĐƠN GIÁ GỐC 400.000₫ Σ 14.400.000 ₫ / 36 BUỔI', 'tâm chưa ưu đãi = ĐƠN GIÁ GỐC: '+(await h.ctr()));
+    check((await h.txt(h.cur+'.sv-lv:nth-child(2) .h .v'))==='0%', 'thanh giảm ghi %: '+(await h.txt(h.cur+'.sv-lv:nth-child(2) .h .v')));
     check(await h.ev(function(){ return document.querySelectorAll('.page.sv.on .sv-g').length; })===3, 'gói 36: 3 vòng');
     await h.tap('.sv-g[data-k="2"]'); await h.wait(300);
-    var s=await h.st(); check(s.b===2, 'tặng 2'); check((await h.ctr())==='ĐƠN GIÁ SAU ƯU ĐÃI 378.947₫ Σ 14.400.000 ₫ / 38 BUỔI', 'tâm tặng 2: '+(await h.ctr()));
+    var s=await h.st(); check(s.b===2, 'tặng 2'); check((await h.ctr())==='ĐƠN GIÁ SAU ƯU ĐÃI 378.947₫ Σ 14.400.000 ₫ / 38 BUỔI', 'có ưu đãi → nhãn đổi SAU ƯU ĐÃI: '+(await h.ctr()));
     var cls=await h.ev(function(){ return [].map.call(document.querySelectorAll('.page.sv.on .sv-g'), function(g){ return (g.classList.contains('on')?'A':'')+(g.classList.contains('nx')?'+':'')+(g.classList.contains('lk')?'K':'')||'-'; }).join(' '); });
     check(cls==='A A +', 'vòng: '+cls);
     var tk=await h.ev(function(){ var s=document.querySelector('.page.sv.on .sv-sl'); return +((/scaleX\(([\d.]+)\)/.exec(s.querySelector('.tk').style.transform)||[])[1]); }); check(Math.abs(tk-1/3)<0.01, 'rãnh còn 1/3 (scaleX): '+tk);
     var d=await h.ev(function(){ return SVX._dots(); }); await h.wait(400); d=await h.ev(function(){ return SVX._dots(); }); check(d.a===2 && d.o===1, 'số 0: 2 hạt tặng Acid + 1 rỗng: '+JSON.stringify(d));
     await h.tap('.sv-g[data-k="2"]'); check((await h.st()).b===1, 'chạm lại vòng cuối đang sáng = bớt một');
     await h.tap('.sv-g[data-k="3"]'); check((await h.st()).b===3, 'chạm vòng 3 = tặng 3'); await h.wait(300);
-    await h.slide(1); check((await h.st()).d===0, 'tặng hết thì không giảm');
-    await h.tap('.sv-g[data-k="2"]'); await h.slide(1); s=await h.st(); check(s.b===2 && s.d===300000, 'tặng 2 → giảm tối đa 300.000: '+s.d);
-    check((await h.ctr()).indexOf('371.053')>=0, 'đơn giá 371.053');
+    await h.slide(1); check((await h.st()).pc===0, 'tặng hết thì không giảm');
+    await h.tap('.sv-g[data-k="2"]'); await h.slide(1); s=await h.st(); check(s.b===2 && s.pc===200, 'tặng 2 → giảm tối đa 2 %: '+s.pc);
+    check((await h.ctr()).indexOf('371.368')>=0, 'đơn giá 371.368: '+(await h.ctr()));
+    var pv=await h.ev(function(s){ var b=document.querySelector(s+' [data-k=d]'), sl=document.querySelector(s+' .sv-sl'); return {t:b.dataset.t!=null ? b.dataset.t : b.textContent, now:sl.getAttribute('aria-valuenow'), max:sl.getAttribute('aria-valuemax'), vt:sl.getAttribute('aria-valuetext')}; }, nowPg0());
+    check(pv.t==='2' && pv.now==='2' && pv.max==='2' && pv.vt==='2 %', 'thanh: 2 % (aria theo %): '+JSON.stringify(pv));
     cls=await h.ev(function(){ return document.querySelector('.page.sv.on .sv-g[data-k="3"]').className; }); check(/\blk\b/.test(cls), 'vòng 3 khoá khi giảm đã chiếm chỗ');
     await h.tap('.sv-g[data-k="3"]'); check((await h.st()).b===2, 'vòng khoá không nhận chạm');
-    await h.tap('.sv-g[data-k="1"]'); await h.slide(0.5); s=await h.st(); check(s.b===1 && s.d===450000, 'tặng 1, kéo nửa thanh = 450.000: '+s.d);
-    await h.slide(0); await h.tap('.sv-g[data-k="2"]'); s=await h.st(); check(s.b===2 && s.d===0, 'về tặng 2 · giảm 0: '+JSON.stringify([s.b,s.d]));
+    await h.tap('.sv-g[data-k="1"]'); await h.slide(0.5); s=await h.st(); check(s.b===1 && s.pc===325, 'tặng 1, kéo nửa thanh = 3,25 % (bước 0,25 %): '+s.pc);
+    await h.wait(400); check((await h.ctr())==='ĐƠN GIÁ SAU ƯU ĐÃI 376.541₫ Σ 13.932.000 ₫ / 37 BUỔI', 'tặng 1 + 3,25 %: '+(await h.ctr()));
+    await h.slide(0); await h.tap('.sv-g[data-k="1"]'); await h.wait(400); s=await h.st();
+    check(s.b===0 && s.pc===0 && (await h.ctr())==='ĐƠN GIÁ GỐC 400.000₫ Σ 14.400.000 ₫ / 36 BUỔI', 'bỏ hết ưu đãi → nhãn về ĐƠN GIÁ GỐC: '+(await h.ctr()));
+    await h.tap('.sv-g[data-k="2"]'); s=await h.st(); check(s.b===2 && s.pc===0, 'về tặng 2 · giảm 0: '+JSON.stringify([s.b,s.pc]));
     await shot(page,'C-deal');
   });
   await run('D', 'Phiếu đề xuất (bill)', async function(){
@@ -186,9 +201,20 @@ function H(page){
     await h.tap('.svb'); check(await h.waitStep('name'), 'QR ← họ tên'); check((await h.ev(function(){ return document.getElementById('sv-in').value; }))==='Nguyễn Quang Vinh', 'giữ họ tên');
     await h.wait(300); await h.tap('.svb'); check(await h.waitStep('pf'), '← hình thức trả');
     check(await h.ev(function(){ return document.querySelector('.page.sv.on:not(.leave-back):not(.leave-fwd) .sv-r.on').dataset.i; })==='0', 'giữ chọn chuyển khoản');
+    var ld=await h.ev(function(s){ var sd=document.querySelector(s+' .sv-r.on .sd'), ln=document.querySelectorAll('.svln'); return {ln:ln.length, sd:getComputedStyle(sd).visibility, an:ln[0] ? ln[0].getAnimations().map(function(a){ return a.effect.getTiming().duration+':'+a.effect.getTiming().delay; }).join(' ') : ''}; }, nowPg0());
+    check(ld.ln===1 && ld.sd==='hidden' && ld.an==='260:0 340:200', 'lùi: gạch dưới co thành chấm rồi rơi về chỗ chấm của "Chuyển khoản": '+JSON.stringify(ld));
+    await h.wait(600); check(await h.ev(function(s){ return document.querySelectorAll('.svln').length===0 && getComputedStyle(document.querySelector(s+' .sv-r.on .sd')).visibility==='visible'; }, nowPg0()), 'chấm thật hiện, dọn chấm bay');
     await h.wait(300); await h.tap('.svb'); check(await h.waitStep('pm'), '← phương thức trả'); await h.wait(300); await h.tap('.svb'); check(await h.waitStep('bill'), '← phiếu');
-    await h.wait(300); await h.tap('.svb'); check(await h.waitStep('deal'), '← ưu đãi'); await h.wait(200);
+    var rb=await h.ev(function(s){ var pg=document.querySelector(s), a=pg.querySelector('.sv-bill').getAnimations()[0]; return {rise:pg.classList.contains('svrise'), body:pg.querySelector(':scope>.body').getAnimations().length, d:a ? a.effect.getTiming().duration : 0, dl:a ? a.effect.getTiming().delay : -1, fly:document.querySelectorAll('.svfly').length}; }, nowPg0());
+    check(rb.rise && rb.body===0 && rb.d===420 && rb.dl===0 && rb.fly===0, 'lùi về phiếu: phiếu đã in trồi lại khỏi khe (0,42 s, không giấy xám, không bay số): '+JSON.stringify(rb));
+    await h.wait(300); await h.tap('.svb'); check(await h.waitStep('deal'), '← ưu đãi');
+    var bd=await h.ev(function(){ var fl=document.querySelectorAll('.svfly'), ly=document.querySelector('#sv-ctr .ly:not(.out)'), u=ly && ly.querySelector('[data-k=unit]'), o=document.querySelector('.page.sv.leave-back');
+      return {fly:fl.length, t:fl[0] ? fl[0].textContent : '', u:u ? getComputedStyle(u).visibility : '', dl:ly ? ly.style.animationDelay : '', sink:!!o && o.classList.contains('svsink'), z:o ? getComputedStyle(o).zIndex : ''}; });
+    check(bd.fly===1 && bd.t==='378.947' && bd.u==='hidden' && bd.dl==='310ms' && bd.sink && bd.z==='3', 'lùi: tờ phiếu chìm, ĐƠN GIÁ rời phiếu bay về tâm (nhãn + dòng Σ hiện khi số gần chạm): '+JSON.stringify(bd));
+    await h.wait(200);
     var cls=await h.ev(function(){ return [].map.call(document.querySelectorAll('.page.sv.on:not(.leave-back) .sv-g'), function(g){ return g.classList.contains('on')?'A':'-'; }).join(''); }); check(cls==='AA-', 'giữ 2 vòng tặng: '+cls);
+    await h.wait(350); var bl=await h.ev(function(){ var u=document.querySelector('#sv-ctr .ly:not(.out) [data-k=unit]'); return {fly:document.querySelectorAll('.svfly').length, u:getComputedStyle(u).visibility, c:SVX._ctr()}; });
+    check(bl.fly===0 && bl.u==='visible' && bl.c==='ĐƠN GIÁ SAU ƯU ĐÃI 378.947₫ Σ 14.400.000 ₫ / 38 BUỔI', 'con số đã về tâm: '+JSON.stringify(bl));
     await h.wait(300); await h.tap('.svh'); await h.wait(500);
     check((await h.ev(function(){ return state.screen; }))==='p-home', '⌂ về trang chủ');
     check(await h.ev(function(){ return document.getElementById('sv-dial').hidden; }), 'số 0 tắt');
@@ -218,17 +244,17 @@ function H(page){
     var d=await h.ev(function(){ return SVX._dots(); }); check(!Object.keys(d).length, 'tiền mặt: không số 0 (Figma E): '+JSON.stringify(d));
     await h.tap('.svc'); await h.wait(500);
   });
-  await run('J', 'Gói 48 · giảm 10.000 ₫ → 3 kỳ lệch: dư dồn kỳ 1', async function(){
+  await run('J', 'Gói 48 · giảm 0,25 % → 3 kỳ lệch: dư dồn kỳ 1', async function(){
     await h.toPkg('1:1',[1,2],[2,3],48); await h.waitStep('deal'); await h.wait(600);   /* chờ trang vào xong (đang trượt 24 px thì toạ độ thanh lệch) */
-    await h.slide(10000/1330000); var s=await h.st(); check(s.d===10000, 'giảm 10.000: '+s.d);
+    await h.slide(1/30); var s=await h.st(); check(s.pc===25, 'giảm 0,25 %: '+s.pc);
     await h.tap('.svc'); await h.waitStep('bill'); await h.wait(400);
     var rows=await h.rows('.page.sv.on .sv-bill .r');
-    check(rows.indexOf('KỲ TRẢ GÓP 3 × 5.916.000₫')>=0 && rows.indexOf('KỲ 1 THÊM 2.000₫')>=0 && rows.indexOf('GIẢM GIÁ 10.000₫')>=0, 'phiếu: '+JSON.stringify(rows));
+    check(rows.indexOf('KỲ TRẢ GÓP 3 × 5.905.000₫')>=0 && rows.indexOf('KỲ 1 THÊM 1.000₫')>=0 && rows.indexOf('GIẢM GIÁ 0,25%')>=0 && rows.indexOf('ĐƠN GIÁ SAU ƯU ĐÃI 369.083₫/BUỔI')>=0, 'phiếu: '+JSON.stringify(rows));
     await h.tap('.svc'); await h.waitStep('pm');
-    var r3=(await h.rows(h.cur+'.sv-r[data-i="1"]'))[0]; check(r3==='Chia 3 kỳKỲ 1 THÊM 2.000 ₫ 3 × 5.916.000₫', 'hàng chia 3 kỳ: '+r3);
+    var r3=(await h.rows(h.cur+'.sv-r[data-i="1"]'))[0]; check(r3==='Chia 3 kỳKỲ 1 THÊM 1.000 ₫ 3 × 5.905.000₫', 'hàng chia 3 kỳ: '+r3);
     await h.tap('.sv-r[data-i="1"]'); await h.wait(500); var d=await h.ev(function(){ return SVX._dots(); }); check(d.m===2, 'hai mốc KỲ 2 · KỲ 3: '+JSON.stringify(d));
     await h.waitStep('pf'); await h.tap('.sv-r[data-i="0"]'); await page.keyboard.type('Trần Thị Bích Ngọc'); await page.keyboard.press('Enter'); await h.waitStep('qr'); await h.wait(1300);
-    check((await h.txt(h.cur+'.sv-amt'))==='5.918.000₫', 'kỳ 1 = 5.918.000'); check((await h.txt(h.cur+'.sv-mm'))==='T T B NGOC 48B TRA GOP', 'nội dung: '+(await h.txt(h.cur+'.sv-mm')));
+    check((await h.txt(h.cur+'.sv-amt'))==='5.906.000₫', 'kỳ 1 = 5.906.000: '+(await h.txt(h.cur+'.sv-amt'))); check((await h.txt(h.cur+'.sv-mm'))==='T T B NGOC 48B TRA GOP', 'nội dung: '+(await h.txt(h.cur+'.sv-mm')));
     await h.tap('.svc'); await h.wait(900);   /* Xong: thẻ thu 0,42 s rồi về trang chủ */
   });
   await run('K', '1:2 = 1:1 với bảng giá 1:2 · gói 72 vòng tặng thứ hai · một khách, một số 0, một mã', async function(){
@@ -331,36 +357,60 @@ function H(page){
     var r2=await h.ev(function(s){ var u=document.querySelector('#sv-ctr .ly:not(.out) [data-k=unit]'); return {rl:u.classList.contains('rl'), t:u.textContent, n:document.querySelectorAll('#sv-ctr .ly').length, g:getComputedStyle(document.querySelector(s+' .sv-g[data-k="2"]')).backgroundColor, b:document.querySelector(s+' [data-k=b]').textContent}; }, nowPg());
     check(!r2.rl && r2.t==='378.947' && r2.n===1 && /212, 255, 0/.test(r2.g) && r2.b==='2', 'lăn xong đúng số, vòng tặng Acid: '+JSON.stringify(r2));
   });
-  await run('T4', 'Ưu đãi → phiếu: số 0 đổ vào khe in rồi phiếu trồi (không lật) · Chốt ưu đãi → Khách đồng ý đổi chữ tại chỗ · lịch thu dựng lên từ khe', async function(){
-    function slotY(sel){ return h.ev(function(q){ var e=document.querySelector(q); if(!e) return null; var r=e.getBoundingClientRect(); return r.top+r.height/2; }, sel); }
-    function near(y){ return h.ev(function(y){ var P=SVX._pts(), m=0; P.forEach(function(q){ m+=Math.abs(q[1]-y); }); return {n:P.length, d:P.length ? m/P.length : 0}; }, y); }
+  await run('T4', 'Ưu đãi → phiếu (v2.14 — không còn vành ⇄ đường kẻ): số 0 hít vào rồi tan · tờ phiếu trắng trồi khỏi khe (vật đặc, không mờ) · ĐƠN GIÁ ở tâm bay xuống đúng ô của nó (Paper → Ink khi mép giấy đi qua) · chữ trên phiếu hiện lan ra từ dòng đó · Chốt ưu đãi → Khách đồng ý tại chỗ · Khách đồng ý: tờ phiếu chìm lại vào khe, các dòng màn sau hiện khi giấy đã qua', async function(){
     await h.tap('.svc'); await h.wait(50);
-    var f=await h.ev(function(s){ var ps=[].slice.call(document.querySelectorAll('.page.sv.on'));
-      return {flip:ps.some(function(p){ return p.classList.contains('flipin')||p.classList.contains('flipout'); }), persp:ps.some(function(p){ return p.getAnimations().some(function(a){ var k=a.effect.getKeyframes(); return k.length && /perspective/.test(k[0].transform||''); }); }),
-              head:document.querySelector(s+'>.head').getAnimations().map(function(a){ return a.animationName; }), line:SVX._line()}; }, nowPg());
-    check(!f.flip && !f.persp && f.head.join()==='svLiO,svLiT', 'không lật, cùng nhịp mọi bước: '+JSON.stringify(f));
-    check(f.line>=24, 'số 0 đang nghiêng thành đường kẻ của khe in: '+f.line+' hạt');
+    var f=await h.ev(function(s){ var pg=document.querySelector(s), ps=[].slice.call(document.querySelectorAll('.page.sv.on')), fl=document.querySelectorAll('.svfly'), an=fl[0] ? fl[0].getAnimations() : [];
+      var dst=[].filter.call(pg.querySelectorAll('.sv-bill .r .v b'), function(b){ return b.textContent==='378.947'; })[0];
+      var col=an.map(function(a){ var k=a.effect.getKeyframes(); return k[0].color ? k[0].color+'>'+k[k.length-1].color : ''; }).filter(Boolean)[0]||'';
+      var tr=an.map(function(a){ return a.effect.getKeyframes(); }).filter(function(k){ return k[0].transform; })[0]||[], last=tr.length ? tr[tr.length-1].transform : '', m=/translate\((-?[\d.]+)px,\s*(-?[\d.]+)px\)\s*scale\(([\d.]+)\)/.exec(last||''), el=fl[0];
+      return {flip:ps.some(function(p){ return p.classList.contains('flipin')||p.classList.contains('flipout'); }), head:pg.querySelector(':scope>.head').getAnimations().map(function(a){ return a.animationName; }),
+              body:pg.querySelector(':scope>.body').getAnimations().length, rise:pg.classList.contains('svrise'), fly:fl.length, t:fl[0] ? fl[0].textContent : '', col:col,
+              dst:dst ? getComputedStyle(dst).visibility : 'none', fold:SVX._fold(), line:document.querySelectorAll('.svln').length,
+              end:m && el ? {x:parseFloat(el.style.left)+ +m[1], yc:parseFloat(el.style.top)+ +m[2]+parseFloat(el.style.height)*m[3]/2} : null}; }, nowPg());
+    check(!f.flip && f.head.join()==='svLiO,svLiT', 'không lật, tiêu đề cùng nhịp mọi bước: '+JSON.stringify(f.head));
+    check(f.rise && f.body===0, 'tờ phiếu là vật đặc: thân trang không mờ theo nhịp dòng chữ (không giấy xám): '+JSON.stringify([f.rise, f.body]));
+    check(f.fly===1 && f.t==='378.947' && f.dst==='hidden', 'ĐƠN GIÁ ở tâm đang bay xuống ô của nó (số thật trên phiếu ẩn tới lúc hạ): '+JSON.stringify([f.fly, f.t, f.dst]));
+    check(/250, 250, 250.*>.*10, 10, 10/.test(f.col), 'chữ Paper → Ink khi xuống giấy: '+f.col);
+    check(f.fold>20 && f.line===0, 'số 0 hít vào rồi tan, không thành đường kẻ: '+f.fold+' hạt');
+    var p=await h.ev(function(s){ var pg=document.querySelector(s), a=pg.querySelector('.sv-bill').getAnimations()[0], sl=pg.querySelector('.sv-slot').getAnimations().length;
+      var dl=function(e){ var a=e && e.getAnimations()[0]; return a ? Math.round(a.effect.getTiming().delay) : -1; }, rows=pg.querySelectorAll('.sv-bill .rs .r');
+      var ai=[].findIndex.call(rows, function(r){ return r.querySelector('.v b').textContent==='378.947'; });
+      return a ? {k:a.effect.getKeyframes().length, d:a.effect.getTiming().duration, dl:a.effect.getTiming().delay, sl:sl, anchor:dl(rows[ai]), above:dl(rows[ai-1]), wm:dl(pg.querySelector('.sv-bill .wm')), tt:dl(pg.querySelector('.sv-bill .tt'))} : null; }, nowPg());
+    check(p && p.k===2 && p.d===520 && p.dl===40 && p.sl===1, 'tờ phiếu trồi một lần 0,52 s đường B0DY, khe hiện nhẹ: '+JSON.stringify(p));
+    check(p && p.anchor>=480 && p.anchor<=520 && p.above===p.anchor+20 && p.tt>p.anchor && p.wm>p.tt, 'chữ trên phiếu hiện lan ra từ dòng con số (dòng đó trước, đầu phiếu sau cùng): '+JSON.stringify(p));
     check(await h.waitStep('bill'), 'sang phiếu');
     var c=await h.ev(function(s){ var c=document.querySelector(s+' .svc'), o=document.querySelector('.page.sv.leave-fwd .svc'); return {cls:c.className, vis:getComputedStyle(c).visibility, t:c.textContent, old:o ? o.className : null, ov:o ? getComputedStyle(o).visibility : null}; }, nowPg());
     check(/\bstill\b/.test(c.cls) && !/\bswap\b/.test(c.cls) && c.vis==='visible' && c.t==='Khách đồng ý' && /\bgone\b/.test(c.old||'') && c.ov==='hidden', 'nút chính giữ chỗ (không mờ ra rồi trồi lên), chữ đã đổi: '+JSON.stringify(c));
-    var p=await h.ev(function(s){ var a=document.querySelector(s+' .sv-bill').getAnimations()[0], sl=document.querySelector(s+' .sv-slot').getAnimations().length; return a ? {k:a.effect.getKeyframes().length, d:a.effect.getTiming().duration, dl:a.effect.getTiming().delay, sl:sl} : null; }, nowPg());
-    check(p && p.k===2 && p.d===460 && p.dl===340 && p.sl===1, 'phiếu trồi một lần 460 ms ngay khi số 0 vừa đổ vào khe (trễ 340), khe sáng một nhịp: '+JSON.stringify(p));
-    var sy=await slotY(nowPg()+' .sv-slot'), d0=await near(sy); await h.wait(260); var d1=await near(sy);
-    check(d0.n>0 && d1.d<d0.d*.5 && d1.d<16, 'hạt dồn về khe: '+d0.d.toFixed(1)+' → '+d1.d.toFixed(1)+' pt');
-    await h.wait(450); check(await h.ev(function(){ return SVX._pts().length===0; }), 'số 0 đã tan vào khe');
-    var t0=Date.now(); await h.tap('.svc'); var b0=await near(sy); check(await h.waitStep('pm', 600), 'Khách đồng ý → sang ngay ('+(Date.now()-t0)+' ms)');
-    check(await h.ev(function(){ return document.querySelectorAll('.svfly,.svdotf,.svzf,.svedge,.sv-bill.torn').length===0; }), 'không lớp bay, không xé');
+    await h.wait(850);   /* hạ 0,6 s · chữ trên phiếu hiện đủ ≈ 0,85 s */
+    var l=await h.ev(function(s){ var pg=document.querySelector(s), dst=[].filter.call(pg.querySelectorAll('.sv-bill .r .v b'), function(b){ return b.textContent==='378.947'; })[0], r=dst.getBoundingClientRect(),
+        op=[].map.call(pg.querySelectorAll('.sv-bill .wm,.sv-bill .dt,.sv-bill .pk,.sv-bill .r,.sv-bill .tl,.sv-bill .tt'), function(e){ return +getComputedStyle(e).opacity; });
+      return {fly:document.querySelectorAll('.svfly').length, dst:getComputedStyle(dst).visibility, op:Math.min.apply(null, op), pts:SVX._pts().length, x:r.left, yc:r.top+r.height/2}; }, nowPg());
+    check(l.fly===0 && l.dst==='visible' && l.op===1 && l.pts===0, 'đã hạ: số thật trên phiếu hiện, dọn bản bay, chữ trên phiếu hiện đủ, số 0 đã tan: '+JSON.stringify(l));
+    check(f.end && Math.abs(f.end.x-l.x)<1.5 && Math.abs(f.end.yc-l.yc)<1.5, 'hạ đúng ô đơn giá trên phiếu: '+JSON.stringify([f.end, l.x, l.yc]));
+    var t0=Date.now(); await h.tap('.svc');
+    var k=await h.ev(function(){ var o=document.querySelector('.page.sv.leave-fwd'), n=document.querySelector('.page.sv.on:not(.leave-fwd):not(.leave-back)'), a=o && o.querySelector('.sv-bill').getAnimations().slice(-1)[0], kf=a ? a.effect.getKeyframes() : [], nb=n && n.querySelector(':scope>.body').getAnimations()[0];
+      return {sink:!!o && o.classList.contains('svsink'), z:o ? getComputedStyle(o).zIndex : '', to:kf.length ? kf[kf.length-1].transform : '', d:a ? a.effect.getTiming().duration : 0, ob:o ? o.querySelector(':scope>.body').getAnimations().length : -1, after:!!n && n.classList.contains('svafter'), nd:nb ? Math.round(nb.effect.getTiming().delay) : -1}; });
+    check(k.sink && k.z==='3' && /100%/.test(k.to) && k.d===220 && k.ob===0, 'Khách đồng ý: tờ phiếu chìm lại vào khe 0,22 s, nằm trên màn sau (không mờ thành giấy xám): '+JSON.stringify(k));
+    check(k.after && k.nd===160, 'các dòng màn sau hiện khi giấy đã qua (trễ 160 ms): '+JSON.stringify(k));
+    check(await h.waitStep('pm', 600), 'Khách đồng ý → sang ngay ('+(Date.now()-t0)+' ms)');
+    check(await h.ev(function(){ return document.querySelectorAll('.svfly,.svln,.svdotf,.svzf,.svedge').length===0; }), 'không lớp bay');
     await h.wait(900);
     var b1=await h.ev(function(){ var G=SVX._geo(), P=SVX._pts(), m=0; P.forEach(function(q){ m+=Math.hypot(q[0]-G.cx, (q[1]-G.cy)/1.3068); }); return P.length ? m/P.length/G.rx : 0; });
-    check(b0.n>0 && b0.d<60 && b1>0.85, 'lịch thu dựng lên từ khe: cách khe '+b0.d.toFixed(1)+' pt → vòng '+b1.toFixed(2)+' rx');
+    check(b1>0.85, 'lịch thu nở từ tâm thành vòng: '+b1.toFixed(2)+' rx');
   });
-  await run('T5', 'Họ tên: số 0 nghiêng thành gạch dưới Acid · Tiếp luôn hiện, kể cả khi bàn phím mở · Tiếp → Xong tại chỗ, hàng điều hướng trượt theo bàn phím · thẻ VietQR mở như reel v10', async function(){
+  await run('T5', 'Hình thức trả → Họ tên (v2.14): chấm Acid của "Chuyển khoản" bay lên đầu trái ô họ tên rồi kéo dài thành gạch dưới · số 0 hít vào rồi tan · Tiếp dựng sẵn xám · Tiếp luôn hiện, kể cả khi bàn phím mở · Tiếp → Xong tại chỗ, hàng điều hướng trượt theo bàn phím · thẻ VietQR mở như reel v10', async function(){
     await h.tap('.sv-r[data-i="1"]'); await h.waitStep('pf'); await h.wait(250); await h.tap('.sv-r[data-i="0"]'); await h.wait(30);
-    var u=await h.ev(function(s){ var ul=document.querySelector(s+' .sv-ul'), a=ul.getAnimations()[0], r=ul.getBoundingClientRect(), y=r.top+r.height/2, P=SVX._pts(), m=0; P.forEach(function(q){ m+=Math.abs(q[1]-y); });
-      return {line:SVX._line(), k:a ? a.effect.getKeyframes().map(function(f){ return f.computedOffset+':'+f.opacity; }).join(' ') : '', y:y, d:P.length ? m/P.length : 0}; }, nowPg());
-    check(u.line>=24 && /^0:0 0\.68:0 1:1$/.test(u.k), 'số 0 nghiêng thành gạch dưới, gạch thật hiện khi hạt tan vào: '+JSON.stringify(u));
-    await h.wait(220); var u2=await h.ev(function(y){ var P=SVX._pts(), m=0; P.forEach(function(q){ m+=Math.abs(q[1]-y); }); return P.length ? m/P.length : 0; }, u.y);
-    check(u2<u.d*.4, 'hạt dồn về gạch dưới: '+u.d.toFixed(1)+' → '+u2.toFixed(1)+' pt');
+    var u=await h.ev(function(s){ var pg=document.querySelector(s), ul=pg.querySelector('.sv-ul'), ln=document.querySelectorAll('.svln'), sd=document.querySelector('.page.sv.leave-fwd .sv-r.on .sd'), c=pg.querySelector('.sv-tiep');
+      var an=ln[0] ? ln[0].getAnimations().map(function(a){ var t=a.effect.getTiming(), k=a.effect.getKeyframes(); return (k[0].clipPath ? 'clip' : k[0].transform ? 'move' : 'fade')+':'+t.duration+':'+t.delay; }) : [];
+      var r=ul.getBoundingClientRect(), lr=ln[0] ? ln[0].getBoundingClientRect() : null;
+      return {ln:ln.length, an:an.join(' '), ul:getComputedStyle(ul).visibility, sd:sd ? getComputedStyle(sd).visibility : 'none', fold:SVX._fold(), off:c.classList.contains('off'), bg:getComputedStyle(c).backgroundColor,
+              box:lr ? [Math.round(parseFloat(ln[0].style.left)-r.left), Math.round(parseFloat(ln[0].style.width)-r.width)] : null}; }, nowPg());
+    check(u.ln===1 && u.an==='fade:60:0 move:340:0 clip:300:290' && u.ul==='hidden' && u.sd==='hidden', 'chấm Acid của lựa chọn bay lên rồi kéo thành gạch dưới (gạch thật ẩn tới lúc kéo xong): '+JSON.stringify(u));
+    check(u.box && u.box[0]===0 && u.box[1]===0, 'gạch kéo đúng bề ngang ô họ tên: '+JSON.stringify(u.box));
+    check(u.fold>20, 'số 0 hít vào rồi tan (không nghiêng thành đường kẻ): '+u.fold);
+    check(u.off && !/212, 255, 0/.test(u.bg), 'Tiếp dựng sẵn xám — không loé Acid rồi mới xám: '+JSON.stringify([u.off, u.bg]));
+    await h.wait(650); var u2=await h.ev(function(s){ return {ln:document.querySelectorAll('.svln').length, ul:getComputedStyle(document.querySelector(s+' .sv-ul')).visibility}; }, nowPg());
+    check(u2.ln===0 && u2.ul==='visible', 'gạch dưới thật hiện, dọn chấm bay: '+JSON.stringify(u2));
     await h.waitStep('name'); await h.wait(300);
     var a=await h.ev(function(s){ var c=document.querySelector(s+' .sv-tiep'), cs=getComputedStyle(c); return {foc:!!document.activeElement && document.activeElement.id==='sv-in', vis:cs.visibility, op:cs.opacity, away:c.classList.contains('away'), off:c.classList.contains('off'), w:Math.round(c.getBoundingClientRect().width), line:SVX._pts().length}; }, nowPg());
     check(a.foc && a.vis==='visible' && +a.op>.95 && !a.away && a.off && a.w===225, 'ô nhập đang focus mà Tiếp vẫn hiện, xám khi chưa có tên: '+JSON.stringify(a));
@@ -552,6 +602,7 @@ function H(page){
     check(await hr.ev(function(){ return !SVX.busy(); }), 'không còn tween sau 0,26 s');
     await hr.tap('.svc'); await hr.waitStep('bill'); await hr.wait(80);
     var t=await hr.ev(function(){ return getComputedStyle(document.querySelector('.page.sv.on .sv-bill')).transform; }); check(t==='none', 'phiếu hiện đủ ngay: '+t);
+    check(await hr.ev(function(){ return !document.querySelector('.svfly,.svln') && !document.querySelector('.page.svrise,.page.svsink'); }), 'giảm chuyển động: không bay số, không trồi / chìm');
   });
   await cr.close();
 

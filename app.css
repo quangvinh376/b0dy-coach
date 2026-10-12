@@ -802,7 +802,9 @@ body.adm .tab-adm{display:flex}
    dòng chữ của loop (app.js line(): 240 ms, trượt 7 pt, chữ cũ tắt ở 45 %, chữ mới hiện từ 30 %). Không biên đạo từng phần tử, không
    khung che, không kẻ mảnh tự vẽ. Mã QR hiện ra như reel v10 (sell.js reveal). Giảm chuyển động: chỉ mờ.
    v2.13.0 — thứ đang có trên màn biến thành thứ của bước sau: số 0 ⇄ gạch dưới họ tên / khe in phiếu, nút chính giữ chỗ đổi chữ, hàng
-   điều hướng trượt theo bàn phím, "36 buổi" bay lên tiêu đề, số đếm theo tuần sáng (ô cố định, không chữ số giữ chỗ), ô giữa mã Ink + chữ 0 Paper. */
+   điều hướng trượt theo bàn phím, "36 buổi" bay lên tiêu đề, số đếm theo tuần sáng (ô cố định, không chữ số giữ chỗ), ô giữa mã Ink + chữ 0 Paper.
+   v2.14.0 — bỏ vành ⇄ đường kẻ: Ưu đãi → Đề xuất ghi ĐƠN GIÁ lên tờ phiếu trắng đang trồi (.svrise), rời phiếu thì giấy chìm lại vào
+   khe (.svsink, màn sau .svafter); Hình thức trả → Họ tên: chấm Acid thành gạch dưới (.svln). */
 .page.sv,.svctr,.svfly{--eb:cubic-bezier(.2,0,0,1);--ein:cubic-bezier(.55,0,.8,.2);--eout:cubic-bezier(.16,1,.3,1)}
 .hrow{display:flex;align-items:center;justify-content:space-between;gap:12px;min-width:0}
 .hrow>.t1{flex:1 1 auto;min-width:0}
@@ -835,9 +837,11 @@ body.adm .tab-adm{display:flex}
 .rl>.rr{position:absolute;left:0;top:0;white-space:nowrap;pointer-events:none}
 .rl .rc{display:inline-block;overflow:hidden;vertical-align:top}
 .rl .sp{display:block;white-space:pre}
-/* lớp bay (fixed, ngoài trang): "36 buổi" lên tiêu đề · dòng nội dung rơi xuống thẻ mã · chữ 0 giữa mã lúc Xong bay về nút Sell */
+/* lớp bay (fixed, ngoài trang): "36 buổi" lên tiêu đề · đơn giá ghi lên phiếu · chấm Acid thành gạch dưới họ tên · dòng nội dung rơi xuống thẻ mã ·
+   chữ 0 giữa mã lúc Xong bay về nút Sell */
 .svfly{position:fixed;white-space:nowrap;pointer-events:none;transform-origin:0 0;font-weight:500;will-change:transform}
 .svzf{position:fixed;z-index:60;pointer-events:none;fill:var(--paper);transform-origin:0 0;will-change:transform;overflow:visible}
+.svln{position:fixed;z-index:60;pointer-events:none;background:var(--acid);will-change:transform}
 /* khung bước */
 .page.sv>.body{display:flex;flex-direction:column}
 .page.sv .head .ac{white-space:nowrap}   /* "36 buổi" không bị ngắt dòng giữa số và chữ */
@@ -882,7 +886,7 @@ body.adm .tab-adm{display:flex}
 .sv-rows.pick .sv-r:not(.on)>.l,.sv-rows.pick .sv-r:not(.on)>.v{opacity:.35}
 .svlogo{display:inline-flex;gap:6px}
 .svlogo svg{width:23px;height:16px;display:block}
-/* Ưu đãi: vòng tặng 44 (Acid đã tặng · + kế tiếp · nét đứt = khoá) + thanh giảm (rãnh Paper 16 % co theo phần đã đổi ra tặng · nét đứt 3/3) */
+/* Ưu đãi: vòng tặng 44 (Acid đã tặng · + kế tiếp · nét đứt = khoá) + thanh giảm theo % (rãnh Paper 16 % co theo phần đã đổi ra tặng · nét đứt 3/3) */
 .sv-lev{border-top:1px solid var(--hair);border-bottom:1px solid var(--hair)}
 .sv-lv{position:relative;height:116px}
 .sv-lv+.sv-lv{height:97px;border-top:1px solid var(--hair)}
@@ -968,6 +972,14 @@ body.adm .tab-adm{display:flex}
 .page.sv.enter-back>*:not(.nav):not(.split):not(.sfoot){animation-name:svLiO,svLiTB}
 .page.sv.leave-fwd>*:not(.nav):not(.split):not(.sfoot),.page.sv.leave-back>*:not(.nav):not(.split):not(.sfoot){animation:svLoO .24s linear both,svLoT .24s var(--eo) both}
 .page.sv.leave-back>*:not(.nav):not(.split):not(.sfoot){animation-name:svLoO,svLoTB}
+/* v2.14 tờ phiếu đề xuất là vật đặc — thân trang không mờ / trượt theo nhịp dòng chữ (giấy xám đục giữa chừng):
+   · vào (.svrise): chỉ tờ phiếu trồi khỏi khe (sell.js billIn)
+   · rời (.svsink): tờ phiếu chìm lại vào khe (sell.js billOut); trang cũ nằm trên trang mới trong lúc chìm → giấy che rồi mở dần màn sau */
+.page.sv.svrise:not(.leave-fwd):not(.leave-back)>.body.sv-b:not(.nav){animation:none}
+.page.sv.svsink.leave-fwd,.page.sv.svsink.leave-back{z-index:3}
+.page.sv.svsink.leave-fwd>.body.sv-b:not(.nav),.page.sv.svsink.leave-back>.body.sv-b:not(.nav){animation:none}
+/* màn sau tờ phiếu (.svafter): các dòng hiện khi tờ phiếu đã chìm qua — không ló chữ ở hai mép giấy trong lúc chìm */
+.page.sv.svafter:not(.leave-fwd):not(.leave-back)>.body.sv-b:not(.nav){animation-delay:.16s}
 @keyframes svLiO{0%,30%{opacity:0}to{opacity:1}}
 @keyframes svLiT{from{transform:translateY(7px)}to{transform:none}}
 @keyframes svLiTB{from{transform:translateY(-7px)}to{transform:none}}
