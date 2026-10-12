@@ -253,7 +253,9 @@ if(typeof window!=='undefined' && typeof document!=='undefined') SVX=(function()
   }
   function mlabel(s){ var due=(ST.split && SVE.INST[ST.S]) ? SVE.INST[ST.S] : [], i=idxOf(s); for(var j=0;j<due.length;j++) if(i===due[j]-1) return 'KỲ '+(j+2); return ''; }
   var PLAN_NOW='none', NEED=false, SMALL=false;   /* SMALL: màn thấp, số 0 không đủ chỗ cho số ở tâm → tắt số 0 ở bước đó */
-  /* đổi kế hoạch / hình học: mọi hạt đi tiếp từ chỗ đang hiện (ngắt được) */
+  /* đổi kế hoạch / hình học: mọi hạt đi tiếp từ chỗ đang hiện (ngắt được).
+     Nhịp (12/10, thước 09/10 cho chuyển động mới): chuyển động dữ liệu ≤ 600 ms tính cả so le —
+     hạt từ nút Sell ≤ 0,6 s · đám mây → vòng ≤ 0,6 s · đổi vòng 0,26 s + so le ≤ 0,25 s · vào lại bước 0,36 s */
   function dial(plan, o){
     o=o||{}; if(SMALL && plan!=='none'){ plan='none'; o={dur:.2}; }
     var G=GEO, fn=PLAN[plan]||PLAN.none; PLAN_NOW=plan;
@@ -272,7 +274,8 @@ if(typeof window!=='undefined' && typeof document!=='undefined') SVX=(function()
   function same(A,B){ return Math.abs(A.x-B.x)<.01 && Math.abs(A.y-B.y)<.01 && Math.abs(A.a-B.a)<.002 && Math.abs(A.d-B.d)<.01 && A.c[1]===B.c[1] && A.h===B.h && A.lab===B.lab; }
   /* chấm Acid ở tâm (khách mới) — từ câu 01 tới khi chọn tần suất */
   var CD={d:0};
-  function cdot(on){ tw({key:'svcd', from:CD.d, to:on?10:0, dur:on?.32:.22, ease:EO, delay:on?.3:0, set:function(v){ CD.d=v; NEED=true; }}); }
+  function cdot(on){ if(!twHas('svcd') && Math.abs(CD.d-(on?10:0))<.01) return;   /* đã đúng trạng thái → không chạy tween rỗng (khỏi vẽ lại 0,6 s) */
+    tw({key:'svcd', from:CD.d, to:on?10:0, dur:on?.3:.22, ease:EO, delay:on?.28:0, set:function(v){ CD.d=v; NEED=true; }}); }
   var cv=null, ctx=null, CW=0, CH=0, CK=0, SZ=1;   /* SZ: cần đo lại khung (mở luồng / đổi cỡ cửa sổ) — không đọc layout trong từng khung hình */
   function canvas(){
     if(!cv){ cv=$id('sv-dial'); ctx=cv.getContext('2d'); }
@@ -456,7 +459,7 @@ if(typeof window!=='undefined' && typeof document!=='undefined') SVX=(function()
     var G=geoOf(id, pg), hasDial=!(id==='bill' || id==='name' || id==='qr' || (id==='val' && ST.pay!=='card'));
     if(hasDial){ SMALL=G.rx<92; GEO=G; }
     switch(id){
-      case 'q1': cdot(true); dial('cloud', prev ? {} : {dur:.46, stag:function(s){ return .1+((s.w*7+s.l*13)%23)/23*.22; }, ease:EO, from:fromChip}); ctr('', G.cy); break;
+      case 'q1': cdot(true); dial('cloud', prev ? {} : {dur:.4, stag:function(s){ return .06+((s.w*7+s.l*13)%23)/23*.14; }, ease:EO, from:fromChip}); ctr('', G.cy); break;
       case 'q2': cdot(!ST.f); if(ST.f){ dial('freq'); ctr('freq', G.cy); } else { dial('cloud'); ctr('', G.cy); } break;
       case 'q3': cdot(false); if(ST.m){ dial('months'); ctr('range', G.cy); } else { dial('freq'); ctr('freq', G.cy); } break;
       case 'pk': if(ST.S!=null && pkList().indexOf(ST.S)>=0){ dial('pkg'); ctr('pkg', G.cy); } else { dial('months'); ctr('range', G.cy); } break;
@@ -491,7 +494,7 @@ if(typeof window!=='undefined' && typeof document!=='undefined') SVX=(function()
   function bind(id, pg){
     if(id==='q1') bindNums(pg, false, function(a){ var m=a?'1:2':'1:1'; if(m!==ST.mode){ ST.mode=m; ST.b=0; ST.d=0; } dial('cloud', {dur:.36}); advance(); }, ST.mode ? [ST.mode==='1:2'?1:0, ST.mode==='1:2'?1:0] : null);
     else if(id==='q2') bindNums(pg, true, function(a,b){ var f=[SVE.FREQ[a], SVE.FREQ[b]], first=!ST.f; ST.f=f; checkPkg(); cdot(false);
-        dial('freq', first ? {dur:.52, stag:function(s){ return s.w*.012+(s.l%3)*.02; }, ease:EIO} : {dur:.26, stag:function(s){ return s.w*.011; }}); ctr('freq'); advance(380); },
+        dial('freq', first ? {dur:.4, stag:function(s){ return s.w*.007+(s.l%3)*.015; }, ease:EIO} : {dur:.26, stag:function(s){ return s.w*.011; }}); ctr('freq'); advance(380); },
         ST.f ? [SVE.FREQ.indexOf(ST.f[0]), SVE.FREQ.indexOf(ST.f[1])] : null);
     else if(id==='q3') bindNums(pg, true, function(a,b){ ST.m=[SVE.MONTHS[a], SVE.MONTHS[b]]; checkPkg(); dial('months', {dur:.26, stag:function(s){ return s.w*.011; }}); ctr('range'); advance(380); },
         ST.m ? [SVE.MONTHS.indexOf(ST.m[0]), SVE.MONTHS.indexOf(ST.m[1])] : null);
@@ -531,7 +534,7 @@ if(typeof window!=='undefined' && typeof document!=='undefined') SVX=(function()
      đang dùng đã chiếm chỗ) + thanh giảm (bước 10.000 ₫; nét đứt = phần đã đổi ra buổi tặng) */
   function bindDeal(pg){
     [].forEach.call(pg.querySelectorAll('.sv-g'), function(g){ g.onclick=function(){ var k=+g.dataset.k; if(SVE.locked(ST.mode,ST.S,k,ST.d)){ g.classList.remove('no'); void g.offsetWidth; g.classList.add('no'); return; }
-      ST.b=(k===ST.b) ? k-1 : k; dealSync(pg); dial('deal', {dur:.26, stag:function(s){ return Math.max(0, idxOf(s)-ST.S)*.05; }}); ctrDeal(); }; });
+      ST.b=(k===ST.b) ? k-1 : k; dealSync(pg); dial('deal', {dur:.26, stag:function(s){ return Math.min(.3, Math.max(0, idxOf(s)-ST.S)*.05); }}); ctrDeal(); }; });
     var sl=pg.querySelector('.sv-sl'), drag=null;
     function setX(clientX){ var r=sl.getBoundingClientRect(), W=r.width, D=SVE.dMax(ST.mode,ST.S), f=clamp((clientX-r.left-12)/(W-24),0,1), d=Math.round(f*D/10000)*10000;
       d=Math.min(d, SVE.dCap(ST.mode,ST.S,ST.b)); if(d!==ST.d){ ST.d=d; dealSync(pg); ctrDeal(); dial('deal', {dur:.2}); } }
