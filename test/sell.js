@@ -16,6 +16,9 @@
      · khe in 3D (mặt máy + khe, giấy chui ra trước mặt máy) · thanh giảm tô Acid tới núm · số đổi giá trị lăn bánh xe (lò xo tới hạn)
      · trả góp chia đều (giảm làm tròn theo số kỳ, không còn KỲ 1 THÊM) · logo B0DY giữa mã (chữ 0 trước, B · D · Y trượt ra; Xong: thu vào
      chữ 0 rồi chữ 0 về nút Sell) · từ Phương thức trả: biểu đồ buổi dàn ngang (đúng S + tặng chấm, cột 3 buổi), tiền mặt cũng có.
+   - v2.16.0 (chủ studio 14/10 00:05, Figma 08F · biến thể 06): biểu đồ buổi thành ĐƯỜNG BĂNG — hàng 3 buổi lùi xa về phía con số, phối
+     cảnh đúng (D ÷ (y − điểm tụ) tuyến tính theo hàng), hạt nhỏ dần, hai mép đường, nhãn KỲ ngoài mép phải ngang hàng buổi mốc; hiện từ
+     hàng gần ra xa cùng hai mép, hít về điểm tụ khi sang phiếu / họ tên; cả cụm số + đường dời cùng một đường khi đổi bước.
    - MOCK API (không ?demo): lệnh 'bank' → mã VietQR đúng tài khoản giả, cache, chưa cài tài khoản → báo lỗi.
    Số tài khoản trong test là SỐ GIẢ (repo công khai). Mã thoát 1 nếu có FAIL hoặc PAGEERR. */
 var {chromium}=require('playwright'); var serve=require('./serve'); var fs=require('fs'); var path=require('path'); var assert=require('assert');
@@ -24,6 +27,21 @@ var SV=require('../sell.js'), SVE=SV.SVE, QRX=SV.QRX;
 fs.rmSync(OUT,{recursive:true,force:true}); fs.mkdirSync(OUT,{recursive:true});
 var RES=[], PAGEERR=[], CUR=null, P=null;
 function check(c, msg){ if(!c) CUR.fails.push(msg); return !!c; }
+/* v2.16 đường băng: mỗi hạt khớp đúng một chỗ (hàng k, cột c) của phép chiếu y = yV + D·z0 ÷ (z0 + k), x = cx + (c − 1)·Wn·s, không trùng,
+   nằm giữa hai mép, cỡ = max(1,6; hạt gần × s) (mốc × 1,15); hai mép đã dựng xong đúng hình học. o: {G: geo.run, cx, P: _pts, R: _rail} */
+function runway(o, n, nm){
+  var G=o.G, P=o.P||[], R=o.R, out={n:P.length}, bad=[], used={}, mk=0; if(!G || !R){ out.err='không có đường băng'; out.ok=false; return out; }
+  var z0=R.z0, K=Math.ceil(n/3); out.K=G.K;
+  P.forEach(function(p){ var s=(p[1]-G.yV)/G.D, k=Math.round(z0/s-z0), sk=z0/(z0+k), c=Math.round((p[0]-o.cx)/(G.Wn*sk))+1, d0=Math.max(1.6, G.dN*sk), key=k*3+c;
+    if(!(k>=0 && k<K && c>=0 && c<=2 && key<n) || Math.abs(p[1]-(G.yV+G.D*sk))>0.05 || Math.abs(p[0]-(o.cx+(c-1)*G.Wn*sk))>0.05){ bad.push(['chỗ', +p[0].toFixed(1), +p[1].toFixed(1), k, c]); return; }
+    if(used[key]) bad.push(['trùng', key]); used[key]=1;
+    if(Math.abs(p[0]-o.cx)+p[2]/2>R.ln*G.Wn*sk) bad.push(['ngoài mép', key]);
+    if(Math.abs(p[2]-d0)<0.03) return; if(Math.abs(p[2]-d0*1.15)<0.03){ mk++; return; } bad.push(['cỡ', key, +p[2].toFixed(2), +d0.toFixed(2)]); });
+  var r=R.r; if(!r || Math.abs(r.a-1)>0.01 || Math.abs(r.yV-G.yV)>0.05 || Math.abs(r.D-G.D)>0.05 || Math.abs(r.Wn-G.Wn)>0.05 || Math.abs(r.kz-G.kz)>0.01 || Math.abs(r.cx-o.cx)>0.05) bad.push(['mép', r]);
+  out.mk=mk; out.bad=bad.slice(0,4); out.ok=P.length===n && G.K===K && !bad.length && Object.keys(used).length===n && mk===(nm||0);
+  out.row=function(pt){ return Math.round(z0/((pt[1]-G.yV)/G.D)-z0); }; return out;
+}
+function rwQ(){ var G=SVX._geo(); return {L:SVX._labs(), G:G.run, cx:G.cx, P:SVX._pts(), R:SVX._rail(), W:innerWidth}; }
 async function shot(page, name){ try{ await page.screenshot({path:path.join(OUT, name+'.png')}); }catch(e){} }
 async function run(id, name, fn){
   if(process.env.ONLY && process.env.ONLY.split(',').indexOf(id)<0) return;
@@ -197,10 +215,11 @@ function H(page){
     await h.tap('.sv-r[data-i="1"]'); await h.wait(120);
     check((await h.ctr())==='TRẢ MỖI KỲ 7,2TR', 'tâm: '+(await h.ctr()));
     await h.wait(450); var d=await h.ev(function(){ return SVX._dots(); }); check(d.m===1 && d.p===14 && d.d===23 && !d.g, 'biểu đồ buổi: 14 buổi kỳ 1 · mốc KỲ 2 · 23 buổi sau — đúng 38 chấm, không tuần trống: '+JSON.stringify(d));
-    var lb=await h.ev(function(){ var L=SVX._labs(), G=SVX._geo(), P=SVX._pts(), ys={}; P.forEach(function(q){ ys[Math.round(q[1])]=1; }); return {L:L, ys:Object.keys(ys).map(Number).sort(function(a,b){ return a-b; }), bar:G.bar, n:P.length}; });
-    var m14=lb.bar ? {x:lb.bar.x0+4*lb.bar.px, y:lb.bar.y0} : null;   /* buổi 15 = cột 5, hàng trên (cột xếp từ dưới lên) */
-    check(lb.n===38 && lb.ys.length===3 && lb.ys[1]-lb.ys[0]===8 && lb.ys[2]-lb.ys[1]===8, 'dàn ngang 3 hàng cách 8 pt: '+JSON.stringify(lb.ys));
-    check(lb.L.length===1 && lb.L[0].t==='KỲ 2' && lb.L[0].bl && m14 && Math.abs(lb.L[0].x-m14.x)<0.6 && Math.abs(lb.L[0].y-(lb.bar.y0-17.5))<0.6, 'nhãn KỲ 2 canh giữa trên cột của mốc: '+JSON.stringify([lb.L, m14]));
+    /* v2.16 đường băng: 13 hàng (12 × 3 + 2) lùi xa về phía con số; nhãn KỲ 2 ngoài mép phải, ngang hàng buổi 15 (hàng 5, cột phải) */
+    var lb=await h.ev(rwQ), rw=runway(lb, 38, 1); check(rw.ok, 'đường băng 38 chấm · 13 hàng · đúng phối cảnh · trong hai mép · mốc lớn hơn: '+JSON.stringify(rw));
+    var L0=lb.L[0], s4=L0 ? (L0.dot[1]-lb.G.yV)/lb.G.D : 0;
+    check(lb.L.length===1 && L0.t==='KỲ 2' && L0.bl && rw.row(L0.dot)===4 && L0.dot[0]>lb.cx+1 && Math.abs(L0.y-L0.dot[1])<0.6 && L0.x>lb.cx+lb.R.ln*lb.G.Wn*s4+3 && L0.x+30<lb.W-24,
+      'nhãn KỲ 2 ngoài mép phải, ngang hàng buổi 15: '+JSON.stringify([lb.L, s4]));
     check(await h.waitStep('pf'), 'sang hình thức trả');
     check((await h.ctr())==='TRẢ MỖI KỲ 7,2TR', 'tâm giữ lịch thu');
     await h.tap('.sv-r[data-i="0"]'); check((await h.step())==='name', 'chuyển khoản → họ tên ngay (bàn phím iOS cần focus trong lượt chạm)');
@@ -230,7 +249,7 @@ function H(page){
     check((await h.ctr())==='', 'số ở tâm chưa hiện khi gạch dưới (cùng độ cao) còn đang co — không đứng sát số như dấu trừ: '+(await h.ctr()));
     await h.wait(600); check(await h.ev(function(s){ return document.querySelectorAll('.svln').length===0 && getComputedStyle(document.querySelector(s+' .sv-r.on .sd')).visibility==='visible'; }, nowPg0()), 'chấm thật hiện, dọn chấm bay');
     check((await h.ctr())==='TRẢ MỖI KỲ 7,2TR', 'số đã hiện: '+(await h.ctr()));
-    var d=await h.ev(function(){ return SVX._dots(); }); check(d.p===14 && d.m===1 && d.d===23, 'biểu đồ buổi hiện lại từ trái sang: '+JSON.stringify(d));
+    var d=await h.ev(function(){ return SVX._dots(); }); check(d.p===14 && d.m===1 && d.d===23, 'biểu đồ buổi hiện lại (đường băng): '+JSON.stringify(d));
     await h.wait(300); await h.tap('.svb'); check(await h.waitStep('pm'), '← phương thức trả'); await h.wait(300); await h.tap('.svb'); check(await h.waitStep('bill'), '← phiếu');
     var rb=await h.ev(function(s){ var pg=document.querySelector(s), a=pg.querySelector('.sv-bill').getAnimations()[0]; return {rise:pg.classList.contains('svrise'), body:pg.querySelector(':scope>.body').getAnimations().length, d:a ? a.effect.getTiming().duration : 0, dl:a ? a.effect.getTiming().delay : -1, fly:document.querySelectorAll('.svfly').length}; }, nowPg0());
     check(rb.rise && rb.body===0 && rb.d===420 && rb.dl===100 && rb.fly===0, 'lùi về phiếu: phiếu đã in trồi lại khỏi khe khi chữ màn cũ đã tắt (0,1 s → 0,42 s, không giấy xám, không bay số): '+JSON.stringify(rb));
@@ -299,8 +318,9 @@ function H(page){
     await h.tap('.svc'); await h.waitStep('bill'); await h.wait(700);
     check((await h.txt(h.cur+'.sv-bill .pk'))==='GÓI 72 BUỔI · 1:2', 'phiếu ghi gói 1:2'); check((await h.txt(h.cur+'.sv-bill .tl'))==='TỔNG GIÁ TRỊ GÓI', 'không "MỖI NGƯỜI" — một khách');
     await h.tap('.svc'); check(await h.waitStep('pf'), 'gói 72 không trả góp'); await h.wait(700);
-    var bw=await h.ev(function(){ var G=SVX._geo(), P=SVX._pts(), x0=1e9, x1=-1e9; P.forEach(function(q){ x0=Math.min(x0,q[0]); x1=Math.max(x1,q[0]); }); return {n:P.length, cols:G.bar && G.bar.cols, px:G.bar && G.bar.px, x0:x0, x1:x1, W:innerWidth}; });
-    check(bw.n===75 && bw.cols===25 && bw.px<15 && bw.x0>=24 && bw.x1<=bw.W-24, 'gói 72 + 3 tặng: 75 chấm, bước cột thu lại cho vừa lề 24: '+JSON.stringify(bw));
+    var bw=await h.ev(rwQ), rk=runway(bw, 75), x0=1e9, x1=-1e9; bw.P.forEach(function(q){ x0=Math.min(x0,q[0]-q[2]/2); x1=Math.max(x1,q[0]+q[2]/2); });
+    var hw=bw.R.ln*bw.G.Wn*bw.R.z0/(bw.R.z0-.3);
+    check(rk.ok && bw.G.K===25 && x0>=24 && x1<=bw.W-24 && bw.cx-hw>=24 && bw.cx+hw<=bw.W-24, 'gói 72 + 3 tặng: 75 chấm, 25 hàng, đường băng trong lề 24: '+JSON.stringify([rk, x0, x1, hw]));
     await h.tap('.sv-r[data-i="0"]');
     check((await h.txt(h.cur+'.t1'))==='Họ tên khách?', 'một khách');
     await page.keyboard.type('Lê Văn An'); await page.keyboard.press('Enter'); await h.waitStep('qr'); await h.wait(1300);
@@ -434,13 +454,14 @@ function H(page){
     check(k.after && k.nd===160, 'các dòng màn sau hiện khi giấy đã qua (trễ 160 ms): '+JSON.stringify(k));
     check(await h.waitStep('pm', 600), 'Khách đồng ý → sang ngay ('+(Date.now()-t0)+' ms)');
     check(await h.ev(function(){ return document.querySelectorAll('.svfly,.svln,.svdotf,.svzf,.svedge').length===0; }), 'không lớp bay');
-    /* v2.15: biểu đồ buổi hiện từng cột từ trái sang (sau khi giấy đã chìm, trễ 0,16 s) — đang hiện thì cột trái rõ hơn cột phải */
-    var sw=null, t1=Date.now(); while(Date.now()-t1<600){ var q=await h.ev(function(){ var G=SVX._geo(), P=SVX._pts(); if(!G.bar || P.length<4) return null; var mid=G.bar.x0+(G.bar.cols-1)*G.bar.px/2, L=0, R=0; P.forEach(function(p){ if(p[0]<mid) L++; else R++; }); return {L:L, R:R, n:P.length}; });
+    /* v2.16: đường băng hiện từ hàng gần ra xa cùng hai mép (sau khi giấy đã chìm, trễ 0,16 s) — đang hiện thì nửa gần nhiều chấm hơn nửa xa */
+    var sw=null, t1=Date.now(); while(Date.now()-t1<600){ var q=await h.ev(function(){ var G=SVX._geo(), P=SVX._pts(), R=SVX._rail(); if(!G.run || P.length<4) return null;
+        var yM=G.run.yV+G.run.D*R.z0/(R.z0+(G.run.K-1)/2), N=0, F=0; P.forEach(function(p){ if(p[1]>yM) N++; else F++; }); return {N:N, F:F, n:P.length, ra:R.r ? R.r.a : 0}; });
       if(q && q.n<38){ sw=q; break; } await h.wait(15); }
-    check(sw && sw.L>sw.R, 'đang hiện: bên trái nhiều chấm hơn bên phải (quét trái → phải): '+JSON.stringify(sw));
+    check(sw && sw.N>sw.F && sw.ra<1, 'đang hiện: nửa gần nhiều chấm hơn nửa xa, hai mép đang hiện (gần → xa): '+JSON.stringify(sw));
     await h.wait(900);
-    var b1=await h.ev(function(){ var G=SVX._geo(), P=SVX._pts(), ok=G.bar && P.every(function(p){ var c=(p[0]-G.bar.x0)/G.bar.px, r=(p[1]-G.bar.y0)/8; return Math.abs(c-Math.round(c))<.01 && Math.abs(r-Math.round(r))<.01 && r>=-.01 && r<=2.01; }); return {n:P.length, ok:ok, idle:SVX._idle().amp}; });
-    check(b1.n===38 && b1.ok, 'đã dàn xong: 38 chấm đúng lưới cột 15 · hàng 8: '+JSON.stringify(b1));
+    var b1=await h.ev(rwQ), rb=runway(b1, 38), id=await h.ev(function(){ return SVX._idle().amp; });
+    check(rb.ok && id===0, 'đã dựng xong: 38 chấm đúng chỗ trên đường băng, đứng yên: '+JSON.stringify([rb, id]));
   });
   await run('T5', 'Hình thức trả → Họ tên (v2.14): chấm Acid của "Chuyển khoản" bay lên đầu trái ô họ tên rồi kéo dài thành gạch dưới · số 0 hít vào rồi tan · Tiếp dựng sẵn xám · Tiếp luôn hiện, kể cả khi bàn phím mở · Tiếp → Xong tại chỗ, hàng điều hướng trượt theo bàn phím · thẻ VietQR mở như reel v10', async function(){
     await h.tap('.sv-r[data-i="1"]'); await h.waitStep('pf'); await h.wait(250); await h.tap('.sv-r[data-i="0"]'); await h.wait(30);
@@ -549,14 +570,14 @@ function H(page){
     await h.tap('.svc'); await h.waitStep('pm'); await h.tap('.sv-r[data-i="0"]'); await h.waitStep('pf'); await h.wait(300);
     await h.tap('.sv-r[data-i="2"]'); check(await h.waitStep('card'), 'sang loại thẻ'); var m1=await over(500);
     check(m1<0.001, 'Hình thức trả → Loại thẻ: không vượt ('+(m1*100).toFixed(3)+' %)');
-    var y0=await h.ev(function(){ return {c:SVX._cy().to, b:SVX._geo().bar.y0}; });
+    var y0=await h.ev(function(){ var G=SVX._geo(); return {c:SVX._cy().to, b:G.run.yV, D:G.run.D}; });
     await h.tap('.sv-r[data-i="1"]');
     /* giữa chừng (đã sang bước sau): khung số và biểu đồ (cùng đồng hồ MT, đường B0DY 0,3 s) đi được cùng một phần quãng */
     var mid=null, t2=Date.now(); while(Date.now()-t2<700){ var q=await h.ev(function(){ var G=SVX._geo(), c=SVX._cy(), m=/matrix\(([^)]+)\)/.exec(getComputedStyle(document.getElementById('sv-ctr')).transform), P=SVX._pts();
-        return {step:SVX._step(), cy:m ? +m[1].split(',')[5] : null, c1:c.to, b1:G.bar ? G.bar.y0 : null, y:P.length ? P[0][1] : null}; });
+        return {step:SVX._step(), cy:m ? +m[1].split(',')[5] : null, c1:c.to, b1:G.run ? G.run.yV : null, D1:G.run ? G.run.D : null, y:P.length ? P[0][1] : null}; });
       if(q.step==='val' && q.cy!=null){ var f0=(q.cy-y0.c)/(q.c1-y0.c); if(f0>0.15 && f0<0.85){ mid=q; break; } } await h.wait(5); }
-    var fc=mid ? (mid.cy-y0.c)/(mid.c1-y0.c) : -1, fb=mid ? (mid.y-(y0.b+16))/(mid.b1-y0.b) : -1;
-    check(mid && Math.abs(fc-fb)<0.03, 'cả cụm dời cùng nhịp: khung số '+fc.toFixed(2)+' · biểu đồ '+fb.toFixed(2)+' '+JSON.stringify(mid));
+    var fc=mid ? (mid.cy-y0.c)/(mid.c1-y0.c) : -1, fb=mid ? (mid.y-(y0.b+y0.D))/(mid.b1-y0.b) : -1;   /* buổi 1 = hàng gần nhất (y = yV + D); D như nhau ở hai bước */
+    check(mid && mid.D1===y0.D && Math.abs(fc-fb)<0.03, 'cả cụm dời cùng nhịp: khung số '+fc.toFixed(2)+' · đường băng '+fb.toFixed(2)+' '+JSON.stringify([y0, mid]));
     var m2=await over(800); check(await h.waitStep('val'), 'sang giá trị phải trả');
     check(m2<0.001, 'Loại thẻ → Giá trị phải trả: không nảy (vượt '+(m2*100).toFixed(3)+' %)');
     var y1=await h.ev(function(){ return {d:SVX._dots()}; });
@@ -566,8 +587,8 @@ function H(page){
     await h.tap('.sv-r[data-i="1"]'); await h.waitStep('val');
     var c=await h.ev(function(){ var ly=document.querySelector('#sv-ctr .ly:not(.out)'); return {flp:!!(ly && ly.classList.contains('flp')), lb:ly ? (ly.querySelector('.lb')||{}).textContent : '', n:SVX._pts().length}; });
     check(lb==='THANH TOÁN' && c.flp && c.lb==='THANH TOÁN' && c.n===36, 'tiền mặt: nhãn THANH TOÁN giữ chỗ, biểu đồ buổi đi theo (không tan): '+JSON.stringify(c));
-    await h.wait(450); var g=await h.ev(function(){ var G=SVX._geo(), k=document.querySelector('#sv-ctr .ly:not(.out) .n44').getBoundingClientRect(); return {n:SVX._pts().length, numBottom:k.bottom, ly:G.bar.ly, small:SVX._small()}; });
-    check(g.n===36 && !g.small && g.ly-6.5>g.numBottom+20, 'tiền mặt: biểu đồ buổi dưới số phải thu: '+JSON.stringify(g));
+    await h.wait(450); var g=await h.ev(function(){ var G=SVX._geo(), R=SVX._rail(), k=document.querySelector('#sv-ctr .ly:not(.out) .n44').getBoundingClientRect(); return {n:SVX._pts().length, numBottom:k.bottom, top:G.run.yV+G.run.D*R.z0/(R.z0+G.run.kz), small:SVX._small()}; });
+    check(g.n===36 && !g.small && g.top>g.numBottom+20, 'tiền mặt: đường băng (đầu xa) dưới số phải thu: '+JSON.stringify(g));
     await h.tap('.svc'); await h.wait(500);
   });
   await ctx.close();
@@ -626,7 +647,7 @@ function H(page){
     await run('R'+vp.width, 'bố cục '+vp.width+'×'+vp.height, async function(){
       async function fit(tag){ var r=await hx.ev(function(){ var pg=document.querySelector('.page.sv.on:not(.leave-fwd):not(.leave-back)'); if(!pg) return {err:'no page'}; var g=SVX._geo(), hd=pg.querySelector('.head').getBoundingClientRect(), nav=pg.querySelector('.sv-nav').getBoundingClientRect(), a=pg.querySelector('.sv-ans'), ar=a ? a.getBoundingClientRect() : null;
         var over=[]; pg.querySelectorAll('*').forEach(function(e){ var b=e.getBoundingClientRect(); if(b.width && (b.right>innerWidth+0.5 || b.left<-0.5)) over.push(e.className||e.tagName); });
-        var bar=!!g.bar, sm=SVX._small(), top=bar ? g.cy-57 : g.cy-g.rx*1.3068, bot=bar ? (sm ? g.cy+34 : g.bar.y0+16+3) : g.cy+g.rx*1.3068;
+        var RR=SVX._rail(), bar=!!g.run, sm=SVX._small(), top=bar ? g.cy+g.run.E[0] : g.cy-g.rx*1.3068, bot=bar ? (sm ? g.cy+g.run.E[1] : g.run.yV+g.run.D*RR.z0/(RR.z0-.3)+1) : g.cy+g.rx*1.3068;
         return {top:top, bot:bot, hb:hd.bottom, at:ar?ar.top:(bar?nav.top:null), nb:nav.bottom, vh:innerHeight, over:over.slice(0,3), bar:bar, small:sm}; });
         check(r.nb<=r.vh+0.5, tag+': nav trong màn '+JSON.stringify(r)); check(!r.over.length, tag+': tràn ngang '+r.over.join(','));
         if(r.at!=null && tag!=='bill') check(r.top>r.hb+10 && r.bot<r.at-10, tag+': '+(r.bar?'số + biểu đồ buổi':'số 0')+' nằm trong khoảng trống '+JSON.stringify(r)); }

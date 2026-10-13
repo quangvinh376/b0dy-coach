@@ -14,6 +14,8 @@
 var {chromium}=require('playwright'); var serve=require('./serve'); var path=require('path'); var fs=require('fs');
 var CHROME='/opt/pw-browsers/chromium-1194/chrome-linux/chrome', PORT=+process.env.PORT||19321, OUT=path.join(__dirname,'out_admin');
 var A_PIN='7777', C_PIN='1234', DEV_IP='9.9.9.9', ROOM_IP='203.0.113.7';
+/* phiên bản đọc từ chính app.js (v2.16.0: không ghim cứng — mỗi lần nâng bản không phải sửa test) */
+var APPV=((/var APP_VER='(v[\d.]+)'/.exec(fs.readFileSync(path.join(__dirname,'..','app.js'),'utf8'))||[])[1]||'?').toUpperCase().replace(/\./g,'\\.');
 fs.rmSync(OUT,{recursive:true,force:true}); fs.mkdirSync(OUT,{recursive:true});
 
 var RES=[], CUR=null, PAGEERR=[];
@@ -465,7 +467,7 @@ async function gas(r){
   await run('AW4', 'Worker v8 · tab Cài đặt ghi nguồn "WORKER"; IP phòng (iplist · addip) vẫn chỉ Apps Script, Worker không thấy', async function(){
     var k0=SRV.wk.length, g0=SRV.gas.length;
     await page.click('#p-home .nav button[aria-label="Cài đặt"]'); await screen('p-admin'); await w(1300);
-    check(/· V2\.15\.2 · WORKER$/.test(await txt('#am-ver')), 'dòng phiên bản: '+(await txt('#am-ver')));
+    check(new RegExp('· '+APPV+' · WORKER$').test(await txt('#am-ver')), 'dòng phiên bản: '+(await txt('#am-ver')));
     await page.click('#am-add'); await w(900);
     check(SRV.ipList.join()===ROOM_IP+','+DEV_IP, 'thêm IP: '+SRV.ipList.join());
     var g=acts(SRV.gas,g0), k=acts(SRV.wk,k0);
@@ -520,7 +522,7 @@ async function gas(r){
     check(SRV.alogs.length===1 && SRV.alogVia[0]==='gas' && (await ev(function(){ return OUT.q.length; }))===0, 'adm_log qua Apps Script: '+SRV.alogVia.join());
     await leaveSession();
     await page.click('#p-home .nav button[aria-label="Cài đặt"]'); await screen('p-admin'); await w(900);
-    check(/· V2\.15\.2 · APPS SCRIPT$/.test(await txt('#am-ver')), 'dòng phiên bản: '+(await txt('#am-ver')));
+    check(new RegExp('· '+APPV+' · APPS SCRIPT$').test(await txt('#am-ver')), 'dòng phiên bản: '+(await txt('#am-ver')));
     await page.click('#p-admin .nav .ghost:nth-child(1)'); await screen('p-home'); await w(500);
   });
 

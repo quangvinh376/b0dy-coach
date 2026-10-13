@@ -21,6 +21,10 @@
    hạn trên đồng hồ MT) · trả góp chia đều (tiền giảm làm tròn theo số kỳ) · logo B0DY giữa mã (chữ 0 trước, B · D · Y trượt ra; Xong:
    thu vào chữ 0) · từ Phương thức trả: BIỂU ĐỒ BUỔI dàn ngang thay vành (Figma màn 07), tiền mặt cũng có; khung số ở tâm dời bằng tween
    trên MT để số + biểu đồ đi như một khối.
+   v2.16.0 (14/10 00:05, chủ studio chọn biến thể 06 "Đường băng" ở Figma 08F): biểu đồ buổi thành ĐƯỜNG BĂNG — mỗi tuần một hàng 3 buổi,
+   lùi xa theo phối cảnh về phía khối số (khe số → đầu xa cố định, gói ít buổi thì điểm tụ lùi vào sau con số), hai mép đường mờ, nhãn KỲ
+   ngoài mép phải ngang hàng buổi mốc; hiện từ gần ra xa như đèn dẫn đường (hai mép trải dài cùng lượt), đổi bước thì cả cụm số + đường
+   dời cùng một đường, rời đi thì lùi về điểm tụ rồi tan. Dữ liệu, mã màu, mốc thu, tiền mặt giữ như v2.15.
    ===================================================================== */
 'use strict';
 
@@ -213,11 +217,12 @@ if(typeof window!=='undefined' && typeof document!=='undefined') SVX=(function()
   /* trạng thái hạt (Figma "bộ sinh số 0"): [đường kính, màu, alpha (-1 = theo chiều sâu), rỗng]
      g tuần trống · v kỳ sau · d buổi còn lại · o còn trong trần tặng · q buổi tuỳ chọn (làn ngoài) · p buổi trong gói · a buổi tặng · m mốc thu kỳ sau */
   var SD={g:[3.6,CP,.16,0], v:[4.6,CP,.24,0], d:[5,CP,.40,0], o:[5.6,CP,.5,1], q:[5.6,CP,.5,1], p:[5.6,CP,-1,0], a:[6.6,CA,1,0], m:[8.4,CA,1,0]};
-  /* v2.15 BIỂU ĐỒ BUỔI — từ Phương thức trả trở đi (chủ studio 13/10 01:05: số buổi đã cố định, dàn chấm ngang cho dễ đọc; Figma màn 07):
-     đúng S + tặng chấm, mỗi cột 3 buổi xếp từ dưới lên (cột 1 = buổi 1 · 2 · 3, như cột của biểu đồ), cột trái → phải theo thứ tự buổi
-     (cũng là vành số 0 cắt ở 12 giờ rồi duỗi thẳng: làn ngoài ở trên). Cùng màu / độ sáng các trạng thái của số 0 nhưng cỡ đều (lưới
-     đọc được); mốc thu Acid, nhãn KỲ canh giữa trên cột của mốc. Bước cột 15 pt (thu lại cho gói dài vừa bề ngang), hàng 8 pt */
-  var BSD={p:[5,CP,.9,0], d:[5,CP,.4,0], v:[5,CP,.24,0], m:[5.6,CA,1,0]}, BPX=15, BPY=8, BLY=17.5;
+  /* BIỂU ĐỒ BUỔI — từ Phương thức trả trở đi (chủ studio 13/10 01:05: số buổi đã cố định). v2.16 ĐƯỜNG BĂNG (chủ studio 14/10 00:05 chọn
+     biến thể 06, Figma 08F): mỗi tuần một hàng ngang 3 buổi (trái · giữa · phải), hàng lùi xa theo phối cảnh một điểm tụ đặt ngay dưới
+     khối số — tuần đầu sát người xem (hạt to, thưa), tuần cuối gần điểm tụ (nhỏ, dày); hai mép đường mờ chụm về điểm tụ. Đúng S + tặng
+     hạt, không tuần trống: gói ngắn là đường ngắn, gói dài dồn về xa. Màu / độ sáng như trạng thái của số 0; mốc thu Acid, nhãn KỲ ngoài
+     mép phải, ngang hàng của mốc. Hàng k: tỉ lệ RZ0 ÷ (RZ0 + k) — RZ0 = độ sâu máy quay (tuần) · mép đường lệch RLN làn khỏi làn giữa */
+  var BSD={p:[5,CP,.9,0], d:[5,CP,.4,0], v:[5,CP,.24,0], m:[5.6,CA,1,0]}, RZ0=3.2, RLN=1.6;
   /* 72 hạt chờ (Figma "số 0 · hạt chờ", toạ độ màn 393 × 852, tâm 196,5 · 376) — [x, y, đường kính, alpha] */
   var CL=[[195.13,207.78,4.73,.61],[175.09,216.05,4.09,.56],[168.46,205.24,4.43,.59],[157.26,219.51,4.84,.63],[135.89,232.01,5.57,.69],[126.3,235.35,3.36,.51],[122.87,245.94,2.36,.43],[111.93,259.41,1.91,.4],[105.09,255.76,3.49,.53],[105.52,268.03,3.37,.52],[95.04,279.4,4.74,.65],[80.47,293.43,5.63,.73],[89.71,309.42,4.64,.65],[69.1,328.91,3.44,.55],[60.57,336.95,5.35,.73],[75.68,345.56,3.11,.53],[62.19,360.27,3.69,.59],[62.63,379.34,6.43,.85],[64.96,404.39,6.31,.85],[74.17,400.8,2.05,.45],[71.33,423.13,3.47,.59],[74.7,446.53,5.23,.77],[93.36,451.09,2.92,.55],[94.59,460.67,4.16,.67],[91.51,473.7,3.97,.66],[98.85,479.2,6.36,.9],[107.58,496.55,4.59,.73],[109.86,510.9,7.05,.98],[128.37,518.68,2.41,.52],[132.35,504.86,7.2,.98],[139.69,521.88,6.95,.98],[158.62,534.4,7.71,.99],[168.23,532.59,6.24,.92],[167.78,547.75,2.27,.51],[184.71,539.49,7.81,1],[200.84,549.99,6.76,.98],[215.74,548.71,6.38,.94],[208.65,538.12,3.54,.64],[222.29,543.1,5.19,.81],[234.03,539.65,3.97,.69],[260.14,531.53,4.48,.74],[268.52,516.71,4.94,.78],[267.98,512.56,6.09,.89],[274.45,505.1,7.59,.98],[289.67,489.66,2.98,.57],[285.65,487.74,2.94,.56],[297.24,471.87,3.48,.61],[311.77,463.59,2.44,.51],[309.56,446.55,2.59,.51],[316.51,431.22,2.51,.5],[324.3,425.13,6.48,.88],[318.77,410.57,4.33,.67],[332.68,396.08,3.8,.61],[321.7,379.2,3.61,.59],[318.64,360.33,6.9,.88],[312.06,345.48,4.3,.64],[325.76,323.04,3.77,.58],[317.59,317.65,3.48,.55],[320.07,313.03,3.17,.52],[308.37,283.53,2.74,.47],[299.07,270.31,3.38,.53],[292.33,272.93,4.06,.58],[279.1,250.13,2.18,.42],[278.94,257.32,2.64,.46],[276.1,240.65,3.67,.54],[252.78,229.04,5.54,.69],[240.01,225.54,2.8,.46],[242.25,226.64,2.55,.44],[229.96,212.51,5.24,.66],[221.33,213.53,5.97,.72],[204,215.33,1.81,.37],[191.1,217.55,2.95,.47]];
   /* hạt chờ thứ k → (tuần, làn): xếp theo góc rồi theo bán kính → bay về đúng chỗ gần nhất trên số 0 */
@@ -254,8 +259,8 @@ if(typeof window!=='undefined' && typeof document!=='undefined') SVX=(function()
   function idxOf(s){ return s.lap===2 ? 72+s.w*3+s.l : (s.l<3 ? s.w*3+s.l : -1); }
   function vis(s, code, G){
     if(code==='cloud'){ var c=CL[CLM[s.w*3+s.l]], k=G.rx/128; return {cl:1, cx:G.cx, cy:G.cy, u:(c[0]-196.5)*k, v:(c[1]-376)*k/RAT, d:c[2]*Math.max(.8,k), c:CP, a:c[3], h:0}; }
-    if(G.bar && code){ var Bg=G.bar, ix=idxOf(s), bd=BSD[code]||BSD.p, by=Bg.y0+(2-ix%3)*BPY;
-      return {x:Bg.x0+Math.floor(ix/3)*Bg.px, y:by, d:bd[0], c:bd[1], a:bd[2], h:bd[3], bl:1, ldy:Bg.ly-by}; }
+    if(G.run && code){ var R=G.run, ix=idxOf(s), sc=RZ0/(RZ0+Math.floor(ix/3)), bd=BSD[code]||BSD.p, dd=Math.max(1.6, R.dN*sc), x=G.cx+(ix%3-1)*R.Wn*sc;
+      return {x:x, y:R.yV+R.D*sc, d:dd*(code==='m'?1.15:1), c:bd[1], a:bd[2], h:0, bl:1, ldx:G.cx+RLN*R.Wn*sc+6-x, ldy:0}; }   /* nhãn: ngoài mép phải, ngang hàng */
     var ry=G.rx*RAT, off=(s.lap===2 ? -(s.l+3) : (s.l-1))*G.gap, P=ep(G.rx, ry, TS24[s.w], off), dp=P[1]/ry;
     if(!code) return {x:G.cx+P[0], y:G.cy+P[1], d:3.6*G.s, c:CP, a:0, h:0};
     var sd=SD[code]; return {x:G.cx+P[0], y:G.cy+P[1], d:sd[0]*(1+.12*dp)*G.s, c:sd[1], a:sd[2]<0 ? .86+.14*(.5+.5*dp) : sd[2], h:sd[3]};
@@ -270,7 +275,7 @@ if(typeof window!=='undefined' && typeof document!=='undefined') SVX=(function()
   function live(s,P){
     if(IDLE.amp<0.002 || P.cl || P.h>0 || P.c[0]<200 || P.c[1]<200 || P.a<0.6 || s.lap!==1) return P;
     var k=Math.pow(Math.max(0, Math.cos(TS24[s.w]-2.1*IDLE.t)), 14)*IDLE.amp; if(k<0.01) return P;
-    return {x:P.x, y:P.y, d:P.d*(1+.1*k), c:P.c, a:Math.min(1,P.a+.14*k), h:P.h, arc:P.arc, f:P.f, lab:P.lab, la:P.la, bl:P.bl, ldy:P.ldy};
+    return {x:P.x, y:P.y, d:P.d*(1+.1*k), c:P.c, a:Math.min(1,P.a+.14*k), h:P.h, arc:P.arc, f:P.f, lab:P.lab, la:P.la, bl:P.bl, ldx:P.ldx, ldy:P.ldy};
   }
   function blend(A,B,p,pp){ var q=clamp(p,0,1); return {d:lerp(A.d,B.d,q)*(1+(pp||0)*Math.sin(Math.PI*q)), c:mixc(A.c,B.c,q), a:lerp(A.a,B.a,q), h:lerp(A.h,B.h,q), arc:B.h>A.h ? q : 1, la:lerp(A.lab?A.a:0, B.lab?B.a:0, q)}; }
   /* hai đồng hồ mỗi hạt: vị trí (tp, dp, ep — lò xo, có thể vượt) · dáng (ta, da, ea, nảy pop; M = dáng giữa chừng) */
@@ -280,10 +285,10 @@ if(typeof window!=='undefined' && typeof document!=='undefined') SVX=(function()
     var kp=s.dp>0 ? clamp((MT-s.tp)/s.dp,0,1) : 1, ka=s.da>0 ? clamp((MT-s.ta)/s.da,0,1) : 1, A=s.A;
     if(kp>=1 && ka>=1) return live(s,B);
     /* giảm chuyển động: hạt không bay — mờ dần tại chỗ cũ rồi hiện dần ở chỗ mới */
-    if(s.fade){ var k=Math.max(kp,ka), F=k<.5 ? A : B, f=k<.5 ? 1-2*k : 2*k-1; return {x:F.x, y:F.y, d:F.d, c:F.c, a:F.a*f, h:F.h, arc:1, f:0, lab:F.lab, la:(F.lab?F.a:0)*f, bl:F.bl, ldy:F.ldy}; }
+    if(s.fade){ var k=Math.max(kp,ka), F=k<.5 ? A : B, f=k<.5 ? 1-2*k : 2*k-1; return {x:F.x, y:F.y, d:F.d, c:F.c, a:F.a*f, h:F.h, arc:1, f:0, lab:F.lab, la:(F.lab?F.a:0)*f, bl:F.bl, ldx:F.ldx, ldy:F.ldy}; }
     if(s.path) return s.path(s,A,B,kp,ka);
     var e=s.ep(kp), ap=(s.M && MT<s.ta) ? blend(A, s.M, e, 0) : blend(s.M||A, B, s.ea(ka), s.pop);
-    return live(s, {x:lerp(A.x,B.x,e), y:lerp(A.y,B.y,e), d:ap.d, c:ap.c, a:ap.a, h:ap.h, arc:ap.arc, f:0, lab:B.lab, la:ap.la, bl:B.bl, ldy:B.ldy});
+    return live(s, {x:lerp(A.x,B.x,e), y:lerp(A.y,B.y,e), d:ap.d, c:ap.c, a:ap.a, h:ap.h, arc:ap.arc, f:0, lab:B.lab, la:ap.la, bl:B.bl, ldx:B.ldx, ldy:B.ldy});
   }
   /* hạt sinh ra: xoáy từ ngoài màn vào, to + nhoè rồi nét dần, chạm chỗ thì nảy nhẹ (reel genA) */
   function genPath(s,A,B,kp){
@@ -348,7 +353,7 @@ if(typeof window!=='undefined' && typeof document!=='undefined') SVX=(function()
         s.A=A; s.M=null; s.pop=0; s.fade=fade; s.ep=s.ea=LIN; n++;
         if(o.gone){ s.B={x:A.x, y:A.y, d:A.d, c:A.c, a:0, h:A.h}; s.path=fade ? null : gonePath; s.tp=s.ta=MT+(fade?0:(s.w/23)*.12); s.dp=s.da=fade?.2:.4; }
         else { var fx=G.fx!=null ? G.fx : G.cx, fy=G.fy!=null ? G.fy : G.cy;
-          s.B={x:fx+(A.x-fx)*o.fold, y:fy+(A.y-fy)*o.fold, d:A.d*.8, c:A.c, a:0, h:A.h, lab:A.lab, bl:A.bl, ldy:A.ldy}; s.path=null; s.ep=s.ea=EB; s.tp=s.ta=MT; s.dp=s.da=fade?.2:(o.dur||.32); }
+          s.B={x:fx+(A.x-fx)*o.fold, y:fy+(A.y-fy)*o.fold, d:A.d*.8, c:A.c, a:0, h:A.h, lab:A.lab, bl:A.bl, ldx:A.ldx, ldy:A.ldy}; s.path=null; s.ep=s.ea=EB; s.tp=s.ta=MT; s.dp=s.da=fade?.2:(o.dur||.32); }
         continue; }
       if(s.B && !o.force && same(s.B,B) && !s.path) continue;   /* đích không đổi → để tween đang chạy chạy tiếp, không giật */
       if(!A || A.a<=0.004){
@@ -364,8 +369,31 @@ if(typeof window!=='undefined' && typeof document!=='undefined') SVX=(function()
       if(o.path && !fade){ s.tp=s.ta=MT+(o.pt?o.pt(s):0); s.dp=s.da=(o.pd?o.pd(s):.8); }
       if(!fade && o.chase){ var ch=o.chase(s, oc, code); if(ch!=null){ s.ta=MT+ch; s.da=o.chaseDur||.22; s.pop=(o.pop!=null?o.pop:.55); if(o.mid && oc==='cloud') s.M=vis(s, o.mid, G); } }
     }
+    /* hai mép đường băng: cùng đồng hồ MT, cùng đường cong, cùng thời lượng với hạt — hít vào thì chụm về điểm tụ cùng hạt */
+    var R=G.run;
+    if(o.fold){ var RN=railNow(); if(RN && RN.a>0.004) railTo({cx:RN.cx, yV:RN.yV, D:RN.D*o.fold, Wn:RN.Wn*o.fold, kz:RN.kz, a:0}, fade?.2:(o.dur||.32), EB); else RW=null; }   /* chưa kịp hiện (còn trong 0,16 s chờ) → bỏ luôn, không hiện muộn ở màn sau */
+    else if(R && (plan==='pay' || plan==='pos')){ var RT={cx:G.cx, yV:R.yV, D:R.D, Wn:R.Wn, kz:R.kz, a:1};
+      if(o.rail && !fade) railTo(RT, o.rail.dur, EB, o.rail.delay, true); else railTo(RT, fade?.2:(o.dp!=null ? o.dp : .3), EB); }
+    else railTo(null, fade?.2:(o.dp!=null ? Math.min(.3, o.dp) : .2), LIN);
     NEED=true; motWake(); return n;
   }
+  /* mép đường băng: tween riêng trên đồng hồ MT (đích mới đến giữa chừng → đi tiếp từ chỗ đang thấy) · grow: hiện từ không thì hai mép
+     trải dài từ mép gần ra đầu xa cùng lúc các hàng buổi hiện dần (gần → xa) */
+  var RW=null;
+  function railNow(){ if(!RW) return null; var k=RW.dur>0 ? clamp((MT-RW.t0)/RW.dur,0,1) : 1, e=RW.ease(k), F=RW.f, T=RW.t;
+    return {cx:lerp(F.cx,T.cx,e), yV:lerp(F.yV,T.yV,e), D:lerp(F.D,T.D,e), Wn:lerp(F.Wn,T.Wn,e), kz:lerp(F.kz,T.kz,e), a:lerp(F.a,T.a,e), busy:MT<RW.t0+RW.dur}; }
+  function railSame(A,B){ return Math.abs(A.cx-B.cx)<.01 && Math.abs(A.yV-B.yV)<.01 && Math.abs(A.D-B.D)<.01 && Math.abs(A.Wn-B.Wn)<.01 && Math.abs(A.kz-B.kz)<.01 && Math.abs(A.a-B.a)<.002; }
+  function railTo(T, dur, ease, delay, grow){
+    var N=railNow();
+    if(!T){ if(!N || N.a<=0.004){ RW=null; return; } T={cx:N.cx, yV:N.yV, D:N.D, Wn:N.Wn, kz:N.kz, a:0}; }
+    if(RW && railSame(RW.t, T)) return;   /* đích không đổi → để tween đang chạy chạy tiếp */
+    var F=(N && N.a>0.004) ? N : {cx:T.cx, yV:T.yV, D:T.D, Wn:T.Wn, kz:grow ? 0 : T.kz, a:0};
+    if(rm()) F={cx:T.cx, yV:T.yV, D:T.D, Wn:T.Wn, kz:T.kz, a:F.a};   /* giảm chuyển động: không dời — chỉ mờ / hiện */
+    RW={f:F, t:T, t0:MT+(delay||0), dur:dur||0, ease:ease||EB}; NEED=true; motWake();
+  }
+  function railBox(RP, b){ var s0=RZ0/(RZ0-.3), s1=RZ0/(RZ0+RP.kz), w=RLN*RP.Wn*s0+2; bbAdd(b, RP.cx-w, RP.yV+RP.D*s1-2, RP.cx+w, RP.yV+RP.D*s0+2); }
+  function railDraw(RP){ var s0=RZ0/(RZ0-.3), s1=RZ0/(RZ0+RP.kz); ctx.strokeStyle=rgba(CP, .1*RP.a); ctx.lineWidth=1; ctx.beginPath();
+    for(var e=-1;e<=1;e+=2){ ctx.moveTo(RP.cx+e*RLN*RP.Wn*s0, RP.yV+RP.D*s0); ctx.lineTo(RP.cx+e*RLN*RP.Wn*s1, RP.yV+RP.D*s1); } ctx.stroke(); }
   function chaseLit(base, per0, from){ return function(s, oc, nc){ if(s.lap!==1) return null; var lit=(nc==='p'||nc==='q'), was=(oc==='p'||oc==='q');
     if(!lit || was) return null; return base+(Math.max(0,s.w-(from||0)))*per0+(nc==='q'?.08:0); }; }
   function fromCenter(s,B){ return {x:GEO.cx, y:GEO.cy, d:1.6, c:B.c, a:0, h:B.h}; }
@@ -388,7 +416,7 @@ if(typeof window!=='undefined' && typeof document!=='undefined') SVX=(function()
   var IDLE={t:0, rot:0, amp:0, until:0};
   function idleKick(){ IDLE.until=MT+10; NEED=true; }
   function idleStep(dv){
-    var want=(ON && !rm() && !SMALL && PLAN_NOW!=='none' && !GEO.bar && MT<IDLE.until) ? 1 : 0;   /* biểu đồ buổi là số liệu đã chốt: đứng yên */
+    var want=(ON && !rm() && !SMALL && PLAN_NOW!=='none' && !GEO.run && MT<IDLE.until) ? 1 : 0;   /* biểu đồ buổi là số liệu đã chốt: đứng yên */
     if(want>IDLE.amp) IDLE.amp=Math.min(want, IDLE.amp+dv/.6); else if(want<IDLE.amp) IDLE.amp=Math.max(want, IDLE.amp-dv/1.2);
     if(!want && IDLE.amp<0.002) IDLE.amp=0;
     if(IDLE.amp>0){ IDLE.t+=dv; IDLE.rot+=.05*dv*IDLE.amp; }
@@ -408,7 +436,6 @@ if(typeof window!=='undefined' && typeof document!=='undefined') SVX=(function()
   }
   function rgba(c,a){ return 'rgba('+Math.round(c[0])+','+Math.round(c[1])+','+Math.round(c[2])+','+(a>1?1:a<0?0:a).toFixed(3)+')'; }
   function spaced(t, x, y, ls){ for(var i=0;i<t.length;i++){ ctx.fillText(t[i], x, y); x+=ctx.measureText(t[i]).width+ls; } }
-  function spW(t, ls){ var w=0; for(var i=0;i<t.length;i++) w+=ctx.measureText(t[i]).width+(i ? ls : 0); return w; }
   /* vùng xoá: chỉ phần hạt / sao chổi / gợn chiếm (khung trước ∪ khung này) thay vì cả canvas toàn màn dpr 3 — hình y hệt, bớt việc vẽ
      mỗi khung (nóng máy). Hạt sinh ra từ ngoài màn thì vùng tự lớn tới cả màn */
   var BB=null;
@@ -421,12 +448,14 @@ if(typeof window!=='undefined' && typeof document!=='undefined') SVX=(function()
   function draw(dv){
     if(!cv && !ON) return; canvas();
     idleStep(dv||0);
-    var busy=false, pts=[], labs=[], b=[1e9,1e9,-1e9,-1e9];
+    var busy=false, pts=[], labs=[], b=[1e9,1e9,-1e9,-1e9], RP=RW ? railNow() : null;
+    if(RP){ if(RP.busy) busy=true; else if(RP.a<=0.004){ RW=null; RP=null; } }
+    if(RP && RP.a>0.004) railBox(RP, b);
     for(var i=0;i<SL.length;i++){
       var s=SL[i]; if(!s.B) continue;
       if(s.A){ if(MT<Math.max(s.tp+s.dp, s.ta+s.da)) busy=true; else { s.A=null; s.path=null; s.M=null; s.pop=0; } }
       var P=cur(s); if(P && P.a>0.004){ pts.push(P); var r=P.d/2*(1+(P.f>0.04 ? P.f*1.6 : 0))+2; bbAdd(b, P.x-r, P.y-r, P.x+r, P.y+r);
-        if(P.lab){ if(P.bl) bbAdd(b, P.x-40, P.y+P.ldy-10, P.x+40, P.y+P.ldy+10); else bbAdd(b, P.x, P.y-10, P.x+9*GEO.s+80, P.y+10); } }
+        if(P.lab){ if(P.bl) bbAdd(b, P.x+P.ldx-2, P.y+P.ldy-10, P.x+P.ldx+60, P.y+P.ldy+10); else bbAdd(b, P.x, P.y-10, P.x+9*GEO.s+80, P.y+10); } }
     }
     var cd0=CD.d*CD.m; if(cd0>0.05) bbAdd(b, GEO.cx-cd0/2-2, GEO.cy-cd0/2-2, GEO.cx+cd0/2+2, GEO.cy+cd0/2+2);
     fxBounds(b);
@@ -434,12 +463,13 @@ if(typeof window!=='undefined' && typeof document!=='undefined') SVX=(function()
     if(BB) cb=cb ? [Math.min(cb[0],BB[0]), Math.min(cb[1],BB[1]), Math.max(cb[2],BB[2]), Math.max(cb[3],BB[3])] : BB;
     if(cb){ var x0=Math.max(0, Math.floor(cb[0])), y0=Math.max(0, Math.floor(cb[1])), x1=Math.min(CW, Math.ceil(cb[2])), y1=Math.min(CH, Math.ceil(cb[3])); if(x1>x0 && y1>y0) ctx.clearRect(x0, y0, x1-x0, y1-y0); }
     BB=nb;
+    if(RP && RP.a>0.004) railDraw(RP);
     pts.sort(function(a,b){ return a.d-b.d; });
     for(var j=0;j<pts.length;j++){ dot(pts[j]); if(pts[j].lab) labs.push(pts[j]); }
     var cd=CD.d*CD.m; if(cd>0.05){ ctx.fillStyle='#D4FF00'; ctx.beginPath(); ctx.arc(GEO.cx, GEO.cy, cd/2, 0, 6.2832); ctx.fill(); }
     if(labs.length){ ctx.font='500 11px "JetBrains Mono", Menlo, monospace'; ctx.textBaseline='middle';
       labs.forEach(function(P){ var a=P.la!=null?P.la:P.a; if(a<=0.01) return; ctx.fillStyle=rgba(CA, a);
-        if(P.bl) spaced(P.lab, P.x-spW(P.lab, .88)/2, P.y+P.ldy+.5, .88); else spaced(P.lab, P.x+9*GEO.s+2, P.y+.5, .88); }); }
+        if(P.bl) spaced(P.lab, P.x+P.ldx, P.y+P.ldy+.5, .88); else spaced(P.lab, P.x+9*GEO.s+2, P.y+.5, .88); }); }
     fxDraw();
     if(QRA) busy=qrStep() || busy;
     NEED=busy || twHas('svcd') || twHas('svcp') || FXL.length>0 || IDLE.amp>0.002 || !!QRA;
@@ -461,7 +491,7 @@ if(typeof window!=='undefined' && typeof document!=='undefined') SVX=(function()
      đếm lên cùng nhịp các tuần sáng dần trên số 0 (như hạt rụng đúng lúc số giây nhảy trong loop) ---------- */
   var CTR_KIND='', CTR_HTML='';
   /* bề ngang lòng số 0 (trừ 3 làn hạt); số Mono rộng 0,6 em/ký tự → biết trước số có lọt không */
-  function inner(){ var G=GEO; if(SMALL || !STEP || G.bar || /^(bill|name|qr)$/.test(STEP)) return document.body.clientWidth-48; return 2*(G.rx-14*G.s)-8; }
+  function inner(){ var G=GEO; if(SMALL || !STEP || G.run || /^(bill|name|qr)$/.test(STEP)) return document.body.clientWidth-48; return 2*(G.rx-14*G.s)-8; }
   function monoW(t, size, ls){ return t.length*(0.6*size+ls); }
   function N(cls, t, extra){ return '<span class="'+cls+'" data-t="'+t+'"'+(extra||'')+'>'+t+'</span>'; }
   function ctrRows(kind){
@@ -744,25 +774,29 @@ if(typeof window!=='undefined' && typeof document!=='undefined') SVX=(function()
   /* hình học số 0 theo khoảng trống giữa khối đỉnh và khối trả lời (Figma: cách ≥ 44 pt, rx ≤ 128; màn số phải trả 162) */
   function topIn(el, pg){ var y=0; while(el && el!==pg){ y+=el.offsetTop; el=el.offsetParent; } return y; }
   function geoOf(id, pg){
-    if(BARS.test(id)) return barGeo(id, pg);
+    if(BARS.test(id)) return runGeo(id, pg);
     var hd=pg.querySelector('.head'), top=hd.offsetTop+hd.offsetHeight, anc=pg.querySelector('.sv-row') || pg.querySelector('.sv-ans') || pg.querySelector('.sv-nav'),
         bot=topIn(anc, pg), h=Math.max(120, bot-top), m=h<420?24:44, rx=Math.max(60, Math.min(128, Math.floor(((h/2-m)-12)/RAT))), s=Math.max(.7, Math.min(1, rx/128));
     return {cx:pg.clientWidth/2, cy:Math.round(top+h/2), rx:rx, gap:Math.round(8*s*10)/10, s:s};
   }
-  /* biểu đồ buổi: khối số (nhãn + số, giữ chỗ cả khi chưa có số — biểu đồ không nhảy khi số hiện) · khoảng g · hàng nhãn KỲ (giữ chỗ) ·
-     3 hàng chấm. Cả cụm đứng giữa khoảng trống; g = ¼ chỗ dư, trong 24…56 pt. Không đủ chỗ (màn thấp) → chỉ còn số, đứng giữa */
+  /* đường băng: khối số (nhãn + số, giữ chỗ cả khi chưa có số — đường không nhảy khi số hiện) · khe ¼ D · thân đường từ đầu xa (hàng
+     cuối + ½) tới mép gần (trước hàng 1 một khoảng 0,3) — D là độ sâu tới hàng gần nhất (≤ 230 pt). Khe số → đầu xa cố định nên gói ít
+     buổi (đường ngắn) không bị hở một khoảng lớn dưới số: điểm tụ lùi vào sau khối số (đường dẫn tới con số). Cả cụm đứng giữa khoảng
+     trống (lề ≥ 24, chật thì 12); không đủ cả D 64 pt (màn rất thấp) → chỉ còn số, đứng giữa. Bề ngang hàng gần ⅓ D (40…80), hạt gần
+     D × 0,043 (7…10). Màn cao: D = 230 ở mọi bước nên đổi bước chỉ là dời cả cụm */
   var BARS=/^(pm|pf|card|val)$/;
   function blockExt(id, W){
     if(id==='card') return [-44, 21];
     if(id==='val') return ST.pay==='card' ? [-44, 48] : [-44, 21];
     var k=kyList(), tv=SVE.tr(k.length>1 ? k[1] : k[0]); return monoW(tv,72,-2.16)+32<=W ? [-57, 34] : [-44, 21];   /* cùng phép chọn cỡ số của ctrRows('pay') */
   }
-  function barGeo(id, pg){
+  var RUN={gm:.25, Dmax:230, Dmin:64};
+  function runGeo(id, pg){
     var hd=pg.querySelector('.head'), top=hd.offsetTop+hd.offsetHeight, anc=pg.querySelector('.sv-ans') || pg.querySelector('.sv-nav'), bot=topIn(anc, pg), h=Math.max(120, bot-top);
-    var W=pg.clientWidth, n=ST.S+ST.b, cols=Math.ceil(n/3), px=Math.min(BPX, (W-48-BSD.m[0])/Math.max(1, cols-1));
-    var E=blockExt(id, W-48), Hn=E[1]-E[0], Hc=6.5+BLY+2*BPY+BSD.m[0]/2, free=h-Hn-Hc, g=clamp(Math.round(free*.25), 24, 56), small=free-g<32;
-    var cy=small ? Math.round(top+h/2-(E[0]+E[1])/2) : Math.round(top+(h-(Hn+g+Hc))/2-E[0]), ly=cy+E[1]+g+6.5, y0=ly+BLY;
-    return {cx:W/2, cy:cy, rx:128, gap:8, s:1, fx:W/2, fy:y0+BPY, small:small, bar:{x0:W/2-(cols-1)*px/2, px:px, y0:y0, ly:ly, cols:cols, n:n}};
+    var W=pg.clientWidth, n=ST.S+ST.b, K=Math.ceil(n/3), kz=K-.5, E=blockExt(id, W-48), Hn=E[1]-E[0], s0=RZ0/(RZ0-.3), s1=RZ0/(RZ0+kz), f=RUN.gm+s0-s1;
+    var m=h-Hn>360 ? 24 : 12, D=Math.min(RUN.Dmax, (h-Hn-2*m)/f), small=D<RUN.Dmin; D=Math.max(RUN.Dmin, D);
+    var cy=small ? Math.round(top+h/2-(E[0]+E[1])/2) : Math.round(top+(h-Hn-D*f)/2-E[0]), yV=cy+E[1]+D*(RUN.gm-s1);
+    return {cx:W/2, cy:cy, rx:128, gap:8, s:1, fx:W/2, fy:yV, small:small, run:{yV:yV, D:D, Wn:clamp(D*.33, 40, 80), dN:clamp(D*.043, 7, 10), K:K, kz:kz, n:n, E:E}};
   }
   /* toạ độ bố cục (bỏ qua transform đang chạy) của một phần tử HTML trên màn */
   function layRect(el){ var x=0, y=0, e=el; while(e){ x+=e.offsetLeft; y+=e.offsetTop; e=e.offsetParent; } return {left:x, top:y, width:el.offsetWidth, height:el.offsetHeight}; }
@@ -801,15 +835,15 @@ if(typeof window!=='undefined' && typeof document!=='undefined') SVX=(function()
     if(prev==='bill' && id!=='bill' && billOut(oldPg)) pg.classList.add('svafter');   /* màn sau hiện sau khi tờ phiếu đã chìm qua (app.css) */
     /* bước không có số 0 (phiếu, họ tên, mã QR, tiền mặt): giữ hình học cũ để hạt đi tiếp từ chỗ đang thấy; số ở tâm vẫn theo khoảng trống mới */
     var G=geoOf(id, pg), hasDial=!(id==='bill' || id==='name' || id==='qr');
-    if(hasDial){ SMALL=G.bar ? G.small : G.rx<92; GEO=G; }
+    if(hasDial){ SMALL=G.run ? G.small : G.rx<92; GEO=G; }
     var NEAR={ep:springE(16,.82,.5), dp:.5};                                                                     /* đổi hình học tại chỗ: gần tới hạn, không nảy */
     var BLOOM={from:fromCenter, ep:springE(12,.8,.7), dp:.7, da:.45, stag:function(s){ return s.w*.012; }};   /* nở ra từ tâm (như vành nhịp thở ra) */
-    var FOLD={fold:.86, dur:.32};                                                                              /* số 0 hít vào một chút rồi tan */
-    /* biểu đồ buổi hiện ra: từng cột từ trái sang theo thứ tự buổi — mỗi chấm nhú lên 3 pt, lớn từ 40 %, 0,34 s đường B0DY; cả lượt ≤ 0,24 s
-       (sau phiếu: trễ 0,16 s, đúng lúc tờ giấy vừa chìm qua — cùng nhịp .svafter của màn) · đổi bước: cả cụm số + biểu đồ dời cùng một
-       đường, cùng 0,3 s với khung số ở tâm (app.css .svctr) — cụm không xô lệch nhau giữa chừng */
-    var SWEEP=function(d0){ var k=G.bar ? Math.min(.016, .24/Math.max(1, G.bar.cols-1)) : 0;
-      return {from:function(s,T){ return {x:T.x, y:T.y+3, d:T.d*.4, c:T.c, a:0, h:0}; }, ep:EB, dp:.34, ea:EB, da:.3, stag:function(s){ return d0+Math.floor(idxOf(s)/3)*k; }}; };
+    var FOLD={fold:GEO.run ? .55 : .86, dur:.32};                                                              /* số 0 hít vào một chút rồi tan · đường băng lùi về điểm tụ rồi tan */
+    /* đường băng hiện ra như đèn dẫn đường: từng hàng từ gần (buổi 1) ra xa theo thứ tự buổi — mỗi hạt nhú lên 3 pt, lớn từ 40 %, 0,34 s
+       đường B0DY; cả lượt ≤ 0,3 s, hai mép đường hiện cùng lượt (sau phiếu: trễ 0,16 s, đúng lúc tờ giấy vừa chìm qua — cùng nhịp .svafter
+       của màn) · đổi bước: cả cụm số + đường băng dời cùng một đường, cùng 0,3 s với khung số ở tâm (ctrMove) — không xô lệch giữa chừng */
+    var SWEEP=function(d0){ var K=G.run ? G.run.K : 1, k=K>1 ? Math.min(.025, .3/(K-1)) : 0;
+      return {from:function(s,T){ return {x:T.x, y:T.y+3, d:T.d*.4, c:T.c, a:0, h:0}; }, ep:EB, dp:.34, ea:EB, da:.3, stag:function(s){ return d0+Math.floor(idxOf(s)/3)*k; }, rail:{delay:d0, dur:.34+(K-1)*k}}; };
     var MOVE={ep:EB, dp:.3, da:.3}, AFTER=(prev==='bill' && !back) ? {delay:.16} : null;
     switch(id){
       case 'q1':
@@ -830,8 +864,8 @@ if(typeof window!=='undefined' && typeof document!=='undefined') SVX=(function()
          GIÁ ở tâm được ghi lên phiếu rồi chữ trên phiếu hiện lan ra từ dòng ấy (priceToBill). Lùi về phiếu: phiếu đã in sẵn trồi lại khỏi
          khe (nhanh hơn); rời phiếu theo hướng nào cũng chìm lại vào khe (billOut) — tờ giấy luôn là một vật đặc, không mờ thành giấy xám */
       case 'bill': dial('none', FOLD); billIn(pg, back ? RISE_B : RISE); if(!back) priceToBill(pg); ctr('', null); break;
-      /* v2.15: từ đây số buổi đã cố định → biểu đồ buổi (dàn ngang). Phiếu → đây: biểu đồ hiện từ trái sang; giữa các bước có biểu đồ: cả
-         cụm dời cùng nhịp, chấm đổi trạng thái tại chỗ; về Họ tên / Đề xuất: biểu đồ hít vào về tâm của nó rồi tan */
+      /* từ đây số buổi đã cố định → biểu đồ buổi (v2.16 đường băng). Phiếu → đây: đường hiện từ gần ra xa; giữa các bước có đường băng: cả
+         cụm dời cùng nhịp, hạt đổi trạng thái tại chỗ; về Họ tên / Đề xuất: đường lùi về điểm tụ (dưới khối số) rồi tan */
       case 'pm': if(prev==='bill' && !back) dial('pay', SWEEP(.16)); else dial('pay', MOVE); ctr(ST.split==null ? '' : 'pay', G.cy, AFTER); break;
       case 'pf': if(prev==='bill' && !back) dial('pay', SWEEP(.16)); else if(prev==='name' && back) dial('pay', SWEEP(.06)); else dial('pay', MOVE);
         ctr('pay', G.cy, AFTER || ((prev==='name' && back && !rm()) ? {delay:.2} : null)); if(prev==='name' && back) lineToDot(oldPg, pg); break;   /* Họ tên → lùi: số hiện khi gạch dưới (cùng độ cao) đã co về đầu trái — không đứng sát số như dấu trừ */
@@ -1277,7 +1311,7 @@ if(typeof window!=='undefined' && typeof document!=='undefined') SVX=(function()
   }
   function open(){
     if(ON && STEP) return; ensureMarks(); flyClear(true);   /* chữ 0 còn đang bay về nút Sell → về chỗ ngay */
-    ST=fresh(); HIST=[]; STEP=null; ON=true; CTR_KIND=''; CTR_HTML=''; CTRP=null; CTRY=null; CTRT=null; twKill('svcy'); SZ=1; FXL=[]; IDLE.amp=0; CD.d=0; CD.m=1; CD.to=0;
+    ST=fresh(); HIST=[]; STEP=null; ON=true; CTR_KIND=''; CTR_HTML=''; CTRP=null; CTRY=null; CTRT=null; twKill('svcy'); SZ=1; FXL=[]; RW=null; IDLE.amp=0; CD.d=0; CD.m=1; CD.to=0;
     SL.forEach(function(s){ s.A=null; s.B=null; s.code=null; s.path=null; s.M=null; });
     $id('sv-dial').hidden=false; $id('sv-ctr').hidden=false; $id('sv-ctr').innerHTML=''; canvas(); ctx.clearRect(0,0,CW,CH); BB=null;   /* cấp bộ nhớ canvas ngay lúc chạm (trước khi các chuyển động bắt đầu), không giữa khung đầu */
     bankLoad();
@@ -1288,7 +1322,7 @@ if(typeof window!=='undefined' && typeof document!=='undefined') SVX=(function()
     var pg=STEP ? $id(PGS[PI]) : null; if(pg && pg.classList.contains('on')) freeze(pg);   /* rời luồng: trang đang hiện rời theo nhịp (leave-back của app) */
     ON=false; STEP=null; clearTimeout(ADV); LOCK=0; cdot(false); SMALL=false; flyClear(true); QRA=null; FXL=[];
     dial('none', {dp:.2, da:.2}); ctr('', null);
-    setTimeout(function(){ if(!ON){ $id('sv-dial').hidden=true; $id('sv-ctr').hidden=true; $id('sv-ctr').innerHTML=''; SL.forEach(function(s){ s.A=null; s.B=null; s.code=null; s.path=null; });
+    setTimeout(function(){ if(!ON){ $id('sv-dial').hidden=true; $id('sv-ctr').hidden=true; $id('sv-ctr').innerHTML=''; RW=null; SL.forEach(function(s){ s.A=null; s.B=null; s.code=null; s.path=null; });
       if(cv){ cv.width=0; cv.height=0; } CW=CH=0; SZ=1; BB=null; } }, 260);   /* trả bộ nhớ canvas toàn màn (dpr 3 ≈ 12 MB) khi luồng đã đóng */
   }
   function exit(){ hide(); go('p-home','back'); }
@@ -1315,7 +1349,7 @@ if(typeof window!=='undefined' && typeof document!=='undefined') SVX=(function()
     busy:function(){ return NEED || TKS.length>0; },
     onGo:function(id){ if(ON && !/^p-sv/.test(id||'')) hide(); else if(!ON && id!=='p-home') flyClear(true); },
     resize:function(){ SZ=1; if(!ON || !STEP) return; var pg=$id(PGS[PI]); if(!pg || !pg.classList.contains('on')) return;
-      if(!/^(bill|name|qr)$/.test(STEP)){ GEO=geoOf(STEP, pg); SMALL=GEO.bar ? GEO.small : GEO.rx<92; }   /* xoay máy / đổi cỡ: đủ chỗ trở lại thì biểu đồ hiện lại */
+      if(!/^(bill|name|qr)$/.test(STEP)){ GEO=geoOf(STEP, pg); SMALL=GEO.run ? GEO.small : GEO.rx<92; }   /* xoay máy / đổi cỡ: đủ chỗ trở lại thì biểu đồ hiện lại */
       dial(PLAN_WANT, {dp:0, da:0, force:true}); ctrMove(GEO.cy, true); },
     /* test / chẩn đoán */
     _st:function(){ return ST; }, _step:function(){ return STEP; }, _geo:function(){ return GEO; }, _bank:function(v){ if(v!==undefined) BANK=v; return BANK; }, _qr:function(){ return LASTQR; }, _kb:function(){ kbFit(); }, _small:function(){ return SMALL; },
@@ -1323,12 +1357,13 @@ if(typeof window!=='undefined' && typeof document!=='undefined') SVX=(function()
       var on=function(Q){ return Math.abs(P.x-Q.x)<.01 && Math.abs(P.y-Q.y)<.01; }; if(!on(s.A) && !on(s.B)) bad++; }); return {n:n, bad:bad}; },
     _dots:function(){ var o={}; SL.forEach(function(s){ var P=s.B; if(P && P.a>0.004 && s.code){ var k=s.code==='q'?'o':(s.code==='cloud'?'p':s.code); o[k]=(o[k]||0)+1; } }); return o; },
     _ctr:function(){ var ly=$id('sv-ctr').querySelector('.ly:not(.out)'); return ly ? [].filter.call(ly.children, function(k){ return !k.classList.contains('out'); }).map(txtOf).join(' ') : ''; },
-    _pts:function(){ var o=[]; SL.forEach(function(s){ var P=s.B ? cur(s) : null; if(P && P.a>0.004) o.push([P.x, P.y]); }); return o; },
+    _pts:function(){ var o=[]; SL.forEach(function(s){ var P=s.B ? cur(s) : null; if(P && P.a>0.004) o.push([P.x, P.y, P.d]); }); return o; },
     _idle:function(){ return {amp:IDLE.amp, need:NEED, fx:FXL.length, qra:!!QRA, lock:LOCK, fly:FLY.length}; }, _cnt:function(){ return CTR_KIND; },
     _fold:function(){ var n=0; SL.forEach(function(s){ if(s.A && s.B && s.B.a===0 && !s.path && MT<s.tp+s.dp) n++; }); return n; },
     _cd:function(){ return CD.d*CD.m; }, _cy:function(){ return {now:CTRY, to:CTRT}; },
     _tk:function(){ return TKS.map(function(T){ return {text:T.text, k:T.el.dataset.k||'', w:T.w.map(function(w){ return {p0:w.p0, p:w.p, t:w.t}; })}; }); },
-    _labs:function(){ var o=[]; SL.forEach(function(s){ var P=s.B ? cur(s) : null; if(P && P.lab && P.a>0.004) o.push({t:P.lab, x:P.x, y:P.bl ? P.y+P.ldy : P.y, a:P.la!=null ? P.la : P.a, bl:!!P.bl}); }); return o; },
+    _labs:function(){ var o=[]; SL.forEach(function(s){ var P=s.B ? cur(s) : null; if(P && P.lab && P.a>0.004) o.push({t:P.lab, x:P.bl ? P.x+P.ldx : P.x, y:P.bl ? P.y+P.ldy : P.y, a:P.la!=null ? P.la : P.a, bl:!!P.bl, dot:[P.x, P.y]}); }); return o; },
+    _rail:function(){ return {r:railNow(), ln:RLN, z0:RZ0}; },
     _over:function(){ var m=0; SL.forEach(function(s){ if(!s.A || !s.B || s.path || s.fade || !s.ep || !(s.dp>0)) return; var kp=(MT-s.tp)/s.dp; if(kp<=0 || kp>=1) return; m=Math.max(m, s.ep(kp)-1); }); return m; }
   };
 })();
