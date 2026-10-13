@@ -7,7 +7,7 @@
    ===================================================================== */
 'use strict';
 var $=function(id){ return document.getElementById(id); };
-var APP_VER='v2.15.1';
+var APP_VER='v2.15.2';
 
 /* ---------------- tiện ích ---------------- */
 function isoToday(d){ d=d||new Date(); return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2); }
@@ -186,12 +186,21 @@ function exGroup(name){ var e=libEntries().filter(function(x){return x.name===na
    ===================================================================== */
 var API='https://script.google.com/macros/s/AKfycbyyCRs0JkV1k8npUpprP44RN-rgNnagWELRBwncBKAiiRKO6hNLDqFcnUrJz7hC_To41g/exec'; /* deployment "Coach API v1" */
 var API_WK='https://b0dy-kiosk-api.little-bonus-1d87.workers.dev/';
-var WK_ON={coach:1,log:1,checkin_coach:1}, WK_OFF={wk_unconfigured:1,wrong_ip:1,unknown_action:1,wk_no_sheet_coach:1}, WK_SAFE={coach:1,log:1};
+/* v2.15.2 (13/10): chế độ Admin chạy trên Worker v8 — adm_data · adm_checkin · adm_log đi Worker trước (Apps Script ~8–10 s mỗi lệnh).
+   Worker cũ (v7) trả unknown_action → lùi về Apps Script như v2.15.1. Worker trả sai_pin cho lệnh adm_* (ADMIN_PIN của Worker khác
+   Script Property ADMIN_PIN) → cũng lùi về Apps Script: Worker kiểm PIN trước mọi lượt ghi nên không có gì bị ghi hai lần.
+   adm_checkin lỗi mạng → KHÔNG lùi (Worker có thể đã ghi) — như checkin_coach: "Thử lại" → máy chủ trả da_checkin nếu đã ghi. */
+var WK_ON={coach:1,log:1,checkin_coach:1,adm_data:1,adm_log:1,adm_checkin:1}, WK_OFF={wk_unconfigured:1,wrong_ip:1,unknown_action:1,wk_no_sheet_coach:1}, WK_SAFE={coach:1,log:1,adm_data:1,adm_log:1};
+/* adm_data (chỉ đọc) · adm_log (ghi khử trùng theo id): Worker trả lỗi GÌ cũng lùi Apps Script — Apps Script là nguồn gốc của chế độ Admin */
+var WK_ADM_ANY={adm_data:1,adm_log:1};
+/* lệnh vừa xong đi đường nào ('wk' | 'gas') — tab Cài đặt của Admin ghi nguồn dữ liệu (adm_data) */
+var VIA={};
 /* v2.8.3 (11/10): Worker v7 trả wrong_ip kèm IP + ASN nó thấy (relay = iCloud Private Relay) → nhớ để báo đúng lý do nếu Apps Script cũng chặn */
 var WK_SEEN=null, IP_P=null;
 var DEMO=!API || /[?&]demo\b/.test(location.search);
 /* ADMIN (v2.4): PIN admin → "Admin": mọi khách của phòng, check-in không khoá IP, tab Cài đặt (IP phòng).
-   Cùng các màn và luồng của coach; api() đổi tên lệnh sang bản admin (backend Admin.gs, chỉ có ở Apps Script → không đi Worker). */
+   Cùng các màn và luồng của coach; api() đổi tên lệnh sang bản admin (Admin.gs ở Apps Script; v2.15.2: adm_data · adm_checkin · adm_log
+   có thêm bản trên Worker v8 và đi Worker trước — adm_stats, iplist · addip · delip vẫn chỉ ở Apps Script). */
 var ADM_ACT={coach:'adm_data', stats:'adm_stats', log:'adm_log', checkin_coach:'adm_checkin'};
 var ST=function(k){ try{ return localStorage.getItem(k); }catch(e){ return null; } };
 var SS=function(k,v){ try{ if(v==null) localStorage.removeItem(k); else localStorage.setItem(k,v); }catch(e){} };
@@ -215,15 +224,17 @@ function api(body, tries, wait, t0, tmo){
   if(DEMO) return demoApi(body);
   var payload=JSON.stringify(body);
   if(WK_ON[body.action] && !body._gas){
-    var wtmo=(body.action==='checkin_coach')?20000:15000;
+    var wtmo=(body.action==='checkin_coach'||body.action==='adm_checkin')?20000:15000;
     return fetchJson(API_WK,{method:'POST',credentials:'omit',headers:{'Content-Type':'text/plain;charset=utf-8'},body:payload}, wtmo)
-      .then(function(r){ if(r && WK_OFF[r.error]){ if(r.error==='wrong_ip' && r.seen) WK_SEEN={ip:String(r.seen), asn:+r.asn||0, relay:!!r.relay, t:Date.now()}; throw new Error('wk_off'); } return r; })
+      .then(function(r){ var e=r&&r.error;
+        if(WK_OFF[e] || (e==='sai_pin' && /^adm_/.test(body.action)) || (WK_ADM_ANY[body.action] && !(r&&r.ok))){ if(e==='wrong_ip' && r.seen) WK_SEEN={ip:String(r.seen), asn:+r.asn||0, relay:!!r.relay, t:Date.now()}; throw new Error('wk_off'); }
+        VIA[body.action]='wk'; return r; })
       .catch(function(e){ if(e.message!=='wk_off' && !WK_SAFE[body.action]) throw e; var b2=JSON.parse(payload); b2._gas=1;
         /* lùi về Apps Script: Apps Script so IP do app tự lấy (ipify) → chờ lượt lấy IP đang chạy (tối đa 2,5 s) để không gửi IP của mạng cũ */
         return ipWait().then(function(){ return api(b2, tries, wait, Date.now(), tmo); }); });
   }
   return fetchJson(API,{method:'POST',credentials:'omit',headers:{'Content-Type':'text/plain;charset=utf-8'},body:payload}, tmo)
-    .catch(function(e){
+    .then(function(r){ VIA[body.action]='gas'; return r; }, function(e){
       if(tries>0 && (Date.now()-t0)<(tmo+1000)){
         return new Promise(function(res){ setTimeout(res, wait); }).then(function(){ return api(JSON.parse(payload), tries-1, Math.min(wait*2,6000), t0, tmo); });
       }
@@ -1259,8 +1270,9 @@ function tryPin(){
     end(); backToPin('MÁY CHỦ LỖI — THỬ LẠI');
   }).catch(function(){ end(); if(ep===AUTH_EP) backToPin('MÁY CHỦ CHẬM — THỬ LẠI'); });
 }
-/* v2.4.1 — PIN Admin: adm_data (tự kiểm PIN) và adm_stats chạy SONG SONG trên Apps Script
+/* v2.4.1 — PIN Admin: adm_data (tự kiểm PIN) và adm_stats chạy SONG SONG
    (v2.4.0: admin → adm_data → adm_stats nối đuôi ≈ 30 s). Giao diện Admin chỉ bật khi adm_data trả ok → PIN sai không nháy tab Cài đặt.
+   v2.15.2: adm_data đi Worker v8 (~1 s; Worker cũ / PIN Worker khác → Apps Script), adm_stats vẫn Apps Script — danh sách không chờ thống kê.
    end(): tắt vạch bận của tryPin (đúng một lần). */
 function adminLoad(pin, t0, ep, end){
   var month=TODAY_ISO.slice(0,7);
@@ -1297,7 +1309,7 @@ HOOK['p-pin']=function(){ startPin(); warm(); };
    Không xoá được IP cuối cùng (danh sách rỗng = Apps Script tắt khoá IP). Worker Cloudflare đọc ALLOW_IP riêng — app tự lui về Apps Script. */
 var ADM={ips:[], max:2, busy:false, loaded:false};
 HOOK['p-admin']=function(){
-  $('am-ip').textContent=state.ip||'—'; $('am-ver').textContent='ADMIN · KHÔNG KHOÁ IP · '+upper(APP_VER);
+  $('am-ip').textContent=state.ip||'—'; $('am-ver').textContent='ADMIN · KHÔNG KHOÁ IP · '+upper(APP_VER)+(VIA.adm_data==='wk'?' · WORKER':VIA.adm_data==='gas'?' · APPS SCRIPT':'');
   renderIps(); refreshIp().then(function(){ if(state.screen==='p-admin'){ $('am-ip').textContent=state.ip||'—'; renderIps(); } }); loadIps();
 };
 function renderIps(){

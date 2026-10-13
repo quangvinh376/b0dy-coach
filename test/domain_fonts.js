@@ -9,6 +9,9 @@ var { chromium } = require('playwright'); var http = require('http'); var fs = r
 var CHROME = '/opt/pw-browsers/chromium-1194/chrome-linux/chrome', ROOT = path.resolve(process.env.ROOT || path.join(__dirname, '..')), PORT = +process.env.PORT || 19521;
 var TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.png': 'image/png', '.webmanifest': 'application/manifest+json', '.woff2': 'font/woff2', '.ttf': 'font/ttf' };
 var HITS = {};
+/* phiên bản đọc từ chính file (v2.15.2: test không ghim cứng số phiên bản) */
+var WANT_VER = (fs.readFileSync(path.join(ROOT, 'app.js'), 'utf8').match(/APP_VER='([^']+)'/) || [])[1];
+var WANT_SW = (fs.readFileSync(path.join(ROOT, 'sw.js'), 'utf8').match(/VER='([^']+)'/) || [])[1];
 function serve() {
   return new Promise(function (res) {
     var s = http.createServer(function (req, r) {
@@ -56,7 +59,7 @@ async function ctxNew(browser) {
   r = await pg.evaluate(async function () { await document.fonts.ready; return { ok: document.fonts.check('500 16px "SVN-Switzer"'), st: Array.from(document.fonts).filter(function (f) { return f.family.replace(/"/g, '') === 'SVN-Switzer'; }).map(function (f) { return f.status; }) }; });
   check('font SVN-Switzer đã nạp (status loaded)', r.ok && r.st.indexOf('loaded') >= 0, r);
   check('preload có crossorigin + type woff2 (khớp request của @font-face, không tải 2 lần)', await pg.evaluate(function () { var l = document.querySelector('link[rel=preload][as=font]'); return !!l && l.getAttribute('href') === 'fonts/SVN-Switzer-Medium.woff2' && l.hasAttribute('crossorigin') && l.type === 'font/woff2'; }));
-  check('APP_VER v2.15.1', await pg.evaluate(function () { return typeof APP_VER !== 'undefined' && APP_VER === 'v2.15.1'; }));
+  check('APP_VER ' + WANT_VER + ' (≥ v2.15.1, đúng như app.js)', !!WANT_VER && WANT_SW === 'b0dy-coach-' + WANT_VER && await pg.evaluate(function (v) { return typeof APP_VER !== 'undefined' && APP_VER === v; }, WANT_VER));
   await ctx.close();
 
   console.log('== F2 woff2 vẽ y hệt ttf ==');
@@ -90,7 +93,7 @@ async function ctxNew(browser) {
     var ks = await caches.keys(), c = await caches.open(ks[0]), keys = (await c.keys()).map(function (q) { return new URL(q.url).pathname; });
     return { ks: ks, woff2: keys.indexOf('/fonts/SVN-Switzer-Medium.woff2') >= 0, n: keys.length };
   });
-  check('cache b0dy-coach-v2.15.1 có sẵn woff2 sau khi cài', r.ks.join() === 'b0dy-coach-v2.15.1' && r.woff2, r);
+  check('cache ' + WANT_SW + ' có sẵn woff2 sau khi cài', r.ks.join() === WANT_SW && r.woff2, r);
   await pg.reload({ waitUntil: 'load' }); await pg.waitForTimeout(300);
   check('trang đã do service worker điều khiển', await pg.evaluate(function () { return !!navigator.serviceWorker.controller; }));
   var before = HITS['/fonts/SVN-Switzer-Medium.woff2'] || 0, beforeCss = HITS['/app.css'] || 0;

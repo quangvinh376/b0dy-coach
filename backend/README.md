@@ -70,7 +70,7 @@ Lưu ý: `coach` đi qua Cloudflare Worker `b0dy-kiosk-api`. Worker chỉ chuy�
 
 ## 7. Chế độ Admin — `backend/Admin.gs` (v2.4, bắt buộc cho PIN admin trong app)
 
-Đăng nhập app bằng **ADMIN_PIN** (Script Properties) → tên **Admin**: xem và check-in **toàn bộ khách của phòng, không khoá IP**, ghi buổi tập như coach, tab **Cài đặt** (thứ 3, cạnh Trang chủ · Khách hàng) quản lý IP được check-in. Mọi lệnh admin đi **thẳng Apps Script** (Worker không có chế độ admin).
+Đăng nhập app bằng **ADMIN_PIN** (Script Properties) → tên **Admin**: xem và check-in **toàn bộ khách của phòng, không khoá IP**, ghi buổi tập như coach, tab **Cài đặt** (thứ 3, cạnh Trang chủ · Khách hàng) quản lý IP được check-in. Lệnh admin chạy ở Apps Script; **từ app v2.15.2 (13/10/2026) `adm_data` · `adm_checkin` · `adm_log` đi Worker v8 trước** (bản port của `admData_` · `admCheckin_` · `admLog_`, mục 7.2), Apps Script là đường lùi. `adm_stats`, `iplist` · `addip` · `delip` chỉ ở Apps Script.
 
 Cài đặt (Apps Script **B0DY Discord KPI**):
 
@@ -109,7 +109,15 @@ Cài đặt (Apps Script **B0DY Discord KPI**):
 
 **Cập nhật:** thay toàn bộ nội dung file `Admin` trong Apps Script bằng `backend/Admin.gs` ▸ Save ▸ Deploy ▸ Manage deployments ▸ ✏️ (Coach API v1) ▸ **New version**. `Code.gs` không đổi.
 
-⚠️ **IP phòng nằm ở HAI chỗ.** Tab Cài đặt chỉ sửa `STUDIO_IP` (Apps Script). Worker Cloudflare gác bằng biến `ALLOW_IP` riêng:
+### 7.2 v2.15.2 — Admin trên Worker v8 (13/10/2026)
+
+Đo 13/10: mọi lệnh Admin ở Apps Script mất ~8–9,4 s phía máy chủ (+1–1,5 s mạng), nặng thêm khi trigger `updateDiscord` (mỗi phút, 5–25 s) đang chạy → vào app Admin / check-in Admin ~10 s. Worker `b0dy-kiosk-api` **v8** (version `a893034f`, nhãn `v8-admin`) thêm `adm_data` · `adm_checkin` · `adm_log` — cùng đầu vào / đầu ra với `Admin.gs` (test đối chiếu chạy `Admin.gs` thật và Worker trên cùng bảng tính giả: 41/41), kiểm `ADMIN_PIN` của Worker (secret) trước mọi lượt ghi, không khoá IP.
+
+- App lùi về Apps Script khi Worker trả `unknown_action` (Worker cũ) · `wk_unconfigured` · **`sai_pin`** (ADMIN_PIN của Worker khác Script Property `ADMIN_PIN` — Admin vẫn dùng được nhưng chậm như cũ; tab Cài đặt của app ghi `· APPS SCRIPT` thay vì `· WORKER`). `adm_data` (chỉ đọc) và `adm_log` (ghi khử trùng theo id — Worker ghi dở thì Apps Script bỏ qua id đã có) lùi với **mọi** lỗi: lỗi mạng, lỗi Sheets, `wk_no_sheet_coach` (`adm_log` cho khách mà sheet "Khách của <coach>" chưa có — Worker không ghi gì, Apps Script tự tạo sheet). `adm_checkin` lỗi mạng / lỗi lạ **không** lùi (Worker có thể đã ghi): app báo "Chưa check-in" + Thử lại → máy chủ trả `da_checkin` nếu dòng đã có.
+- **Sửa logic `admData_` / `admCheckin_` / `admLog_` trong `Admin.gs` thì phải sửa bản port trên Worker** (mã + test đối chiếu: doc dự án `claude/b0dy-kiosk-worker-v8.md`), không thì hai đường trả khác nhau.
+- Đổi `ADMIN_PIN` ở Script Properties thì đổi luôn secret `ADMIN_PIN` của Worker (Cloudflare → Workers & Pages → `b0dy-kiosk-api` → Settings → Variables and secrets) — lệch nhau thì Admin lùi về Apps Script (chậm), không hỏng.
+
+⚠️ (Lịch sử, đúng tới 11/10 — từ `Admin.gs` v2.10 + Worker v7, tab Cài đặt chép danh sách IP sang tab "Cấu hình" ô B1 của Customer database và Worker đọc ô đó → **một nguồn**; `ALLOW_IP` chỉ còn dự phòng.) **IP phòng nằm ở HAI chỗ.** Tab Cài đặt chỉ sửa `STUDIO_IP` (Apps Script). Worker Cloudflare gác bằng biến `ALLOW_IP` riêng:
 - **Thêm** IP ở app → coach check-in từ IP đó vẫn được (Worker từ chối → app tự lui về Apps Script, chậm hơn vài giây). Muốn nhanh: thêm IP đó vào `ALLOW_IP`.
 - **Xoá** IP ở app **không** rút quyền phía Worker. Muốn chặn hẳn một IP: xoá cả trong `ALLOW_IP` (Cloudflare → Workers & Pages → `b0dy-kiosk-api` → Settings → Variables and secrets).
 

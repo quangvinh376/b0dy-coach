@@ -4,6 +4,11 @@
    PIN sai, backend chưa nâng cấp, PIN admin bị đổi giữa chừng, bố cục 375/393/430.
    v2.4.1 (tốc độ): không còn lượt 'admin' riêng; adm_data + adm_stats song song; đổi coach ⇄ Admin vào ngay từ cache (lb_acc);
    kết quả làm mới của phiên cũ bị bỏ khi đổi người; sang tháng giữa chừng → thống kê gọi lại. Máy chủ giả có độ trễ theo lệnh (SRV.latW / SRV.latG).
+   v2.15.2: adm_data · adm_checkin · adm_log đi Worker trước. AD1–AD15 chạy với Worker CŨ (v7: adm_* → unknown_action → lùi Apps Script,
+   mọi hành vi như v2.15.1); AW1–AW10 chạy với Worker v8 (SRV.wkAdm): Admin trên Worker, Apps Script chỉ còn adm_stats + IP phòng;
+   ADMIN_PIN của Worker khác (SRV.wkApin) → lùi Apps Script; mất mạng: adm_data / adm_log lùi, adm_checkin KHÔNG lùi; mất phản hồi sau
+   khi Worker đã ghi (SRV.wkCut) → "Thử lại" nhận da_checkin, không ghi hai lần; wk_no_sheet_coach → adm_log lùi Apps Script;
+   Worker trả lỗi bất kỳ (SRV.wkErr): adm_data / adm_log lùi Apps Script, adm_checkin không lùi (AW11).
    PIN trong file này là PIN GIẢ của mock — PIN thật chỉ nằm trong Script Properties.
    Chạy: NODE_PATH=/opt/node22/lib/node_modules node test/admin_mock.js */
 var {chromium}=require('playwright'); var serve=require('./serve'); var path=require('path'); var fs=require('fs');
@@ -22,7 +27,8 @@ async function run(id, name, fn){ if(ONLY.length && ONLY.indexOf(id)<0) return; 
 function today(){ var d=new Date(); return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2); }
 var SRV;
 function resetSrv(){
-  SRV={wk:[], gas:[], ipList:[ROOM_IP], noAdm:false, down:false, apin:A_PIN, checkins:[], alogs:[], clogs:[], latW:{}, latG:{},
+  SRV={wk:[], gas:[], ipList:[ROOM_IP], noAdm:false, down:false, apin:A_PIN, checkins:[], alogs:[], alogVia:[], clogs:[], latW:{}, latG:{},
+    wkAdm:false, wkApin:A_PIN, wkDown:{}, wkCut:{}, wkNoSheet:false, wkErr:{},
     mem:[{name:'Bùi Doãn Quang',done:14,total:24,left:10,coach:'Quyết Hán',kind:'PT 1:2'},
          {name:'Nguyễn Quang Vinh',done:11,total:12,left:1,coach:'Quyết Hán',kind:''},
          {name:'Vũ Sao Mai',done:3,total:24,left:21,coach:'Hiền Mai',kind:''},
@@ -34,11 +40,34 @@ function coachRes(){ return {ok:true, coach:'Quyết Hán', members:SRV.mem.filt
 function send(r, out){ return r.fulfill({status:200, contentType:'application/json', body:JSON.stringify(out)}); }
 function lag(ms){ return ms ? new Promise(function(res){ setTimeout(res, ms); }) : Promise.resolve(); }
 function monthOf(p){ return /^\d{4}-\d{2}$/.test(String(p.month||'')) ? p.month : today().slice(0,7); }   /* máy chủ thật trả lại đúng tháng được hỏi */
+/* lệnh Admin dùng chung cho Apps Script (Admin.gs) và Worker v8 — via = nơi xử lý. Check-in lần hai trong ngày → da_checkin (như máy chủ thật);
+   adm_log khử trùng theo id ở MỌI nơi (Worker đã ghi thì Apps Script thấy id và bỏ qua). */
+function admDo(p, via){
+  var a=p.action;
+  if(a==='adm_data') return {ok:true, admin:true, coach:'Admin', members:JSON.parse(JSON.stringify(SRV.mem)), snapshot:{}, library:null, today:today()};
+  if(a==='adm_checkin'){ var m=SRV.mem.filter(function(x){ return x.name===p.name; })[0]; if(!m) return {ok:false,error:'khong_thay_khach'};
+    if(SRV.checkins.some(function(c){ return c.name===p.name; })) return {ok:false,error:'da_checkin',at:'09:41'};
+    SRV.checkins.push({name:p.name, by:'Admin', ip:p.ip, via:via}); m.done++; m.left--; return {ok:true,row:42,member:m,coach:m.coach,by:'Admin',at:'09:41'}; }
+  if(a==='adm_log'){ var have={}, n=0, dup=0; SRV.alogs.forEach(function(e){ have[e.id]=1; });
+    (p.events||[]).forEach(function(e){ if(have[e.id]){ dup++; return; } have[e.id]=1; SRV.alogs.push(e); SRV.alogVia.push(via); n++; });
+    return {ok:true,written:n,dup:dup}; }
+  return null;
+}
 async function wk(r){
-  var p=JSON.parse(r.request().postData()||'{}'); SRV.wk.push({action:p.action, pin:p.pin, apin:p.apin, ip:p.ip, t:Date.now()});
+  var p=JSON.parse(r.request().postData()||'{}'); SRV.wk.push({action:p.action, pin:p.pin, apin:p.apin, ip:p.ip, name:p.name, t:Date.now()});
+  if(SRV.wkDown[p.action]) return r.abort('internetdisconnected');
   await lag(SRV.latW[p.action]);
   if(p.action==='ping') return send(r,{ok:true});
   if(p.action==='coach') return send(r, p.pin===C_PIN ? coachRes() : {ok:false,error:'sai_pin'});
+  /* Worker v8: adm_data · adm_checkin · adm_log — không khoá IP; kiểm ADMIN_PIN của Worker (SRV.wkApin) trước mọi lượt ghi */
+  if(SRV.wkAdm && /^adm_(data|checkin|log)$/.test(p.action)){
+    if(p.apin!==SRV.wkApin) return send(r,{ok:false,error:'sai_pin'});
+    if(p.action==='adm_log' && SRV.wkNoSheet) return send(r,{ok:false,error:'wk_no_sheet_coach'});
+    if(SRV.wkErr[p.action]) return send(r,{ok:false,error:SRV.wkErr[p.action]});          /* lỗi Sheets / lỗi lạ của Worker (HTTP 200) */
+    var out=admDo(p, 'wk');
+    if(SRV.wkCut[p.action]) return r.abort('connectionreset');      /* Worker đã ghi, phản hồi mất trên đường về */
+    return send(r, out);
+  }
   if(p.action==='checkin_coach' || p.action==='log'){ if(SRV.ipList.indexOf(p.ip)<0) return send(r,{ok:false,error:'wrong_ip'}); }
   if(p.action==='log' && p.pin===C_PIN){ SRV.clogs=SRV.clogs.concat(p.events); return send(r,{ok:true,written:p.events.length}); }
   return send(r,{ok:false,error:'unknown_action'});
@@ -53,11 +82,8 @@ async function gas(r){
   if(/^adm_/.test(a) || a==='iplist' || a==='addip' || a==='delip'){
     if(SRV.noAdm) return send(r,{ok:false,error:'unknown_action'});
     if(!isA) return send(r,{ok:false,error:'sai_pin'});
-    if(a==='adm_data') return send(r,{ok:true, admin:true, coach:'Admin', members:JSON.parse(JSON.stringify(SRV.mem)), snapshot:{}, library:null, today:today()});
     if(a==='adm_stats') return send(r,{ok:true, admin:true, month:monthOf(p), days:{}, monthTotal:309, perClient:{}, rev:{month:today().slice(0,7), total:96500000}, hist:{}});
-    if(a==='adm_checkin'){ var m=SRV.mem.filter(function(x){ return x.name===p.name; })[0]; if(!m) return send(r,{ok:false,error:'khong_thay_khach'});
-      SRV.checkins.push({name:p.name, by:'Admin', ip:p.ip}); m.done++; m.left--; return send(r,{ok:true,row:42,member:m,coach:m.coach,by:'Admin',at:'09:41'}); }
-    if(a==='adm_log'){ SRV.alogs=SRV.alogs.concat(p.events||[]); return send(r,{ok:true,written:(p.events||[]).length}); }
+    var ad=admDo(p, 'gas'); if(ad) return send(r, ad);
     if(a==='iplist') return send(r,{ok:true, ips:SRV.ipList.slice(), max:2});
     if(a==='addip'){ if(!p.ip) return send(r,{ok:false,error:'thieu_ip'}); if(SRV.ipList.indexOf(p.ip)<0){ if(SRV.ipList.length>=2) return send(r,{ok:false,error:'full',ips:SRV.ipList.slice(),max:2}); SRV.ipList.push(p.ip); } return send(r,{ok:true,ips:SRV.ipList.slice(),max:2}); }
     if(a==='delip'){ var k=SRV.ipList.indexOf(String(p.del||'')); if(k>=0){ if(SRV.ipList.length<=1) return send(r,{ok:false,error:'con_1_ip',ips:SRV.ipList.slice(),max:2}); SRV.ipList.splice(k,1); } return send(r,{ok:true,ips:SRV.ipList.slice(),max:2}); }
@@ -132,7 +158,8 @@ async function gas(r){
     check(gw.indexOf('admin')<0, 'không còn lượt hỏi "admin" riêng: '+gw.join(','));
     check(gw.join()==='adm_stats,adm_data', 'đúng 1 adm_stats + 1 adm_data, thống kê KHÔNG chờ danh sách: '+gw.join(','));
     check(since(SRV.wk,k0).filter(function(x){ return x.action==='coach'; }).every(function(x){ return x.pin===A_PIN && !x.apin; }), 'lượt thử coach mang pin, không mang apin');
-    check(since(SRV.wk,k0).every(function(x){ return !x.apin && !/^adm_|^iplist|^addip|^delip/.test(x.action); }), 'Worker không bao giờ thấy apin/adm_*');
+    check(since(SRV.wk,k0).every(function(x){ return x.action==='ping' || (x.action==='coach' ? !x.apin : (x.action==='adm_data' && x.apin===A_PIN && !x.pin)); }), 'Worker chỉ thấy coach (pin) + adm_data (apin) — không adm_stats / IP phòng: '+kw.join(','));
+    check(kw.filter(function(a){ return a!=='ping'; }).join()==='coach,adm_data', 'v2.15.2: adm_data hỏi Worker trước (Worker cũ trả unknown_action → Apps Script): '+kw.join(','));
     check(since(SRV.gas,g0).filter(function(x){ return /^adm_/.test(x.action); }).every(function(x){ return x.apin===A_PIN && !x.pin && x.ip===DEV_IP; }), 'adm_* mang apin, không mang pin, kèm ip');
     check((await txt('#h-name'))==='Admin', 'tên: '+(await txt('#h-name')));
     check((await txt('#h-taught'))==='Tổng 309 buổi', 'hero: '+(await txt('#h-taught')));
@@ -304,7 +331,7 @@ async function gas(r){
     var bg=since(SRV.gas,g0).filter(function(x){ return /^adm_(data|stats)$/.test(x.action); });
     var d=bg.filter(function(x){ return x.action==='adm_data'; })[0], s=bg.filter(function(x){ return x.action==='adm_stats'; })[0];
     check(d && s && Math.abs(d.t-s.t)<400, 'làm mới ngầm: adm_data + adm_stats cùng lúc, Δ='+(d&&s?Math.abs(d.t-s.t):'?')+' ms');
-    check(SRV.wk.filter(function(x){ return x.t>=t && (x.pin===A_PIN || x.apin); }).length===0, 'PIN Admin đã biết → không hỏi Worker');
+    check(SRV.wk.filter(function(x){ return x.t>=t && x.action==='coach'; }).length===0, 'PIN Admin đã biết → không thử PIN coach ở Worker');
     await w(4200); SRV.latW={}; SRV.latG={};
   });
 
@@ -380,6 +407,172 @@ async function gas(r){
       await D.ctx.close();
     });
   }
+
+  /* ---------------- v2.15.2 · Admin trên Worker v8 (SRV.wkAdm) ---------------- */
+  var D=null;
+  async function fresh(cfg){
+    if(D) await D.ctx.close();
+    resetSrv(); SRV.wkAdm=true; Object.assign(SRV, cfg||{});
+    D=await mk(); page=D.page;
+    await page.goto('http://localhost:'+PORT+'/'); await screen('p-pin'); await w(500);
+  }
+  function acts(arr, i){ return since(arr, i||0).map(function(x){ return x.action; }).filter(function(a){ return a!=='ping'; }); }
+  async function adminIn(){ await pin(A_PIN); await page.waitForFunction(function(){ return state.screen==='p-home' && state.admin && !state.loading; }, null, {timeout:9000}); await w(600); }
+  async function ciAdmin(row){ await page.click('#h-go'); await screen('p-pick'); await w(700); await page.click('#pk-list .row:has-text("'+row+'")'); await screen('p-confirm'); await w(1300); await page.click('#cf-go'); }
+  async function leaveSession(){ await ev(function(){ closeLib(true); state.session=null; saveSession(); go('p-home','back'); }); await screen('p-home'); await w(700); }
+
+  await run('AW1', 'Worker v8 · PIN Admin lần đầu: adm_data ở Worker ∥ adm_stats ở Apps Script — danh sách không chờ thống kê, Apps Script không thấy adm_data', async function(){
+    await fresh({latW:{coach:300, adm_data:500}, latG:{adm_stats:2500}});
+    var t=Date.now(); await pin(A_PIN);
+    await page.waitForFunction(function(){ return state.admin && !state.loading; }, null, {timeout:9000}); var td=Date.now()-t;
+    await page.waitForFunction(function(){ return state.stats && state.stats.admin; }, null, {timeout:9000}); var ts=Date.now()-t;
+    console.log('   · Worker v8 (coach 300 ms · adm_data 500 ms · adm_stats Apps Script 2.500 ms): danh sách '+td+' ms · thống kê '+ts+' ms');
+    check(td<1700, 'danh sách Admin sau '+td+' ms (lùi Apps Script thì ≥ 2.500 ms)');
+    check(acts(SRV.wk).join()==='coach,adm_data', 'Worker: '+acts(SRV.wk).join());
+    check(acts(SRV.gas).join()==='adm_stats', 'Apps Script chỉ adm_stats: '+acts(SRV.gas).join());
+    check(SRV.wk.filter(function(x){ return x.action==='adm_data'; }).every(function(x){ return x.apin===A_PIN && !x.pin && x.ip===DEV_IP; }), 'adm_data ở Worker: apin, không pin, kèm ip');
+    await w(300);
+    check((await txt('#h-name'))==='Admin' && (await txt('#h-taught'))==='Tổng 309 buổi', 'trang chủ: '+(await txt('#h-name'))+' · '+(await txt('#h-taught')));
+    check((await disp('#p-home .tab-adm'))==='flex', 'tab Cài đặt hiện');
+    check(await ev(function(){ return VIA.adm_data==='wk' && WK_ON.adm_checkin===1 && !WK_SAFE.adm_checkin && WK_SAFE.adm_data===1 && WK_SAFE.adm_log===1; }), 'VIA.adm_data = wk · adm_checkin không lùi khi lỗi mạng');
+    check((await ev(function(){ return BUSY_N; }))===0, 'vạch bận = 0');
+    SRV.latW={}; SRV.latG={};
+  });
+
+  await run('AW2', 'Worker v8 · Admin check-in khách coach khác từ IP lạ: adm_checkin ở Worker đúng 1 lần, Apps Script 0', async function(){
+    var k0=SRV.wk.length, g0=SRV.gas.length;
+    await ciAdmin('Sao Mai'); await screen('p-plan', 9000); await w(600);
+    check(SRV.checkins.length===1 && SRV.checkins[0].name==='Vũ Sao Mai' && SRV.checkins[0].via==='wk' && SRV.checkins[0].ip===DEV_IP, 'check-in: '+JSON.stringify(SRV.checkins));
+    check(acts(SRV.wk,k0).filter(function(a){ return a==='adm_checkin'; }).length===1, 'Worker adm_checkin 1 lần: '+acts(SRV.wk,k0).join());
+    check(acts(SRV.gas,g0).indexOf('adm_checkin')<0, 'Apps Script không nhận check-in: '+acts(SRV.gas,g0).join());
+    check(/^Đã check-in/.test(await pill()), 'pill: '+(await pill()));
+    check(await ev(function(){ return state.session && state.session.coach==='Admin'; }), 'buổi tập thuộc Admin');
+  });
+
+  await run('AW3', 'Worker v8 · Admin ghi dữ liệu: adm_log ở Worker (apin), Apps Script 0, outbox trống; gửi lại cùng id → không ghi trùng', async function(){
+    var k0=SRV.wk.length, g0=SRV.gas.length;
+    await ev(function(){ enqueue({type:'ĐO', name:'Vũ Sao Mai', metric:'weight', val:54}); return flush(); }); await w(900);
+    var calls=SRV.wk.slice(k0).filter(function(x){ return x.action==='adm_log'; });
+    check(calls.length===1 && calls[0].apin===A_PIN && !calls[0].pin, 'Worker adm_log 1 lần kèm apin: '+calls.length);
+    check(SRV.alogs.length===1 && SRV.alogVia[0]==='wk' && SRV.alogs[0].coach==='Admin', 'ghi ở Worker: '+SRV.alogVia.join());
+    check(acts(SRV.gas,g0).indexOf('adm_log')<0, 'Apps Script không nhận adm_log: '+acts(SRV.gas,g0).join());
+    check((await ev(function(){ return OUT.q.length; }))===0, 'outbox trống');
+    await ev(function(e){ OUT.q.push(e); outSave(); return flush(); }, SRV.alogs[0]); await w(900);
+    check(SRV.alogs.length===1 && (await ev(function(){ return OUT.q.length; }))===0, 'gửi lại cùng id: không ghi trùng, outbox trống ('+SRV.alogs.length+')');
+    await leaveSession();
+  });
+
+  await run('AW4', 'Worker v8 · tab Cài đặt ghi nguồn "WORKER"; IP phòng (iplist · addip) vẫn chỉ Apps Script, Worker không thấy', async function(){
+    var k0=SRV.wk.length, g0=SRV.gas.length;
+    await page.click('#p-home .nav button[aria-label="Cài đặt"]'); await screen('p-admin'); await w(1300);
+    check(/· V2\.15\.2 · WORKER$/.test(await txt('#am-ver')), 'dòng phiên bản: '+(await txt('#am-ver')));
+    await page.click('#am-add'); await w(900);
+    check(SRV.ipList.join()===ROOM_IP+','+DEV_IP, 'thêm IP: '+SRV.ipList.join());
+    var g=acts(SRV.gas,g0), k=acts(SRV.wk,k0);
+    check(g.indexOf('iplist')>=0 && g.indexOf('addip')>=0 && g.every(function(a){ return !/^adm_(data|checkin|log)$/.test(a); }), 'Apps Script: '+g.join());
+    check(k.every(function(a){ return !/^(iplist|addip|delip|adm_stats)$/.test(a); }), 'Worker: '+k.join());
+    SRV.ipList=[ROOM_IP];
+    await page.click('#p-admin .nav .ghost:nth-child(1)'); await screen('p-home'); await w(600);
+  });
+
+  await run('AW5', 'Worker v8 · mất phản hồi SAU KHI Worker đã ghi check-in: không lùi Apps Script, "Thử lại" nhận da_checkin — đúng 1 dòng', async function(){
+    SRV.wkCut={adm_checkin:1}; var k0=SRV.wk.length, g0=SRV.gas.length;
+    await ciAdmin('Quang Vinh'); await w(1500);
+    check(/^Chưa check-in/.test(await pill()) && /Thử lại/.test(await txt('#pill .act')), 'pill: '+(await pill()));
+    check((await ev(function(){ return state.screen; }))==='p-confirm', 'ở lại màn xác nhận');
+    check(acts(SRV.gas,g0).indexOf('adm_checkin')<0, 'KHÔNG lùi Apps Script khi Worker có thể đã ghi: '+acts(SRV.gas,g0).join());
+    check(SRV.checkins.filter(function(c){ return c.name==='Nguyễn Quang Vinh'; }).length===1, 'Worker đã ghi 1 dòng');
+    SRV.wkCut={};
+    await page.click('#pill .act'); await screen('p-plan', 9000); await w(600);
+    check(SRV.checkins.filter(function(c){ return c.name==='Nguyễn Quang Vinh'; }).length===1, 'Thử lại không ghi thêm: '+SRV.checkins.length);
+    check(acts(SRV.wk,k0).filter(function(a){ return a==='adm_checkin'; }).length===2 && acts(SRV.gas,g0).indexOf('adm_checkin')<0, 'Worker 2 lượt (lượt 2 = da_checkin), Apps Script 0');
+    check(/^Đã check-in/.test(await pill()), 'pill: '+(await pill()));
+    await leaveSession();
+  });
+
+  await run('AW6', 'Worker v8 mất mạng: adm_data / adm_log lùi Apps Script; adm_checkin KHÔNG lùi, mạng về "Thử lại" → Worker ghi 1 lần', async function(){
+    SRV.wkDown={adm_data:1, adm_log:1, adm_checkin:1}; var g0=SRV.gas.length;
+    await ev(function(){ return refreshData(true); }); await w(900);
+    check(acts(SRV.gas,g0).indexOf('adm_data')>=0, 'adm_data lùi Apps Script: '+acts(SRV.gas,g0).join());
+    check(await ev(function(){ return state.admin && VIA.adm_data==='gas'; }), 'vẫn Admin, nguồn Apps Script');
+    await ev(function(){ enqueue({type:'ĐO', name:'Vũ Sao Mai', metric:'waist', val:65}); return flush(); }); await w(900);
+    check(SRV.alogVia.slice(-1)[0]==='gas' && (await ev(function(){ return OUT.q.length; }))===0, 'adm_log lùi Apps Script: '+SRV.alogVia.join());
+    var g1=SRV.gas.length;
+    await ciAdmin('Trần Minh Anh'); await w(1500);
+    check(/^Chưa check-in/.test(await pill()), 'check-in báo lỗi: '+(await pill()));
+    check(acts(SRV.gas,g1).indexOf('adm_checkin')<0 && SRV.checkins.every(function(c){ return c.name!=='Trần Minh Anh'; }), 'adm_checkin KHÔNG lùi Apps Script: '+acts(SRV.gas,g1).join());
+    SRV.wkDown={};
+    await page.click('#pill .act'); await screen('p-plan', 9000); await w(500);
+    check(SRV.checkins.filter(function(c){ return c.name==='Trần Minh Anh'; }).length===1 && SRV.checkins.slice(-1)[0].via==='wk', 'mạng về, Thử lại → Worker ghi 1 lần: '+JSON.stringify(SRV.checkins.slice(-1)));
+    await leaveSession();
+  });
+
+  await run('AW7', 'ADMIN_PIN của Worker khác Apps Script: Worker trả sai_pin → lệnh Admin lùi Apps Script, Admin vẫn dùng được (không báo PIN sai)', async function(){
+    await fresh({wkApin:'9999'});
+    await adminIn();
+    check((await txt('#h-name'))==='Admin', 'vào Admin: '+(await txt('#h-name')));
+    check(acts(SRV.wk).join()==='coach,adm_data' && acts(SRV.gas).slice().sort().join()==='adm_data,adm_stats', 'wk '+acts(SRV.wk).join()+' · gas '+acts(SRV.gas).join());
+    check(await ev(function(){ return VIA.adm_data==='gas'; }), 'nguồn Apps Script');
+    await ciAdmin('Sao Mai'); await screen('p-plan', 9000); await w(500);
+    check(SRV.checkins.length===1 && SRV.checkins[0].via==='gas', 'check-in qua Apps Script: '+JSON.stringify(SRV.checkins));
+    check(SRV.wk.filter(function(x){ return x.action==='adm_checkin'; }).length===1, 'Worker được hỏi 1 lần (sai_pin, không ghi)');
+    await ev(function(){ enqueue({type:'ĐO', name:'Vũ Sao Mai', metric:'weight', val:55}); return flush(); }); await w(900);
+    check(SRV.alogs.length===1 && SRV.alogVia[0]==='gas' && (await ev(function(){ return OUT.q.length; }))===0, 'adm_log qua Apps Script: '+SRV.alogVia.join());
+    await leaveSession();
+    await page.click('#p-home .nav button[aria-label="Cài đặt"]'); await screen('p-admin'); await w(900);
+    check(/· V2\.15\.2 · APPS SCRIPT$/.test(await txt('#am-ver')), 'dòng phiên bản: '+(await txt('#am-ver')));
+    await page.click('#p-admin .nav .ghost:nth-child(1)'); await screen('p-home'); await w(500);
+  });
+
+  await run('AW8', 'Worker v8 thiếu sheet coach đích (wk_no_sheet_coach): adm_log lùi Apps Script, đủ sự kiện, không trùng', async function(){
+    await fresh({wkNoSheet:true}); await adminIn();
+    var k0=SRV.wk.length, g0=SRV.gas.length;
+    await ev(function(){ enqueue({type:'ĐO', name:'Phan Việt Hoàng', metric:'weight', val:70}); enqueue({type:'ĐO', name:'Vũ Sao Mai', metric:'weight', val:54}); return flush(); }); await w(1200);
+    check(acts(SRV.wk,k0).filter(function(a){ return a==='adm_log'; }).length===1 && acts(SRV.gas,g0).filter(function(a){ return a==='adm_log'; }).length===1, 'Worker 1 lượt (từ chối) → Apps Script 1 lượt: wk '+acts(SRV.wk,k0).join()+' · gas '+acts(SRV.gas,g0).join());
+    check(SRV.alogs.length===2 && SRV.alogVia.join()==='gas,gas', 'ghi đủ 2 ở Apps Script: '+SRV.alogVia.join());
+    check((await ev(function(){ return OUT.q.length; }))===0, 'outbox trống');
+  });
+
+  await run('AW9', 'Worker v8 · PIN sai → "MÃ PIN KHÔNG ĐÚNG" (Worker rồi Apps Script cùng từ chối), giao diện Admin không nháy', async function(){
+    await ev(function(){ logout(); }); await screen('p-pin'); await w(400);
+    await watchAdm(); var k0=SRV.wk.length, g0=SRV.gas.length;
+    await pin('5555'); await w(2200);
+    check((await txt('#pin-err'))==='MÃ PIN KHÔNG ĐÚNG' && (await ev(function(){ return state.screen; }))==='p-pin', 'lỗi: '+(await txt('#pin-err')));
+    check(!(await ev(function(){ return state.admin; })) && (await admOn())===0, 'không vào / không nháy Admin');
+    check(acts(SRV.wk,k0).join()==='coach,adm_data' && acts(SRV.gas,g0).slice().sort().join()==='adm_data,adm_stats', 'wk '+acts(SRV.wk,k0).join()+' · gas '+acts(SRV.gas,g0).join());
+    check((await ev(function(){ return BUSY_N; }))===0, 'vạch bận = 0');
+  });
+
+  await run('AW11', 'Worker v8 trả lỗi (Sheets 503 / lỗi lạ, HTTP 200): adm_data · adm_log lùi Apps Script; adm_checkin KHÔNG lùi, báo "Chưa check-in"', async function(){
+    await fresh({wkErr:{adm_data:'sheets_503_UNAVAILABLE', adm_log:'sheets_500_INTERNAL', adm_checkin:'ghi_de_dong'}});
+    await adminIn();
+    check((await txt('#h-name'))==='Admin' && acts(SRV.gas).indexOf('adm_data')>=0, 'adm_data lùi Apps Script, vào Admin: gas '+acts(SRV.gas).join());
+    check(await ev(function(){ return VIA.adm_data==='gas'; }), 'nguồn Apps Script');
+    await ev(function(){ enqueue({type:'ĐO', name:'Vũ Sao Mai', metric:'weight', val:56}); return flush(); }); await w(900);
+    check(SRV.alogs.length===1 && SRV.alogVia[0]==='gas' && (await ev(function(){ return OUT.q.length; }))===0, 'adm_log lùi Apps Script: '+SRV.alogVia.join());
+    var g0=SRV.gas.length;
+    await ciAdmin('Sao Mai'); await w(1500);
+    check(/^Chưa check-in/.test(await pill()) && (await ev(function(){ return state.screen; }))==='p-confirm', 'check-in báo lỗi, ở lại xác nhận: '+(await pill()));
+    check(acts(SRV.gas,g0).indexOf('adm_checkin')<0 && SRV.checkins.length===0, 'adm_checkin KHÔNG lùi Apps Script: '+acts(SRV.gas,g0).join());
+    SRV.wkErr={};
+    await page.click('#pill .act'); await screen('p-plan', 9000); await w(500);
+    check(SRV.checkins.length===1 && SRV.checkins[0].via==='wk', 'Worker hết lỗi → Thử lại ghi 1 lần ở Worker');
+    await leaveSession();
+    await ev(function(){ logout(); }); await screen('p-pin'); await w(400);
+  });
+
+  await run('AW10', 'Worker v8 · coach 1234 không đổi: không lệnh adm_*, không apin; check-in ngoài phòng vẫn bị chặn', async function(){
+    var k0=SRV.wk.length, g0=SRV.gas.length;
+    await pin(C_PIN); await screen('p-home'); await w(1500);
+    check(!(await ev(function(){ return state.admin; })) && (await txt('#h-name'))!=='Admin', 'coach: '+(await txt('#h-name')));
+    await page.click('#h-go'); await screen('p-pick'); await w(600);
+    await page.click('#pk-list .row:has-text("Quang Vinh")'); await screen('p-confirm'); await w(1200);
+    await page.click('#cf-go'); await w(2500);
+    check(/phòng/.test(await pill()), 'bị chặn: '+(await pill()));
+    var all=SRV.wk.slice(k0).concat(SRV.gas.slice(g0));
+    check(all.every(function(x){ return !x.apin && !/^adm_/.test(x.action); }), 'không adm_* / apin: '+all.map(function(x){ return x.action; }).join(','));
+    await D.ctx.close(); D=null;
+  });
 
   await browser.close(); srv.close();
   var fails=RES.filter(function(r){ return r.fails.length; }).length;
