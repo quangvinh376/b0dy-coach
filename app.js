@@ -7,7 +7,7 @@
    ===================================================================== */
 'use strict';
 var $=function(id){ return document.getElementById(id); };
-var APP_VER='v2.15.0';
+var APP_VER='v2.15.1';
 
 /* ---------------- tiện ích ---------------- */
 function isoToday(d){ d=d||new Date(); return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2); }
@@ -196,6 +196,9 @@ var ADM_ACT={coach:'adm_data', stats:'adm_stats', log:'adm_log', checkin_coach:'
 var ST=function(k){ try{ return localStorage.getItem(k); }catch(e){ return null; } };
 var SS=function(k,v){ try{ if(v==null) localStorage.removeItem(k); else localStorage.setItem(k,v); }catch(e){} };
 var SES=function(k,v){ try{ if(v===undefined) return sessionStorage.getItem(k); if(v==null) sessionStorage.removeItem(k); else sessionStorage.setItem(k,v); }catch(e){ return null; } };
+/* v2.15.1 (13/10): từ 13/10/2026 app chạy ở checkin.b0dy.studio — domain này trước là kiosk. Dọn dữ liệu kiosk còn sót trong máy
+   (b0dy_apin là PIN admin kiosk lưu dạng chữ rõ). Kiosk nay ở demo.b0dy.studio, origin khác → không ảnh hưởng kiosk. */
+['b0dy_apin','b0dy_ip','b0dy_members'].forEach(function(k){ SS(k,null); });
 
 function fetchJson(url, opts, timeoutMs){
   return new Promise(function(resolve, reject){

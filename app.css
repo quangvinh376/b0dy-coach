@@ -3,7 +3,9 @@
    Khung 393×852 · rail 24 (lưới: 12) · đỉnh 56 · đáy 28 · nav 48.
    Không framework, không build.
    ===================================================================== */
-@font-face{font-family:'SVN-Switzer';src:url('fonts/SVN-Switzer-Medium.woff2') format('woff2'),url('fonts/SVN-Switzer-Medium.woff') format('woff'),url('fonts/SVN-Switzer-Medium.ttf') format('truetype'),url('fonts/SVN-Switzer-Medium.otf') format('opentype');font-weight:500;font-style:normal;font-display:swap}
+/* v2.15.1: woff2 (39 KB, chuyển không mất dữ liệu từ ttf 138 KB — cùng nét chữ, cùng bảng GPOS/cmap/hmtx) rồi ttf dự phòng.
+   Bỏ hai mục .woff/.otf không có file: trước đây máy mới phải đi qua 2 lượt 404 tuần tự (~300 ms mỗi lượt) mới tới ttf. */
+@font-face{font-family:'SVN-Switzer';src:url('fonts/SVN-Switzer-Medium.woff2') format('woff2'),url('fonts/SVN-Switzer-Medium.ttf') format('truetype');font-weight:500;font-style:normal;font-display:swap}
 
 :root{
   --ink:#0A0A0A; --paper:#FAFAFA; --graphite:#4A4A4A; --slate:#767676; --gray:#9E9E9E; --ash:#B0B0B0;
