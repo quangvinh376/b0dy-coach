@@ -950,8 +950,10 @@ body.adm .tab-adm{display:flex}
 .sv-tk .cst{position:absolute;left:-14px;right:-14px;bottom:-34px;height:52px;z-index:-2;pointer-events:none;background:radial-gradient(closest-side,rgba(0,0,0,.7),rgba(0,0,0,.42) 45%,rgba(0,0,0,0))}
 .sv-tk .ps{position:absolute;left:0;top:0;width:313px;z-index:1;display:block;overflow:visible;pointer-events:none}
 .sv-tk .ps .rim{fill:none;stroke:rgba(10,10,10,.1);stroke-width:1}
-.sv-tk .ps .rdg{fill:none;stroke:rgba(255,255,255,.9);stroke-width:1}
-.sv-tk .ps .crs{fill:none;stroke:rgba(10,10,10,.12);stroke-width:1}
+/* v2.18.0 vé giấy thật (ve.js, WebGL2): canvas phủ khung cắt, vé DOM thành mô hình trong suốt (nhịp + test giữ nguyên); không có WebGL2 → vé DOM */
+.sv-bc>.ve3d{position:absolute;left:0;top:0;z-index:2;display:block;pointer-events:none}
+.sv-billw.gl .sv-tk{opacity:0}
+.sv-billw.gl .sv-roll,.sv-billw.gl .sv-shade{visibility:hidden}
 /* thân vé: B0DY · PHIẾU ĐỀ XUẤT / ngày giờ (phải) · GÓI · số buổi Switzer 108 + BUỔI + 1:1 cùng chân chữ · kẻ mảnh · lưới 2 cột · giá chính */
 .sv-tk .hd{display:flex;justify-content:space-between;height:40px}
 .sv-tk .wm{display:block;width:56px;height:18.24px;fill:currentColor;flex:none}

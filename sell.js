@@ -35,6 +35,9 @@
    Sửa lỗi v2.17.0: hằng vé TKW trùng tên độ cứng lò xo bánh xe chữ số → số lăn ở Ưu đãi gần như nhảy thẳng; vé nay dùng object VE.
    v2.17.2 (14/10 14:12, chủ studio: "không có shading thì trông flat"): vé có khối 3D — ánh sáng từ trên, mặt giấy tối dần về nếp gấp + mép xa,
    nếp gấp sống sáng / lòng tối, cuống võng tối hơn bên trái, bóng đổ mềm dưới cuống rơi lên mặt máy; phẳng lúc in, gập khi xé.
+   v2.18.0 (14/10 16:03, chủ studio: "chưa hề realistic, trông vẫn gượng ép — go all out"): VÉ GIẤY THẬT — ve.js vẽ vé như một tờ giấy
+   trong không gian 3D (WebGL2) theo đúng dáng vé DOM ở mỗi khung (vé DOM thành mô hình trong suốt: bố cục, nhịp, test giữ nguyên).
+   Bỏ hai đường nếp gấp vẽ giả của v2.17.2 (16:01: "tại sao có 2 line gần vết cắt?" — giấy thật không có) — vé DOM chỉ còn là dự phòng.
    ===================================================================== */
 'use strict';
 
@@ -757,13 +760,12 @@ if(typeof window!=='undefined' && typeof document!=='undefined') SVX=(function()
      tế"). Ánh sáng từ trên (cùng hướng với mép trên mặt máy in đang bắt sáng): cuống có bóng đổ mềm phía dưới (.cst — dải gradient, không
      filter: rẻ khi vé chuyển động; vé càng gần mặt máy, bóng càng rơi lên mặt máy, bên trái võng thấp nên đậm hơn), mặt giấy tối dần về phía nếp gấp ở đường xé và về mép phải (xa nguồn sáng), cuống tối ngay dưới nếp
      gấp (đang gập đi) và tối hơn ở bên trái (phần võng xuống nhiều hơn), viền giấy một nét mảnh (độ dày giấy). Chỉ Ink trong suốt — đơn sắc.
-     Phủ trên cả chữ (.ps) như ánh sáng thật; lúc in ra vé còn phẳng (sáng tối nhẹ), xé ra thì gập — sáng tối đậm lên cùng nhịp cuống mở */
+     Phủ trên cả chữ (.ps) như ánh sáng thật; lúc in ra vé còn phẳng (sáng tối nhẹ), xé ra thì gập — sáng tối đậm lên cùng nhịp cuống mở.
+     v2.18.0: chỉ còn hiện khi không có WebGL2 (ve.js vẽ giấy thật); bỏ hai đường nếp gấp vẽ giả (.rdg / .crs) */
   var SHD=0, SHADE={m:{v:[[0,.05],[.035,.012],[.09,0],[.4,0],[1,.1]], h:[[0,0],[1,.06]]}, s:{v:[[0,.17],[.2,.065],[1,.11]], h:[[0,.07],[1,0]]}}, FLAT=.45;   /* thân: mép xé trên hơi cong (một dải tối mảnh) · tối dần về nếp gấp · cuống: lòng nếp tối nhất, võng bên trái */
   function tkShade(k){ var id='svs'+(++SHD)+k, S=SHADE[k];
     function lg(n, x2, y2, st){ return '<linearGradient id="'+id+n+'" x1="0" y1="0" x2="'+x2+'" y2="'+y2+'">'+st.map(function(q){ return '<stop offset="'+q[0]+'" stop-color="#0A0A0A" stop-opacity="'+q[1]+'"/>'; }).join('')+'</linearGradient>'; }
-    return '<svg class="ps" aria-hidden="true"><defs>'+lg('v',0,1,S.v)+lg('h',1,0,S.h)+'</defs><path fill="url(#'+id+'v)"/><path fill="url(#'+id+'h)"/><path class="rim"/><path class="'+(k==='m' ? 'rdg' : 'crs')+'"/></svg>'; }
-  /* nếp gấp ở đường xé: mép thân vé ngay trên lỗ kim bắt sáng một nét (sống nếp), cuống ngay dưới lỗ kim tối một nét (lòng nếp) */
-  function tkFold(k, h){ return k==='m' ? 'M11 '+(h-3.5)+'H'+(VE.W-11) : 'M11 3.5H'+(VE.W-11); }
+    return '<svg class="ps" aria-hidden="true"><defs>'+lg('v',0,1,S.v)+lg('h',1,0,S.h)+'</defs><path fill="url(#'+id+'v)"/><path fill="url(#'+id+'h)"/><path class="rim"/></svg>'; }
   function bill(){
     var q=Q(), off=!!(q.b || q.pc), g=[], at=ST.at||new Date(), when=pad2(at.getDate())+'.'+pad2(at.getMonth()+1)+'.'+at.getFullYear()+' — '+pad2(at.getHours())+':'+pad2(at.getMinutes());
     if(off) g.push(['ĐƠN GIÁ GỐC', vnd(q.P), '₫']);
@@ -965,7 +967,7 @@ if(typeof window!=='undefined' && typeof document!=='undefined') SVX=(function()
     tk.style.bottom=(7*k).toFixed(2)+'px'; tk.style.transform=g.float; ts.style.transform=g.open;
     w.querySelector('.sv-roll').style.transform='scale('+K+')'; w.querySelector('.sv-shade').style.transform='scaleX('+K+')';
     [[tm, g.py, tkMainD], [ts, g.sh, tkStubD]].forEach(function(x){ var d=x[2](x[1]); [].forEach.call(x[0].querySelectorAll(':scope>.pp, :scope>.ps'), function(sv){ sv.setAttribute('viewBox', '0 0 '+VE.W+' '+x[1]); sv.style.height=x[1]+'px';
-      [].forEach.call(sv.querySelectorAll('path'), function(p){ p.setAttribute('d', /^(rdg|crs)$/.test(p.getAttribute('class')) ? tkFold(x[0]===tm ? 'm' : 's', x[1]) : d); }); }); });
+      [].forEach.call(sv.querySelectorAll('path'), function(p){ p.setAttribute('d', d); }); }); });
     tk._g=g; return g;
   }
   /* toạ độ màn của một phần tử trên vé ở dáng in (thẳng, đáy khớp khe, thu k quanh giữa mép đáy) */
@@ -994,7 +996,7 @@ if(typeof window!=='undefined' && typeof document!=='undefined') SVX=(function()
     var a=flyPath(f, a0, c0, b0, 1, k, DUR, HOLD, EB, function(o,u,e){ o.letterSpacing=(ls0+(ls1-ls0)*e).toFixed(3)+'px'; });
     var p=clamp(tc/T, .02, .98);
     anim(f.el, [{color:'#FAFAFA'},{color:'#FAFAFA', offset:p-.02},{color:'#0A0A0A', offset:p+.02},{color:'#0A0A0A'}], {duration:T, fill:'both'});
-    var fin=function(){ dst.style.visibility=''; dst.classList.add('uin'); flyDrop(f); }; if(a) a.onfinish=fin; else fin();   /* số chạm vé → gạch dưới vẽ từ trái */
+    var fin=function(){ dst.style.visibility=''; dst.classList.add('uin'); flyDrop(f); if(window.VE3D) VE3D.kick(); }; if(a) a.onfinish=fin; else fin();   /* số chạm vé → gạch dưới vẽ từ trái */
   }
   /* rời Đề xuất (Khách đồng ý / lùi về Ưu đãi): vé thẳng lại, cuống khép, hạ xuống khớp răng vào mẩu giấy trong khe (SEAT), rồi bị kéo vào
      khe (đường rút đi) — như máy nhận lại vé; trang cũ nằm trên trang mới trong lúc đó (app.css .svsink) nên giấy che rồi mở dần màn sau.
@@ -1008,6 +1010,7 @@ if(typeof window!=='undefined' && typeof document!=='undefined') SVX=(function()
     anim(g.ts, [{transform:(s && s!=='none') ? s : g.open},{transform:'rotate(0deg)'}], {duration:Math.round(SINK*SEAT), easing:ESEAT, fill:'forwards'});
     [].forEach.call(tk.querySelectorAll('.ps'), function(e, i){ anim(e, [{opacity:po[i]},{opacity:FLAT}], {duration:Math.round(SINK*SEAT), easing:ESEAT, fill:'forwards'}); });
     ['.sv-slot', '.sv-roll', '.sv-shade'].forEach(function(q){ anim(w.querySelector(q), [{opacity:1},{opacity:0}], {duration:100, delay:SINK-80, easing:'linear', fill:'forwards'}); });
+    if(window.VE3D) VE3D.kick();
     return true;
   }
   /* Đề xuất → lùi về Ưu đãi: ngược lại priceToBill — chữ trên vé tắt nhanh (90 ms), con số rời dòng giá chính của vé (đang nghiêng: bản sao
@@ -1039,6 +1042,7 @@ if(typeof window!=='undefined' && typeof document!=='undefined') SVX=(function()
     var p=clamp(tc/T, .02, .98);
     anim(f.el, [{color:'#0A0A0A'},{color:'#0A0A0A', offset:p-.02},{color:'#FAFAFA', offset:p+.02},{color:'#FAFAFA'}], {duration:T, fill:'both'});
     var fin=function(){ dst.style.visibility=''; flyDrop(f); }; if(a) a.onfinish=fin; else fin();
+    if(window.VE3D) VE3D.kick();
   }
   function mY(t){ if(!t || t==='none') return 0; var m=/matrix\(([^)]+)\)/.exec(t); if(m) return +m[1].split(',')[5]||0; m=/matrix3d\(([^)]+)\)/.exec(t); return m ? +m[1].split(',')[13]||0 : 0; }
   /* Hình thức trả → Họ tên: chấm Acid của lựa chọn "Chuyển khoản" bay lên đúng đầu trái ô họ tên rồi kéo dài thành gạch dưới Acid —
@@ -1230,7 +1234,8 @@ if(typeof window!=='undefined' && typeof document!=='undefined') SVX=(function()
      xé khỏi cuộn: nhấc lên + nghiêng về dáng lơ lửng, cuống mở theo sau một nhịp (đường bật ra, không nảy); lùi về → vé đã in trồi lại
      rồi lơ lửng như cũ. Máy in (mặt máy + khe + mẩu giấy) hiện ngay trước khi giấy ra. Giảm chuyển động: vé đứng sẵn ở dáng lơ lửng ---------- */
   function billIn(pg, rise){
-    var g=tkFit(pg); if(!g || rm() || !rise) return;
+    var g=tkFit(pg); if(g && window.VE3D) VE3D.attach(pg, TKA);   /* v2.18.0: vé giấy thật (ve.js) — vé DOM thành mô hình trong suốt */
+    if(!g || rm() || !rise) return;
     var w=pg.querySelector('.sv-billw'), d0=Math.round(rise.delay*1000), dp=Math.round(rise.dur*1000), dh=Math.round(rise.hold*1000), dt=Math.round(rise.tear*1000), T=dp+dh+dt;
     pg.classList.add('svrise');   /* vé là vật đặc — thân trang không mờ theo nhịp dòng chữ (giấy xám đục giữa chừng) */
     ['.sv-slot', '.sv-roll', '.sv-shade'].forEach(function(q){ anim(w.querySelector(q), [{opacity:0},{opacity:1}], {duration:120, delay:Math.max(0, d0-50), easing:'linear', fill:'backwards'}); });
@@ -1418,14 +1423,18 @@ if(typeof window!=='undefined' && typeof document!=='undefined') SVX=(function()
     $id('sv-dial').hidden=false; $id('sv-ctr').hidden=false; $id('sv-ctr').innerHTML=''; canvas(); ctx.clearRect(0,0,CW,CH); BB=null;   /* cấp bộ nhớ canvas ngay lúc chạm (trước khi các chuyển động bắt đầu), không giữa khung đầu */
     bankLoad();
     render('q1', 'fwd', false);
+    veWarm(0);
   }
+  /* v2.18.0: dựng sẵn bộ vẽ vé giấy (ve.js: ngữ cảnh WebGL, dịch shader, sinh nhiễu, vẽ thử) lúc luồng bán hàng rảnh — tới lúc bấm "Tiếp"
+     vào phiếu chỉ còn phần đo vé. Chờ màn đầu hiện xong và số 0 đứng yên (tối đa ~5 s); mỗi bước một tác vụ cách ~2 khung */
+  function veWarm(n){ if(!window.VE3D) return; setTimeout(function(){ if(!ON) return; if(NEED && n<12){ veWarm(n+1); return; } VE3D.warm(); }, n ? 350 : 900); }
   function hide(){
     if(!ON) return; var inp=$id('sv-in'); if(inp) inp.blur();
     var pg=STEP ? $id(PGS[PI]) : null; if(pg && pg.classList.contains('on')) freeze(pg);   /* rời luồng: trang đang hiện rời theo nhịp (leave-back của app) */
     ON=false; STEP=null; clearTimeout(ADV); LOCK=0; cdot(false); SMALL=false; flyClear(true); QRA=null; FXL=[];
     dial('none', {dp:.2, da:.2}); ctr('', null);
     setTimeout(function(){ if(!ON){ $id('sv-dial').hidden=true; $id('sv-ctr').hidden=true; $id('sv-ctr').innerHTML=''; RW=null; SL.forEach(function(s){ s.A=null; s.B=null; s.code=null; s.path=null; });
-      if(cv){ cv.width=0; cv.height=0; } CW=CH=0; SZ=1; BB=null; } }, 260);   /* trả bộ nhớ canvas toàn màn (dpr 3 ≈ 12 MB) khi luồng đã đóng */
+      if(cv){ cv.width=0; cv.height=0; } CW=CH=0; SZ=1; BB=null; if(window.VE3D) VE3D.sleep(); } }, 260);   /* trả bộ nhớ canvas toàn màn (dpr 3 ≈ 12 MB) + vé giấy khi luồng đã đóng */
   }
   function exit(){ hide(); go('p-home','back'); }
   function home(){ if(LOCK===2 || !guard()) return; exit(); }
@@ -1447,12 +1456,12 @@ if(typeof window!=='undefined' && typeof document!=='undefined') SVX=(function()
     if(n.classList.contains('z') || n.classList.contains('rr') || n.classList.contains('nr')) return ''; var s=''; [].forEach.call(n.childNodes, function(c){ s+=txtOf(c); }); return s; }
   return {
     open:open, back:back, home:home, cta:cta, hide:hide,
-    draw:function(dv){ if(TKS.length) tkStep(dv); if(NEED) draw(dv); },   /* bánh xe chữ số (tickTo) đi cùng một rAF với số 0 */
-    busy:function(){ return NEED || TKS.length>0; },
+    draw:function(dv){ if(TKS.length) tkStep(dv); if(NEED) draw(dv); if(window.VE3D) VE3D.frame(); },   /* bánh xe chữ số (tickTo) + vé giấy thật đi cùng một rAF với số 0 */
+    busy:function(){ return NEED || TKS.length>0 || !!(window.VE3D && VE3D.busy()); },
     onGo:function(id){ if(ON && !/^p-sv/.test(id||'')) hide(); else if(!ON && id!=='p-home') flyClear(true); },
     resize:function(){ SZ=1; if(!ON || !STEP) return; var pg=$id(PGS[PI]); if(!pg || !pg.classList.contains('on')) return;
       if(!/^(bill|name|qr)$/.test(STEP)){ GEO=geoOf(STEP, pg); SMALL=GEO.run ? GEO.small : GEO.rx<92; }   /* xoay máy / đổi cỡ: đủ chỗ trở lại thì biểu đồ hiện lại */
-      else if(STEP==='bill') tkFit(pg);   /* vé đặt lại dáng theo khoảng trống mới */
+      else if(STEP==='bill'){ tkFit(pg); if(window.VE3D) VE3D.refit(pg); }   /* vé đặt lại dáng theo khoảng trống mới */
       dial(PLAN_WANT, {dp:0, da:0, force:true}); ctrMove(GEO.cy, true); },
     /* test / chẩn đoán */
     _st:function(){ return ST; }, _step:function(){ return STEP; }, _geo:function(){ return GEO; }, _bank:function(v){ if(v!==undefined) BANK=v; return BANK; }, _qr:function(){ return LASTQR; }, _kb:function(){ kbFit(); }, _small:function(){ return SMALL; },
@@ -1467,6 +1476,7 @@ if(typeof window!=='undefined' && typeof document!=='undefined') SVX=(function()
     _tk:function(){ return TKS.map(function(T){ return {text:T.text, k:T.el.dataset.k||'', w:T.w.map(function(w){ return {p0:w.p0, p:w.p, t:w.t}; })}; }); },
     _labs:function(){ var o=[]; SL.forEach(function(s){ var P=s.B ? cur(s) : null; if(P && P.lab && P.a>0.004) o.push({t:P.lab, x:P.bl ? P.x+P.ldx : P.x, y:P.bl ? P.y+P.ldy : P.y, a:P.la!=null ? P.la : P.a, bl:!!P.bl, dot:[P.x, P.y]}); }); return o; },
     _rail:function(){ return {r:railNow(), ln:RLN, z0:RZ0}; },
+    _ve:function(){ return window.VE3D ? VE3D._dbg() : null; },
     _tkt:function(){ var pg=$id(PGS[PI]), tk=pg && pg.querySelector('.sv-tk'), g=tk && tk._g; if(!g) return null;
       return {k:g.k, F:g.F, H:g.H, py:g.py, sh:g.sh, top:g.top, bot:g.bot, E:g.E, X:g.X, Tx:g.Tx, Ty:g.Ty, tight:tk.classList.contains('tight'), float:g.float, printed:g.printed, start:g.start, sunk:g.sunk, open:g.open, a1:TKA.a1, a2:TKA.a2}; },
     _over:function(){ var m=0; SL.forEach(function(s){ if(!s.A || !s.B || s.path || s.fade || !s.ep || !(s.dp>0)) return; var kp=(MT-s.tp)/s.dp; if(kp<=0 || kp>=1) return; m=Math.max(m, s.ep(kp)-1); }); return m; }

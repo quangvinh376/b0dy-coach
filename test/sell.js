@@ -22,6 +22,9 @@
    - v2.17.0 (chủ studio 14/10 11:59, Figma 03 "Vé"): phiếu thành vé — dòng phụ lưới 2 cột, giá chính gạch dưới (SAU ƯU ĐÃI CÒN khi có ưu
      đãi, không thì ĐƠN GIÁ GỐC), không dòng kỳ trả góp, cuống tổng + mã vạch Code 128 (dựng lại chuỗi nét từ hình vẽ = mã của dòng chữ);
      in thẳng từ khe → ĐƠN GIÁ hạ vào ô giá chính lúc vé còn thẳng → xé (nghiêng 1,6°, cuống mở 2,6°); rời: thẳng lại, khớp khe, bị kéo vào.
+   - v2.18.0 (chủ studio 14/10 16:03, "go all out — realistically masterpiece"): vé giấy thật (ve.js, WebGL2) — mục 4: V2 / V3 (dpr 2–3)
+     giấy liền lúc in, chữ in đúng chỗ chữ DOM, dáng cong + gập + phối cảnh + bóng, vòng vẽ dừng khi đứng yên, mất ngữ cảnh → vé DOM ·
+     V375 màn thấp · Vrm giảm chuyển động · V0 tắt tay; D: vé DOM dự phòng không còn hai đường nếp gấp.
    - MOCK API (không ?demo): lệnh 'bank' → mã VietQR đúng tài khoản giả, cache, chưa cài tài khoản → báo lỗi.
    Số tài khoản trong test là SỐ GIẢ (repo công khai). Mã thoát 1 nếu có FAIL hoặc PAGEERR. */
 var {chromium}=require('playwright'); var serve=require('./serve'); var fs=require('fs'); var path=require('path'); var assert=require('assert');
@@ -239,16 +242,20 @@ function H(page){
     check(Math.abs(g.rollTop-(g.gapTop-4))<0.6 && Math.abs(g.rollW-313)<0.6 && Math.abs(g.gap-28)<1, 'mẩu giấy trong khe (răng nhọn lên 4 pt trên khe, rộng 313) · máy in cách nav 28: '+JSON.stringify([g.rollTop, g.gapTop, g.rollW, g.gap]));
     check(Math.abs(g.r1+1.6)<0.01 && Math.abs(g.r2+2.6)<0.01 && Math.abs(g.sc-1)<0.001 && !g.T.tight, 'dáng lơ lửng: vé nghiêng 1,6°, cuống mở 2,6°, đủ cỡ (393 × 852): '+JSON.stringify([g.r1, g.r2, g.sc]));
     check(g.top>=g.headBottom+9.5 && g.bottom<=g.plateTop-9.5 && g.bottom>=g.plateTop-14.6 && g.left>=8 && g.right<=g.W-8, 'vé nằm giữa tiêu đề và mặt máy (đáy lơ lửng 10–14 pt trên máy, đỉnh cách tiêu đề ≥ 10): '+JSON.stringify([g.headBottom, g.top, g.bottom, g.plateTop, g.left, g.right]));
-    /* v2.17.2 khối 3D (chủ studio 14/10 14:12): bóng đổ mềm dưới mỗi mảnh (sau giấy), lớp sáng tối phủ trên cả chữ — gradient Ink trong suốt (id riêng,
-       không trùng), cùng đường viền với giấy; nếp gấp: sống sáng ngay trên lỗ kim (thân), lòng tối ngay dưới lỗ kim (cuống) */
-    var sh=await h.ev(function(s){ var o={}; [['m','.sv-tm','.rdg'],['s','.sv-ts','.crs']].forEach(function(x){ var p=document.querySelector(s+x[1]), ps=p.querySelector(':scope>.ps'), cs=p.querySelector(':scope>.cst')||p.querySelector(':scope>.pp'), pp=p.querySelector(':scope>.pp'), fd=ps.querySelector(x[2]);
+    /* v2.17.2 khối 3D — nay là vé DỰ PHÒNG (máy không có WebGL2): bóng đổ mềm dưới cuống, lớp sáng tối Ink trong suốt (id riêng); v2.18.0 bỏ hai
+       nét "sống / lòng nếp gấp" (chủ studio 14/10 16:01 hỏi vì sao có 2 đường ở vết cắt — nếp gấp thật không sinh ra hai nét song song) */
+    var sh=await h.ev(function(s){ var o={}; [['m','.sv-tm','.rdg,.crs'],['s','.sv-ts','.rdg,.crs']].forEach(function(x){ var p=document.querySelector(s+x[1]), ps=p.querySelector(':scope>.ps'), cs=p.querySelector(':scope>.cst')||p.querySelector(':scope>.pp'), pp=p.querySelector(':scope>.pp'), fd=ps.querySelector(x[2]);
         var fills=[].map.call(ps.querySelectorAll('path[fill]'), function(q){ var m=/url\(#([^)]+)\)/.exec(q.getAttribute('fill')||''), g=m && document.getElementById(m[1]); return g ? [].map.call(g.querySelectorAll('stop'), function(st){ return st.getAttribute('stop-color'); }).join('') : 'thiếu'; });
         o[x[0]]={z:[getComputedStyle(cs).zIndex, getComputedStyle(pp).zIndex, getComputedStyle(ps).zIndex].join(), pe:getComputedStyle(ps).pointerEvents, fills:fills, same:ps.querySelector('path').getAttribute('d')===pp.querySelector('path').getAttribute('d'),
           fold:fd ? fd.getAttribute('d') : '', fc:fd ? getComputedStyle(fd).stroke : '', h:p.offsetHeight, op:+getComputedStyle(ps).opacity, cst:p.querySelectorAll(':scope>.cst').length, bg:getComputedStyle(cs).backgroundImage, flt:getComputedStyle(cs).filter}; });
       var ids=[].map.call(document.querySelectorAll('linearGradient'), function(g){ return g.id; }); o.dup=ids.length-new Set(ids).size; return o; }, V);
     check(sh.m.z==='-1,-1,1' && sh.s.z==='-2,-1,1' && sh.m.cst===0 && sh.s.cst===1 && sh.m.pe==='none' && sh.m.same && sh.s.same && sh.dup===0 && [sh.m, sh.s].every(function(x){ return x.fills.length===2 && x.fills.every(function(f){ return /^(#0A0A0A)+$/.test(f); }) && x.op===1; }),
       'bóng đổ sau giấy · lớp sáng tối trên chữ, gradient Ink đơn sắc, cùng viền giấy, id không trùng: '+JSON.stringify(sh));
-    check(sh.m.fold==='M11 '+(sh.m.h-3.5)+'H302' && /255, 255, 255/.test(sh.m.fc) && sh.s.fold==='M11 3.5H302' && /10, 10, 10/.test(sh.s.fc) && /radial-gradient/.test(sh.s.bg) && sh.s.flt==='none', 'nếp gấp ở đường xé (sống sáng / lòng tối) · bóng đổ mềm dưới cuống bằng gradient (không filter): '+JSON.stringify([sh.m.fold, sh.s.fold, sh.s.bg, sh.s.flt]));
+    check(sh.m.fold==='' && sh.s.fold==='' && /radial-gradient/.test(sh.s.bg) && sh.s.flt==='none', 'vé dự phòng: không còn 2 nét giả ở đường lỗ kim · bóng đổ mềm dưới cuống bằng gradient (không filter): '+JSON.stringify([sh.m.fold, sh.s.fold, sh.s.bg, sh.s.flt]));
+    /* v2.18.0: trình duyệt kiểm thử chỉ có WebGL chạy bằng CPU (SwiftShader) → vé giấy thật tự lùi về vé DOM (máy không GPU vẽ mỗi khung sẽ
+       chậm) — các ca vé giấy thật chạy riêng ở mục 4 (ép bật) */
+    var sw=await h.ev(function(){ var d=SVX._ve(); return {ok:d.ok, err:d.err, cv:!!document.querySelector('.page.sv.on canvas.ve3d'), op:getComputedStyle(document.querySelector('.page.sv.on .sv-tk')).opacity}; });
+    check(sw.ok===false && /^soft: /.test(sw.err) && !sw.cv && sw.op==='1', 'WebGL chạy bằng CPU → vé DOM: '+JSON.stringify(sw));
     var ac=await h.ev(function(){ var bad=0; document.querySelectorAll('.page.sv.on .sv-tk *').forEach(function(e){ var c=getComputedStyle(e).color; if(/212, 255, 0/.test(c)) bad++; }); return bad; }); check(ac===0, 'không Acid trên Paper');
     var low=await h.ev(function(){ var bad=[]; document.querySelectorAll('.page.sv.on .sv-tk *').forEach(function(e){ var cs=getComputedStyle(e); if(/JetBrains/.test(cs.fontFamily) && e.children.length===0 && e.textContent!==e.textContent.toUpperCase()) bad.push(e.textContent); }); return bad; }); check(!low.length, 'Mono viết HOA: '+low.join('|'));
     var fw=await h.ev(function(){ var bad=[]; document.querySelectorAll('.page.sv.on .sv-tk *').forEach(function(e){ var w=getComputedStyle(e).fontWeight; if(e.textContent.trim() && w!=='500') bad.push(e.tagName+':'+w); }); return bad; }); check(!fw.length, 'một độ đậm (500): '+fw.join('|'));
@@ -764,6 +771,114 @@ function H(page){
     await hr.wait(300); var d2=await hr.ev(function(){ return {d:SVX._dots(), busy:SVX.busy(), tk:SVX._tk().length}; }); check(d2.d.p===38 && !d2.busy && !d2.tk, 'xong ~0,2 s: '+JSON.stringify(d2));
   });
   await cr.close();
+
+  /* ================= 4 · VÉ GIẤY THẬT (v2.18.0, ve.js — WebGL2; ở đây ép bật vì trình duyệt kiểm thử chỉ có WebGL chạy CPU) =================
+     Nhịp được dừng rồi tua tất định (animation.currentTime) — không phụ thuộc tốc độ máy kiểm thử */
+  async function veCtx(o){ var cx=await mkctx(browser, o.vp, o.extra), pg=await cx.newPage(), hh=H(pg); P=pg;
+    await cx.addInitScript(function(v){ try{ localStorage.setItem('ve3d', v); }catch(e){} }, o.flag||'1');
+    pg.on('pageerror', function(e){ PAGEERR.push((o.tag||'ve')+': '+String(e)); }); await pg.goto(URL+'?demo'); await pg.waitForSelector('#p-pin.on'); await hh.wait(400); await hh.login();
+    hh.cv=function(){ return hh.cur; }; return {cx:cx, pg:pg, h:hh}; }
+  async function veAt(hv, t){ await hv.ev(function(t){ document.getAnimations().forEach(function(a){ try{ var e=a.effect.getComputedTiming().endTime; if(t>=e) a.finish(); else a.currentTime=t; }catch(x){} }); }, t); await hv.wait(40); await hv.ev(function(){ VE3D.kick(); __mot.step(16); }); await hv.wait(40); }
+  async function veGo(hv, fn){ await hv.ev(function(f){ __mot.hold(true); SVX[f](); document.getAnimations().forEach(function(a){ a.pause(); }); }, fn); }   /* bấm (cta / back) rồi dừng mọi nhịp ngay trong cùng lượt */
+  async function veEnd(hv){ await veAt(hv, 4000); await hv.ev(function(){ __mot.hold(false); }); await hv.wait(400); }
+  var NOW=nowPg0();
+  for(var dp of [2,3]){
+    var vx=await veCtx({extra:{deviceScaleFactor:dp}, tag:'ve dpr'+dp}), hv=vx.h;
+    await run('V'+dp, 'vé giấy thật · dpr '+dp+': lúc in giấy liền (không đường nối lưới, không điểm thủng) · chữ in đúng chỗ chữ của vé DOM · dáng lơ lửng: cong + gập + phối cảnh + bóng · vòng vẽ dừng khi đứng yên · mất ngữ cảnh → vé DOM', async function(){
+      await hv.toPkg('1:1',[1,2],[2,2],36); await hv.waitStep('deal'); await hv.tap('.sv-g[data-k="2"]'); await hv.wait(400);
+      await veGo(hv, 'cta'); await veAt(hv, 450);   /* vé đang in ra (thẳng, phẳng; chữ chưa hiện) */
+      var s=await hv.ev(function(N){ var pg=document.querySelector(N), cv=pg.querySelector('canvas.ve3d'), c=cv.getBoundingClientRect(), tm=pg.querySelector('.sv-tm'), d=SVX._ve();
+        function pr(el, x, y){ var i=document.createElement('i'); i.style.cssText='position:absolute;left:'+x+'px;top:'+y+'px;width:0;height:0'; el.appendChild(i); var r=i.getBoundingClientRect(); el.removeChild(i); return [r.left-c.left, r.top-c.top]; }
+        var W=d.M.W, py=d.M.py, top=Math.max(4, pr(tm, 0, 14)[1]), perf=pr(tm, 0, py)[1], bot=c.height-40, cols=[], out=[];
+        for(var i=1;i<12;i++) cols.push(-2.5+(W+5)*i/12); cols.push(W/2, 80.3, 233.7, 156.4, 156.6);   /* mọi đường lưới dọc + giữa vé + vài cột lẻ */
+        cols.forEach(function(u){ var x=pr(tm, u, 0)[0]; [[top, perf-7], [perf+7, bot]].forEach(function(sg){ if(sg[1]-sg[0]<8) return; var r=VE3D._rd(x-0.5, sg[0], 1, sg[1]-sg[0]); out.push([+u.toFixed(1), r.lone, r.dark, r.clear, r.n]); }); });
+        return {d:{on:d.on, p1:d.p1, p2:d.p2, out:d.out, curl:d.curl, V:d.V.curl*d.V.curlP}, cols:out}; }, NOW);
+      var bad=s.cols.filter(function(x){ return x[1] || x[2] || x[3]; });
+      check(s.d.on && s.cols.length>=16 && !bad.length, 'lúc in: giấy liền dọc mọi đường lưới (không đường nối, không điểm thủng lộ nền): '+JSON.stringify(bad.slice(0,4))+' · '+s.cols.length+' đoạn');
+      check(s.d.p1===0 && s.d.p2===0 && s.d.out>0.5 && s.d.out<1 && Math.abs(s.d.curl-s.d.V*s.d.out*s.d.out)<0.01, 'đang in: chưa nghiêng / chưa gập; giấy ra khỏi khe càng dài càng ngả nhẹ ra sau: '+JSON.stringify(s.d));
+      await veEnd(hv);
+      /* dáng lơ lửng */
+      var f0=await hv.ev(function(){ return SVX._ve().frames; }); await hv.wait(400);
+      var gv=await hv.ev(function(N){ var pg=document.querySelector(N), w=pg.querySelector('.sv-billw'), bc=pg.querySelector('.sv-bc'), cv=bc.querySelector(':scope>canvas.ve3d'), tk=pg.querySelector('.sv-tk'), d=SVX._ve();
+        var r=cv && cv.getBoundingClientRect(), b=bc.getBoundingClientRect();
+        return {d:{on:d.on, p1:d.p1, p2:d.p2, curl:d.curl, C:d.V.curl, bend:d.bend, B:d.V.bend, open:d.open, f:d.frames, busy:d.busy}, gl:w.classList.contains('gl'), cv:!!cv, fit:cv ? Math.abs(r.width-b.width)<0.6 && Math.abs(r.height-b.height)<0.6 && Math.abs(r.top-b.top)<0.6 && Math.abs(r.left-b.left)<0.6 : false,
+          px:cv ? [cv.width, cv.height, Math.round(b.width*devicePixelRatio), Math.round(b.height*devicePixelRatio)] : null, op:getComputedStyle(tk).opacity,
+          roll:getComputedStyle(pg.querySelector('.sv-roll')).visibility, shade:getComputedStyle(pg.querySelector('.sv-shade')).visibility, busy:SVX.busy()}; }, NOW);
+      check(gv.d.on && gv.gl && gv.cv && gv.fit && gv.px[0]===gv.px[2] && gv.px[1]===gv.px[3] && gv.op==='0' && gv.roll==='hidden' && gv.shade==='hidden',
+        'canvas phủ đúng khung cắt (đủ điểm ảnh), vé DOM trong suốt làm mô hình: '+JSON.stringify([gv.gl, gv.cv, gv.fit, gv.px, gv.op, gv.roll, gv.shade]));
+      check(gv.d.p1>0.999 && gv.d.p2>0.999 && Math.abs(gv.d.curl-gv.d.C)<0.01 && Math.abs(gv.d.bend-gv.d.B)<1e-4 && gv.d.open===1, 'dáng lơ lửng (nghiêng 1,6° · cuống 2,6°) → đầu vé cong lùi đủ, cuống gập đủ, đường lỗ kim đã xé: '+JSON.stringify(gv.d));
+      check(!gv.d.busy && gv.d.f===f0, 'vé đứng yên → vòng vẽ của vé dừng hẳn (không vẽ lại khung nào trong 0,4 s): '+JSON.stringify([f0, gv.d.f, gv.d.busy]));
+      var px=await hv.ev(function(N){ var pg=document.querySelector(N), cv=pg.querySelector('canvas.ve3d'), c=cv.getBoundingClientRect(), tm=pg.querySelector('.sv-tm'), ts=pg.querySelector('.sv-ts'), M=SVX._ve().M;
+        function pr(el, x, y){ var i=document.createElement('i'); i.style.cssText='position:absolute;left:'+x+'px;top:'+y+'px;width:0;height:0'; el.appendChild(i); var r=i.getBoundingClientRect(); el.removeChild(i); return [r.left-c.left, r.top-c.top]; }
+        function win(p, n){ return VE3D._rd(p[0]-n/2, p[1]-n/2, n, n); }
+        var hb=pg.querySelector('.hp .v b').getBoundingClientRect(), sl=pg.querySelector('.sv-slot').getBoundingClientRect();
+        var bodyP=win(pr(tm, 300, M.py*.55), 6), stubP=win(pr(ts, 300, M.sh*.5), 6), hero=VE3D._rd(hb.left-c.left, hb.top-c.top, hb.width, hb.height);
+        /* đầu vé lùi ra sau → nhỏ lại về phía tâm phối cảnh: điểm cách mép 2 pt ở đầu vé (theo DOM phẳng) đã ra ngoài giấy; ở đáy thân vẫn trong giấy */
+        var tl=win(pr(tm, 2, 14), 1), tr=win(pr(tm, 311, 14), 1), bl=win(pr(tm, 2, M.py-16), 1), br=win(pr(tm, 311, M.py-16), 1);
+        var under=VE3D._rd(c.width/2-20, sl.top-c.top+2, 40, 4), side=VE3D._rd(sl.left-c.left+4, sl.top-c.top+2, 6, 4);   /* bóng lên mép trên mặt máy: dưới vé có, ngoài vé không */
+        return {body:[bodyP.mean, bodyP.light, bodyP.n], stub:[stubP.mean, stubP.light, stubP.n], hero:[hero.dark, hero.n], corners:[tl.clear===tl.n, tr.clear===tr.n, bl.clear===0, br.clear===0], under:[under.clear, under.n], side:[side.clear, side.n]}; }, NOW);
+      check(px.body[1]===px.body[2] && px.stub[0]>150 && px.body[0]-px.stub[0]>6, 'giấy sáng · cuống gập ra sau tối hơn thân (sáng tối sinh từ hình dạng): '+JSON.stringify([px.body, px.stub]));
+      check(px.hero[0]>px.hero[1]*.08, 'con số giá chính in trên giấy đúng chỗ của nó: '+JSON.stringify(px.hero));
+      check(px.corners.every(Boolean), 'phối cảnh: đầu vé (lùi xa) hẹp lại, đáy thân giữ nguyên bề ngang: '+JSON.stringify(px.corners));
+      check(px.under[0]<px.under[1]*.2 && px.side[0]===px.side[1], 'bóng mềm lên mép trên mặt máy ngay dưới vé, ngoài vé không: '+JSON.stringify([px.under, px.side]));
+      await shot(vx.pg, 'V'+dp+'-bill');
+      /* Khách đồng ý → lùi về phiếu: vé đã in sẵn trồi lại — đúng lúc vừa thẳng hết khỏi khe (phẳng, mọi chữ đã có), mực trùng hộp chữ của vé DOM */
+      await hv.tap('.svc'); await hv.waitStep('pm'); await hv.wait(600);
+      await veGo(hv, 'back'); await veAt(hv, 519);
+      var Q=['.bg .n', '.hp .v b', '.tt b', '.bc', '.wm', '.cd', '.gd .c .v b', '.dt'];
+      /* so chữ: tắt độ ngả lúc in (giấy phẳng tuyệt đối, z = 0) — chỉ còn phép đặt chữ lên giấy; độ ngả kiểm riêng ở trên */
+      var gl=await hv.ev(function(a){ var pg=document.querySelector(a[0]), cv=pg.querySelector('canvas.ve3d'), c=cv.getBoundingClientRect(); window.__cp=VE3D._V.curlP; window.__wv=VE3D._V.wave; VE3D._V.curlP=0; VE3D._V.wave=0;
+        var d=SVX._ve(), o={pose:[d.p1, d.p2], c:[c.left, c.top]};
+        a[1].forEach(function(q){ var r=pg.querySelector('.sv-tk '+q).getBoundingClientRect(), e=VE3D._rd(r.left-c.left-6, r.top-c.top-6, r.width+12, r.height+12, 150); o[q]={r:[r.left, r.top, r.width, r.height], box:e.box ? [e.box[0]+c.left, e.box[1]+c.top, e.box[2]+c.left, e.box[3]+c.top] : null}; });
+        VE3D._V.curlP=window.__cp; VE3D._V.wave=window.__wv; return o; }, [NOW, Q]);
+      /* cùng dáng, hiện vé DOM + ẩn canvas → chụp → hộp mực của vé DOM */
+      await hv.ev(function(){ var st=document.createElement('style'); st.id='__dom'; st.textContent='.sv-billw.gl .sv-tk{opacity:1!important}.sv-bc>canvas.ve3d{visibility:hidden!important}'; document.head.appendChild(st); });
+      await hv.wait(80); var png=(await vx.pg.screenshot()).toString('base64');
+      await hv.ev(function(){ var st=document.getElementById('__dom'); if(st) st.remove(); });
+      var dm=await hv.ev(async function(a){ var im=new Image(); im.src='data:image/png;base64,'+a[0]; await im.decode(); var k=im.width/innerWidth, cc=document.createElement('canvas'); cc.width=im.width; cc.height=im.height;
+        var x=cc.getContext('2d'); x.drawImage(im, 0, 0); var o={};
+        a[1].forEach(function(q){ var r=a[2][q].r, X=Math.round((r[0]-6)*k), Y=Math.round((r[1]-6)*k), W=Math.round((r[2]+12)*k), H=Math.round((r[3]+12)*k), d=x.getImageData(X, Y, W, H).data, b=null;
+          for(var j=0;j<H;j++) for(var i=0;i<W;i++){ if(d[(j*W+i)*4]<150){ var px=(X+i)/k, py=(Y+j)/k; if(!b) b=[px, py, px, py]; else { b[0]=Math.min(b[0], px); b[1]=Math.min(b[1], py); b[2]=Math.max(b[2], px); b[3]=Math.max(b[3], py); } } }
+          o[q]=b; }); return o; }, [png, Q, gl]);
+      var al={pose:gl.pose}, worst=0;
+      Q.forEach(function(q){ var g=gl[q].box, d=dm[q]; if(!g || !d){ al[q]='thiếu'; worst=99; return; } var e=[g[0]-d[0], g[1]-d[1], g[2]-d[2], g[3]-d[3]].map(function(v){ return +v.toFixed(2); }); al[q]=e; e.forEach(function(v){ worst=Math.max(worst, Math.abs(v)); }); });
+      console.log("   · lệch mực GL ↔ DOM: "+worst+" pt"); check(gl.pose[0]===0 && worst<=1.5, 'vé thẳng: mực in trên giấy thật trùng mực của vé DOM ở cùng dáng (36 · giá chính · tổng · mã vạch · wordmark · dòng mã · lưới · ngày giờ) — lệch lớn nhất '+worst+' pt: '+JSON.stringify(al));
+      await veEnd(hv);
+      /* mất ngữ cảnh WebGL (iOS khi app ở nền lâu) → vé DOM thay ngay; có lại → vé giấy thật */
+      await hv.ev(function(N){ var cv=document.querySelector(N+' canvas.ve3d'), x=cv.getContext('webgl2').getExtension('WEBGL_lose_context'); window.__lx=x; x.loseContext(); }, NOW); await hv.wait(250);
+      var l1=await hv.ev(function(N){ var w=document.querySelector(N+' .sv-billw'); return {gl:w.classList.contains('gl'), op:getComputedStyle(w.querySelector('.sv-tk')).opacity, lost:SVX._ve().lost}; }, NOW);
+      await hv.ev(function(){ __lx.restoreContext(); }); await hv.wait(600);
+      var l2=await hv.ev(function(N){ var w=document.querySelector(N+' .sv-billw'), d=SVX._ve(); return {gl:w.classList.contains('gl'), lost:d.lost, on:d.on}; }, NOW);
+      check(!l1.gl && l1.op==='1' && l1.lost && l2.gl && !l2.lost && l2.on, 'mất ngữ cảnh → vé DOM thay ngay · có lại → giấy thật: '+JSON.stringify([l1, l2]));
+    });
+    await vx.cx.close();
+  }
+  /* màn thấp 375 × 667: vé gọn (.tight) + thu k — giấy thật theo đúng bố cục đó */
+  var vs=await veCtx({vp:{width:375,height:667}, tag:'ve375'});
+  await run('V375', 'vé giấy thật ở màn thấp (vé gọn + thu k)', async function(){
+    var hv=vs.h; await hv.toPkg('1:1',[1,2],[2,2],36); await hv.waitStep('deal'); await hv.tap('.sv-g[data-k="2"]'); await hv.wait(400);
+    await veGo(hv, 'cta'); await veEnd(hv);
+    var r=await hv.ev(function(N){ var d=SVX._ve(), T=SVX._tkt(), cv=document.querySelector(N+' canvas.ve3d'), bc=document.querySelector(N+' .sv-bc'); return {on:d.on, tight:d.M.tight, K:d.K, T:{tight:T.tight, k:T.k}, fit:!!cv && Math.abs(cv.clientHeight-bc.clientHeight)<1 && Math.abs(cv.clientWidth-bc.clientWidth)<1}; }, NOW);
+    check(r.on && r.fit && r.tight===true && r.T.tight===true && Math.abs(r.K-r.T.k)<0.002 && r.K>=0.8, 'giấy thật theo vé gọn + thu k của màn 667: '+JSON.stringify(r));
+    await shot(vs.pg, 'V375-bill');
+  });
+  await vs.cx.close();
+  /* giảm chuyển động: giấy thật đứng sẵn ở dáng lơ lửng, vẽ một lần rồi dừng */
+  var vr=await veCtx({extra:{reducedMotion:'reduce'}, tag:'verm'});
+  await run('Vrm', 'giảm chuyển động: giấy thật đứng sẵn ở dáng lơ lửng, vẽ xong là dừng', async function(){
+    var hv=vr.h; await hv.toPkg('1:1',[1,2],[2,2],36); await hv.waitStep('deal'); await hv.tap('.svc'); await hv.waitStep('bill'); await hv.wait(300);
+    var r=await hv.ev(function(){ var d=SVX._ve(); return {on:d.on, p1:d.p1, p2:d.p2, curl:d.curl, C:d.V.curl, busy:SVX.busy(), f:d.frames}; });
+    check(r.on && r.p1>0.999 && r.p2>0.999 && Math.abs(r.curl-r.C)<0.01 && !r.busy && r.f>=1 && r.f<=4, 'đứng sẵn ở dáng lơ lửng (cong, gập đủ), vài khung rồi dừng: '+JSON.stringify(r));
+  });
+  await vr.cx.close();
+  var v0=await veCtx({flag:'0', tag:'ve0'});
+  await run('V0', 'tắt tay (localStorage ve3d = 0) → vé DOM như cũ, không canvas', async function(){
+    var h0=v0.h; await h0.toPkg('1:1',[1,2],[2,2],36); await h0.waitStep('deal'); await h0.tap('.svc'); await h0.waitStep('bill'); await h0.wait(1400);
+    var r=await h0.ev(function(N){ var pg=document.querySelector(N), w=pg.querySelector('.sv-billw'); return {cv:!!pg.querySelector('canvas.ve3d'), gl:w.classList.contains('gl'), op:getComputedStyle(pg.querySelector('.sv-tk')).opacity, roll:getComputedStyle(pg.querySelector('.sv-roll')).visibility, ok:SVX._ve().ok, busy:SVX.busy()}; }, NOW);
+    check(!r.cv && !r.gl && r.op==='1' && r.roll==='visible' && r.ok===false && !r.busy, 'vé DOM dự phòng: '+JSON.stringify(r));
+    await h0.tap('.svc'); check(await h0.waitStep('pm'), 'Khách đồng ý vẫn chạy');
+  });
+  await v0.cx.close();
 
   await browser.close(); srv.close();
   var fail=RES.filter(function(r){ return r.fails.length; }).length;
