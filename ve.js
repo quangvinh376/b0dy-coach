@@ -1,5 +1,5 @@
 /* =====================================================================
-   B0DY · Coach app — VÉ GIẤY THẬT (v2.18.0 · 14/10/2026)
+   B0DY · Coach app — VÉ GIẤY THẬT (v2.18.0 · 14/10/2026 · v2.18.1 nhẹ hơn trên máy thật)
    Chủ studio 14/10 16:03: lớp sáng tối v2.17.2 "chưa hề realistic, trông vẫn rất gượng ép — go all out, làm một realistically
    masterpiece". Lớp phủ gradient không bao giờ ra giấy thật: sáng tối vẽ tay không khớp hình dạng (vé vẫn phẳng như tấm dán). Nay vé
    được VẼ như một tờ giấy trong không gian 3D (WebGL2):
@@ -228,8 +228,8 @@ var VE3D=(function(){
         cv.addEventListener('webglcontextrestored', function(){ try{ init(); LOST=false; if(CUR && !CUR.dead){ build(CUR); size(CUR); CUR.w.classList.add('gl'); kick(); } }catch(e){ LOST=true; } }, false);
         NB=1; return;
       }
-      [initP, initS, initN, warmDraw][NB-1](); NB++;
-      if(NB>4) OK=true;
+      [initP, initS, initN, warmDraw, warmFonts][NB-1](); NB++;
+      if(NB>5) OK=true;
     }catch(e){ ERR=String(e && e.message || e); gl=null; cv=null; OK=false; }
   }
   function warm(){ if(OK!==null) return; boot1(); if(OK===null) setTimeout(warm, 34); }   /* một bước mỗi ~2 khung */
@@ -262,6 +262,12 @@ var VE3D=(function(){
     gl.drawElements(gl.TRIANGLES, b.n, gl.UNSIGNED_SHORT, 0);
     gl.clearColor(0, 0, 0, 0); gl.clear(gl.COLOR_BUFFER_BIT); gl.flush();
   }
+  /* phông trên canvas: lần đầu dùng mỗi cỡ chữ trình duyệt phải dựng phông (máy thật 3–10 ms mỗi cỡ) → dựng sẵn lúc rảnh, đúng các cỡ
+     của vé lần trước (nhớ trong máy), chưa có thì hai họ phông của app */
+  function warmFonts(){ var L=null; try{ L=JSON.parse(localStorage.getItem('ve3d.f') || 'null'); }catch(e){}
+    if(!L || !L.length){ var cs=getComputedStyle(document.documentElement); L=['500 16px '+(cs.getPropertyValue('--sans') || 'sans-serif'), '500 16px '+(cs.getPropertyValue('--mono') || 'monospace')]; }
+    var cw=document.createElement('canvas'); cw.width=cw.height=8; var x=cw.getContext('2d', {willReadFrequently:true});
+    L.forEach(function(f){ try{ x.font=f; x.fillText('ẦẪẬỄỖỜỮ 036 ₫', 0, 6); }catch(e){} }); cw.width=cw.height=0; }
   /* rời luồng bán hàng: trả bộ nhớ lớn (khung vẽ dpr 3 ≈ 8 MB + texture chữ ≈ 9 MB); giữ ngữ cảnh + shader đã dịch cho lần sau */
   function sleep(){ var c=CUR;
     (function chk(n){ if(CUR!==c) return;
@@ -291,13 +297,18 @@ var VE3D=(function(){
     var host=tk.parentNode, cl=tk.cloneNode(true);
     [].forEach.call(cl.querySelectorAll('[style]'), function(e){ e.removeAttribute('style'); });
     cl.removeAttribute('style'); cl.style.cssText='transform:none;visibility:hidden;opacity:1;left:0;top:0;bottom:auto;margin-left:0';
+    /* đường chân chữ: một điểm dò (inline-block 0 × 0 đặt ở chân chữ) cho mọi dòng cùng lúc → chỉ 2 lượt dàn trang (trước: mỗi dòng một
+       lượt — chèn rồi gỡ điểm dò buộc trình duyệt dàn lại trang, ~1 ms mỗi dòng trên máy thật) */
+    var its=items(cl), prs=its.map(function(it){ if(it.k!=='t') return null; var pr=document.createElement('i');
+      pr.style.cssText='display:inline-block;width:0;height:0;margin:0;padding:0;border:0;vertical-align:baseline'; it.e.insertBefore(pr, it.e.firstChild); return pr; });
     host.appendChild(cl);
+    var b0=cl.getBoundingClientRect().top, bls=prs.map(function(pr){ return pr ? pr.getBoundingClientRect().top-b0 : 0; });
+    prs.forEach(function(pr){ if(pr) pr.parentNode.removeChild(pr); });
     var base=cl.getBoundingClientRect(), tm=cl.querySelector('.sv-tm'), ts=cl.querySelector('.sv-ts'), rg=document.createRange(), out=[];
-    items(cl).forEach(function(it){
+    its.forEach(function(it, i){
       var e=it.e, r=e.getBoundingClientRect(), cs=getComputedStyle(e), o={k:it.k, x:r.left-base.left, y:r.top-base.top, w:r.width, h:r.height, color:cs.color};
       if(it.k==='t'){
-        var pr=document.createElement('i'); pr.style.cssText='display:inline-block;width:0;height:0;margin:0;padding:0;border:0;vertical-align:baseline';
-        e.insertBefore(pr, e.firstChild); o.bl=pr.getBoundingClientRect().top-base.top; e.removeChild(pr);
+        o.bl=bls[i];
         o.font=cs.fontStyle+' '+cs.fontWeight+' '+cs.fontSize+' '+cs.fontFamily; o.ff=cs.fontFamily; o.fw=cs.fontWeight; o.up=cs.textTransform==='uppercase'; o.g=[];
         var tw=document.createTreeWalker(e, NodeFilter.SHOW_TEXT), n;
         while((n=tw.nextNode())){ var k=0; graphemes(n.data).forEach(function(g){ if(/\S/.test(g)){ rg.setStart(n, k); rg.setEnd(n, k+g.length); o.g.push([o.up ? g.toUpperCase() : g, rg.getBoundingClientRect().left-base.left]); } k+=g.length; }); }
@@ -326,28 +337,36 @@ var VE3D=(function(){
     var m=V.m, nh=0; for(var hx=17;hx<M.W-12;hx+=9) nh++; c.nh=nh;
     mesh('b', grid(-m, M.W+m, 12, -m, M.py+m, 56)); mesh('s', grid(-m, M.W+m, 12, -m, M.sh+m, 20)); mesh('r', grid(-m, M.W+m, 1, -m, 12.5, 1));
     if(c.ci) c.ci.width=c.ci.height=0; if(c.cd) c.cd.width=c.cd.height=0;
-    c.ci=c.cd=c.ink=c.idt=null; c.q=[paint, upInk, upId]; c.sig=''; c.force=1; c.rb=0;
+    c.ci=c.cd=c.cx=c.cxd=c.ink=c.idt=null; c.q=[paint, upInk, upId]; c.sig=''; c.force=1; c.rb=0;
     fontWait(c);
+    var fl={}; M.items.forEach(function(o){ if(o.k==='t') fl[o.font]=1; }); fl=Object.keys(fl);
+    try{ if(localStorage.getItem('ve3d.f')!==JSON.stringify(fl)) localStorage.setItem('ve3d.f', JSON.stringify(fl)); }catch(e){}
     c.tm=[+(performance.now()-t0).toFixed(1)];
   }
-  function paint(c){
-    var t=performance.now(), M=c.M, s=c.ts, w=Math.ceil(M.W*s), h=Math.ceil(M.H*s);
-    var ci=c.ci=document.createElement('canvas'), cd=c.cd=document.createElement('canvas'); ci.width=w; ci.height=h; cd.width=Math.ceil(w/2); cd.height=Math.ceil(h/2);
-    var x=ci.getContext('2d', {willReadFrequently:true}), xd=cd.getContext('2d', {willReadFrequently:true});   /* canvas CPU: nạp texture là chép bộ nhớ, không đọc ngược từ GPU */
-    x.setTransform(s,0,0,s,0,0); xd.setTransform(s/2,0,0,s/2,0,0); x.textBaseline='alphabetic';
-    M.items.forEach(function(o, i){ var id=i+1, e=o.k==='ul' ? 1 : 3;
+  /* vẽ chữ theo lượt ~5 ms mỗi khung (lần đầu dùng mỗi cỡ chữ trên canvas, trình duyệt phải dựng phông — máy thật có lúc 40–50 ms cả vé);
+     cần ngay (all) thì vẽ một mạch */
+  function paint(c, all){
+    var M=c.M, s=c.ts, t=performance.now();
+    if(!c.ci){ var w=Math.ceil(M.W*s), h=Math.ceil(M.H*s), ci=c.ci=document.createElement('canvas'), cd=c.cd=document.createElement('canvas');
+      ci.width=w; ci.height=h; cd.width=Math.ceil(w/2); cd.height=Math.ceil(h/2);
+      c.cx=ci.getContext('2d', {willReadFrequently:true}); c.cxd=cd.getContext('2d', {willReadFrequently:true});   /* canvas CPU: nạp texture là chép bộ nhớ, không đọc ngược từ GPU */
+      c.cx.setTransform(s,0,0,s,0,0); c.cxd.setTransform(s/2,0,0,s/2,0,0); c.cx.textBaseline='alphabetic'; c.pi=0; c.tp=0; }
+    var x=c.cx, xd=c.cxd;
+    while(c.pi<M.items.length){ var o=M.items[c.pi], id=c.pi+1, e=o.k==='ul' ? 1 : 3; c.pi++;
       xd.fillStyle='rgb('+(id*8)+',0,0)'; xd.fillRect(o.x-e, o.y-e, o.w+2*e, o.h+2*e);
       x.fillStyle=o.color;
       if(o.k==='t'){ x.font=o.font; o.g.forEach(function(g){ x.fillText(g[0], g[1], o.bl); }); }
       else if(o.k==='hl' || o.k==='ul') x.fillRect(o.x, o.y, o.w, o.h);
       else if(o.k==='wm'){ x.save(); x.translate(o.x, o.y); x.scale(o.w/132, o.h/43); wmPaths().forEach(function(p){ x.fill(p, 'evenodd'); }); x.restore(); }
       else if(o.k==='bc' && window.Path2D){ x.save(); x.translate(o.x, o.y); x.scale(o.w/o.vw, o.h/o.vh); x.fill(new Path2D(o.d)); x.restore(); }
-    });
-    c.tm.push(+(performance.now()-t).toFixed(1));
+      if(!all && performance.now()-t>5) break; }
+    c.tp+=performance.now()-t;
+    if(c.pi<M.items.length) return false;
+    c.cx=c.cxd=null; c.tm.push(+c.tp.toFixed(1)); return true;
   }
   /* một cặp texture dùng lại cho mọi lần vào phiếu (không rò bộ nhớ GPU); canvas trả bộ nhớ ngay sau khi nạp (WebKit) */
-  function upInk(c){ var t=performance.now(); TXI=tex(TXI, c.ci, false, true); c.ci.width=c.ci.height=0; c.ci=null; c.tm.push(+(performance.now()-t).toFixed(1)); }
-  function upId(c){ var t=performance.now(); TXD=tex(TXD, c.cd, true, false); c.cd.width=c.cd.height=0; c.cd=null; c.ink=TXI; c.idt=TXD; c.tm.push(+(performance.now()-t).toFixed(1)); }
+  function upInk(c){ var t=performance.now(); TXI=tex(TXI, c.ci, false, true); c.ci.width=c.ci.height=0; c.ci=null; c.tm.push(+(performance.now()-t).toFixed(1)); return true; }
+  function upId(c){ var t=performance.now(); TXD=tex(TXD, c.cd, true, false); c.cd.width=c.cd.height=0; c.cd=null; c.ink=TXI; c.idt=TXD; c.tm.push(+(performance.now()-t).toFixed(1)); return true; }
   /* phông: chỉ soi các FontFace đúng họ + độ đậm + dải ký tự dùng trên vé (rẻ). Không dùng fonts.check(): nó dò cả phông hệ thống trong
      danh sách (-apple-system, Menlo…) theo từng ký tự → 30–40 ms mỗi lần, quá đắt ngay lúc bấm. Phông về sau → dựng lại ở khung kế */
   function fams(f){ return String(f||'').split(',').map(function(x){ return x.trim().replace(/^["']|["']$/g, '').toLowerCase(); }); }
@@ -430,7 +449,8 @@ var VE3D=(function(){
     if(c.rb) build(c);   /* phông vừa về → đo + vẽ chữ lại */
     if(c.bc.clientWidth!==c.cw || c.bc.clientHeight!==c.ch) size(c);
     var P=pose(c);
-    if(c.q.length){ var now=force || P.ops.some(function(x){ return x>.001; }); do c.q.shift()(c); while(now && c.q.length); if(!c.q.length) c.force=1; }
+    if(c.q.length){ var now=force || P.ops.some(function(x){ return x>.001; });   /* chữ chưa hiện: mỗi khung một bước; cần hiện: làm hết ngay */
+      do { if(c.q[0](c, now)) c.q.shift(); else break; } while(now && c.q.length); if(!c.q.length) c.force=1; }
     var S=sig(P);
     if(S===c.sig && !c.force && !force){ c.idle++; return; }
     c.sig=S; c.force=0; c.idle=0; c.P=P; FR++;
