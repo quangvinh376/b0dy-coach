@@ -1,5 +1,5 @@
 /* =====================================================================
-   B0DY · Coach app — VÉ GIẤY THẬT (v2.18.0 · 14/10/2026 · v2.18.1 nhẹ hơn trên máy thật)
+   B0DY · Coach app — VÉ GIẤY THẬT (v2.18.0 · 14/10/2026 · v2.18.1–2 nhẹ hơn trên máy thật)
    Chủ studio 14/10 16:03: lớp sáng tối v2.17.2 "chưa hề realistic, trông vẫn rất gượng ép — go all out, làm một realistically
    masterpiece". Lớp phủ gradient không bao giờ ra giấy thật: sáng tối vẽ tay không khớp hình dạng (vé vẫn phẳng như tấm dán). Nay vé
    được VẼ như một tờ giấy trong không gian 3D (WebGL2):
@@ -283,6 +283,8 @@ var VE3D=(function(){
   function mesh(key, m){ var b=PG.bufs[key]; if(!b){ b=PG.bufs[key]={b:gl.createBuffer(), e:gl.createBuffer()}; }
     gl.bindBuffer(gl.ARRAY_BUFFER, b.b); gl.bufferData(gl.ARRAY_BUFFER, m.d, gl.STATIC_DRAW);
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, b.e); gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, m.ix, gl.STATIC_DRAW); b.n=m.ix.length; }
+  /* lưới theo kích thước vé: cùng kích thước như lần trước → giữ nguyên bộ đệm GPU (không nạp lại) */
+  function meshG(key, x0, x1, nx, y0, y1, ny){ var g=[x0, x1, nx, y0, y1, ny].join(','), b=PG.bufs[key]; if(b && b.g===g) return; mesh(key, grid(x0, x1, nx, y0, y1, ny)); PG.bufs[key].g=g; }
 
   /* ---------- đọc bố cục vé (bản sao không biến đổi) → texture mực + bản đồ dòng ---------- */
   function graphemes(s){
@@ -335,7 +337,7 @@ var VE3D=(function(){
     c.ul=M.items[c.ulId-1] || null;
     c.items=items(c.tk).map(function(it){ var ch=[], e=it.e; while(e && e!==c.tk){ ch.push(e); e=e.parentElement; } return {k:it.k, e:it.e, ch:ch}; });
     var m=V.m, nh=0; for(var hx=17;hx<M.W-12;hx+=9) nh++; c.nh=nh;
-    mesh('b', grid(-m, M.W+m, 12, -m, M.py+m, 56)); mesh('s', grid(-m, M.W+m, 12, -m, M.sh+m, 20)); mesh('r', grid(-m, M.W+m, 1, -m, 12.5, 1));
+    meshG('b', -m, M.W+m, 12, -m, M.py+m, 56); meshG('s', -m, M.W+m, 12, -m, M.sh+m, 20); meshG('r', -m, M.W+m, 1, -m, 12.5, 1);
     if(c.ci) c.ci.width=c.ci.height=0; if(c.cd) c.cd.width=c.cd.height=0;
     c.ci=c.cd=c.cx=c.cxd=c.ink=c.idt=null; c.q=[paint, upInk, upId]; c.sig=''; c.force=1; c.rb=0;
     fontWait(c);
