@@ -927,43 +927,75 @@ body.adm .tab-adm{display:flex}
 .ntk .nc{display:inline-block;position:relative;overflow:hidden;vertical-align:top}
 .ntk .nc>.nph{visibility:hidden}
 .ntk .nc>i{position:absolute;left:0;top:0;font-style:normal}   /* không will-change: ~50 ô chữ số nhỏ mỗi lần kéo — tách lớp ghép từng ô tốn hơn vẽ lại */
-/* phiếu đề xuất = tờ bill: giấy Paper 313 trồi lên khỏi khe in (v2.15, chủ studio 13/10: khe in 3D như đang in thật — theo ảnh minh hoạ):
-   mặt máy là một tấm bo 12 (Ink sáng hơn nền một bậc, mép trên bắt sáng) có khe tối khoét ngang; tờ giấy chui ra từ khe, nằm TRƯỚC mặt máy
-   (khung .sv-bc cắt đúng mép dưới khe → chân giấy luôn ở trong khe), chân giấy tối dần vào khe, mép dưới khe bắt sáng một nét, giấy đổ bóng
-   nhẹ lên mặt máy. Mép trên răng cưa; không Acid trên Paper */
-.sv-billw{flex:1 1 auto;min-height:0;position:relative;overflow:hidden}
+/* máy in (v2.15, chủ studio 13/10: khe in 3D như đang in thật): mặt máy là một tấm bo 12 (Ink sáng hơn nền một bậc, mép trên bắt sáng)
+   có khe tối khoét ngang; giấy chui ra từ khe, nằm TRƯỚC mặt máy (khung .sv-bc cắt đúng mép dưới khe → chân giấy luôn ở trong khe).
+   v2.17 phiếu đề xuất = VÉ (Figma 03 "Vé", chủ studio 14/10 11:54 · đầu vé cũng là vết xé 11:59): giấy Paper 313 in ra từ khe rồi xé
+   khỏi cuộn — thân vé + cuống (đường xé lỗ kim r 2 mỗi 9 pt, hai khía tròn r 11), mép trên + mép dưới răng cưa (35 răng sâu 5), nghiêng
+   1,6°, cuống mở thêm 2,6° quanh khía phải; mẩu giấy còn trong khe (.sv-roll) có răng khớp đúng vết xé, tối dần vào khe (.sv-shade).
+   Hình giấy là SVG (.pp) — sell.js tkFit đo chiều cao từng phần, dựng đường viền, đặt dáng vé theo khoảng trống. Không Acid trên Paper */
+.sv-billw{flex:1 1 auto;min-height:0;position:relative}   /* không cắt ở đây: vé nghiêng chạm gần mép màn — khung cắt .sv-bc rộng cả màn */
 .sv-slot{position:absolute;left:0;right:0;bottom:0;height:44px;border-radius:12px;background:linear-gradient(180deg,#1d1d1d 0%,#141414 100%);box-shadow:inset 0 1px 0 rgba(250,250,250,.08)}
 .sv-slot::before{content:'';position:absolute;left:6px;right:6px;bottom:22px;height:8px;border-radius:4px;background:#040404;box-shadow:inset 0 2px 3px rgba(0,0,0,.9),0 1px 0 rgba(250,250,250,.11)}
-.sv-bc{position:absolute;left:0;right:0;top:0;bottom:22px;overflow:hidden;z-index:1}
-.sv-bill{position:absolute;left:16px;right:16px;bottom:0;background:var(--paper);color:var(--ink);padding:44px 18px;transform:translateY(calc(100% + 8px));box-shadow:0 0 10px rgba(0,0,0,.45)}
-.sv-bill::after{content:'';position:absolute;left:0;right:0;bottom:0;height:40px;pointer-events:none;background:linear-gradient(to top,rgba(10,10,10,.26) 0,rgba(10,10,10,.08) 40%,rgba(10,10,10,0) 100%)}
-.sv-bill .zz{position:absolute;left:0;top:-5px;width:100%;height:6px;display:block;fill:var(--paper)}
-.sv-bill .wm{display:block;width:56px;height:18.24px;margin:0 auto;fill:currentColor}
-.sv-bill .dt{margin-top:12px;text-align:center;font-family:var(--mono);font-size:11px;line-height:13px;letter-spacing:.88px;color:var(--graphite)}
-.sv-bill .dl{display:block;height:1px;margin-top:36px;background-image:linear-gradient(to right,rgba(10,10,10,.4) 50%,transparent 50%);background-size:6px 1px}
-.sv-bill .pk{margin-top:35px;font-family:var(--mono);font-size:24px;line-height:23px;letter-spacing:-.72px}
-.sv-bill .rs{margin-top:24px}
-.sv-bill .r{display:flex;justify-content:space-between;align-items:baseline;gap:12px;height:37px}
-.sv-bill .r .l{font-family:var(--mono);font-size:12px;line-height:14px;letter-spacing:.48px;color:var(--graphite);white-space:nowrap}
-.sv-bill .r .v{display:flex;align-items:baseline;gap:6px;white-space:nowrap}
-.sv-bill .r .v b{font-weight:500;font-family:var(--mono);font-size:14px;line-height:17px}
-/* SAU ƯU ĐÃI CÒN: gạch dưới con số (Figma 13/10) — vẽ từ trái khi ĐƠN GIÁ vừa hạ xuống phiếu (.uin) */
-.sv-bill .r .v b.u{position:relative}
-.sv-bill .r .v b.u::after{content:'';position:absolute;left:0;right:0;bottom:.5px;height:1px;background:currentColor;transform-origin:0 50%}
-.sv-bill .r .v b.u.uin::after{animation:svUl .3s var(--eb) both}
+.sv-bc{position:absolute;left:calc(-1 * var(--rail));right:calc(-1 * var(--rail));top:0;bottom:22px;overflow:hidden;z-index:1;pointer-events:none}
+.sv-roll{position:absolute;left:50%;bottom:0;width:313px;height:12px;margin-left:-156.5px;display:block;fill:var(--paper);transform-origin:50% 100%}
+.sv-shade{position:absolute;left:50%;bottom:0;width:313px;height:26px;margin-left:-156.5px;background:linear-gradient(180deg,rgba(10,10,10,0) 0,rgba(10,10,10,.12) 55%,rgba(10,10,10,.4) 100%);transform-origin:50% 100%}
+.sv-tk{position:absolute;left:50%;bottom:7px;width:313px;margin-left:-156.5px;color:var(--ink);transform-origin:50% 100%}
+.sv-tm,.sv-ts{position:relative;z-index:0}
+.sv-tm{padding:26px 22px}
+.sv-ts{padding:24px 22px 20px;transform-origin:100% 0}
+.sv-tk .pp{position:absolute;left:0;top:0;width:313px;z-index:-1;display:block;overflow:visible;fill:var(--paper)}
+/* thân vé: B0DY · PHIẾU ĐỀ XUẤT / ngày giờ (phải) · GÓI · số buổi Switzer 108 + BUỔI + 1:1 cùng chân chữ · kẻ mảnh · lưới 2 cột · giá chính */
+.sv-tk .hd{display:flex;justify-content:space-between;height:40px}
+.sv-tk .wm{display:block;width:56px;height:18.24px;fill:currentColor;flex:none}
+.sv-tk .hr{text-align:right}
+.sv-tk .ty,.sv-tk .dt,.sv-tk .gl,.sv-tk .tl{font-family:var(--mono);font-size:11px;line-height:14px;letter-spacing:.88px;color:var(--graphite);white-space:nowrap}
+.sv-tk .ty{margin:3px -.88px 0 0}
+.sv-tk .dt{margin:9px -.88px 0 0;color:var(--slate)}
+.sv-tk .gl{margin-top:21px}
+.sv-tk .bg{display:flex;align-items:baseline;height:98px;margin:-2px 0 0 -5px;white-space:nowrap}
+.sv-tk .bg .n{font-weight:500;font-size:108px;line-height:98px;letter-spacing:-5.4px}
+.sv-tk .bg .bu{margin-left:8px;font-family:var(--mono);font-size:16px;line-height:19px;letter-spacing:1.28px}
+.sv-tk .bg .md{margin-left:auto;font-family:var(--mono);font-size:24px;line-height:24px;letter-spacing:-.72px}
+.sv-tk .hl{display:block;height:1px;margin-top:14px;background:rgba(10,10,10,.1)}
+.sv-tk .gd{display:grid;grid-template-columns:134.5px 134.5px;margin-top:16px}
+.sv-tk .c{height:44px}
+.sv-tk .l{font-family:var(--mono);font-size:10px;line-height:12px;letter-spacing:.8px;color:var(--slate);white-space:nowrap}
+.sv-tk .v{display:flex;align-items:baseline;white-space:nowrap}
+.sv-tk .c .v{margin-top:3px;gap:5px}
+.sv-tk .c .v b{font-weight:500;font-family:var(--mono);font-size:15px;line-height:18px}
+.sv-tk .v em{font-style:normal;font-family:var(--mono);font-size:11px;line-height:14px;letter-spacing:.88px;color:var(--graphite)}
+.sv-tk .hp{margin-top:2px}
+.sv-tk .hl+.hp{margin-top:18px}   /* gói không có dòng phụ (gói 12 · 24 chưa ưu đãi) */
+.sv-tk .hp .v{margin-top:4px;gap:7px}
+.sv-tk .hp .v b{position:relative;font-weight:500;font-family:var(--mono);font-size:30px;line-height:30px;letter-spacing:-.9px}
+.sv-tk .hp .v em{font-size:14px;line-height:17px;letter-spacing:0}
+/* giá chính gạch dưới 1,5 pt (chủ studio 14/10 10:49: SAU ƯU ĐÃI CÒN khi có ưu đãi, không thì ĐƠN GIÁ GỐC) — vẽ từ trái khi ĐƠN GIÁ vừa hạ xuống vé (.uin) */
+.sv-tk .hp .v b.u::after{content:'';position:absolute;left:0;right:0;bottom:-2.5px;height:1.5px;background:currentColor;transform-origin:0 50%}
+.sv-tk .hp .v b.u.uin::after{animation:svUl .3s var(--eb) both}
 @keyframes svUl{from{transform:scaleX(0)}to{transform:scaleX(1)}}
-.sv-bill .r .v em{font-style:normal;font-family:var(--mono);font-size:12px;line-height:14px;letter-spacing:.48px;color:var(--graphite)}
-.sv-bill .rs+.dl{margin-top:16px}
-.sv-bill .tl{margin-top:36px;font-family:var(--mono);font-size:11px;line-height:13px;letter-spacing:.88px;color:var(--graphite)}
-.sv-bill .tt{margin-top:10px;display:flex;align-items:baseline;gap:8px}
-.sv-bill .tt b{font-weight:500;font-family:var(--mono);font-size:44px;line-height:42px;letter-spacing:-1.32px}
-.sv-bill .tt em{font-style:normal;font-family:var(--mono);font-size:20px;line-height:24px;color:var(--graphite)}
-/* màn thấp (≤ 667): phiếu gọn — bớt khoảng, không bớt chữ */
-.sv-bill.tight{padding:26px 18px 28px}
-.sv-bill.tight .dl,.sv-bill.tight .pk,.sv-bill.tight .tl{margin-top:18px}
-.sv-bill.tight .rs{margin-top:14px}
-.sv-bill.tight .r{height:31px}
-.sv-bill.tight .rs+.dl{margin-top:10px}
+/* cuống: TỔNG GIÁ TRỊ GÓI · tổng Mono 34 · mã vạch Code 128 · dòng chữ của mã (giãn 30 %) */
+.sv-tk .tl{line-height:13px}
+.sv-tk .tt{display:flex;align-items:baseline;gap:8px;height:32px;margin-top:10px;white-space:nowrap}
+.sv-tk .tt b{font-weight:500;font-family:var(--mono);font-size:34px;line-height:32px;letter-spacing:-1.02px}
+.sv-tk .tt em{font-style:normal;font-family:var(--mono);font-size:15px;line-height:19px;color:var(--graphite)}
+.sv-tk .bc{display:block;width:269px;height:36px;margin-top:20px;fill:var(--ink)}
+.sv-tk .cd{margin-top:8px;padding-left:2.7px;text-align:center;font-family:var(--mono);font-size:9px;line-height:11px;letter-spacing:2.7px;color:var(--graphite);white-space:nowrap}
+/* vé gọn (màn thấp — sell.js tkFit khi vé đủ cỡ phải thu < 0,9): bớt khoảng, số buổi 84 — không bớt chữ, cỡ chữ dữ liệu giữ nguyên */
+.sv-tk.tight .sv-tm{padding:18px 22px 20px}
+.sv-tk.tight .hd{height:34px}
+.sv-tk.tight .dt{margin-top:3px}
+.sv-tk.tight .gl{margin-top:12px}
+.sv-tk.tight .bg{height:76px}
+.sv-tk.tight .bg .n{font-size:84px;line-height:76px;letter-spacing:-4.2px}
+.sv-tk.tight .hl{margin-top:10px}
+.sv-tk.tight .gd{margin-top:12px}
+.sv-tk.tight .c{height:38px}
+.sv-tk.tight .hl+.hp{margin-top:14px}
+.sv-tk.tight .hp .v{margin-top:3px}
+.sv-tk.tight .sv-ts{padding:18px 22px 14px}
+.sv-tk.tight .tt{margin-top:8px}
+.sv-tk.tight .bc{height:28px;margin-top:12px}
+.sv-tk.tight .cd{margin-top:6px}
 /* Họ tên khách (Figma 811:499): ô nhập Switzer 28 ở y 236, con trỏ + gạch dưới Acid, dòng NỘI DUNG CHUYỂN KHOẢN viết theo từng chữ.
    Nút Tiếp luôn hiện (cả khi bàn phím mở — chủ studio 12/10 18:50), xám tới khi có tên */
 .sv-nm{flex:none;margin-top:142px}
@@ -1026,10 +1058,9 @@ body.adm .tab-adm{display:flex}
   .svctr{transition:none}
   .svctr .ly,.svctr .k.in{animation:fadein .15s linear backwards}
   .svctr .ly.out,.svctr .k.out{animation:fadeout .12s linear both}
-  .sv-bill{transform:none;transition:none}
   .sv-cap.pop,.sv-r.pop .sd{animation:none}
   .sv-cap>i,.sv-sl .tk,.sv-sl .bk,.sv-sl .fl{transition:none}
-  .sv-bill .r .v b.u.uin::after{animation:none}
+  .sv-tk .hp .v b.u.uin::after{animation:none}
   .sv-nav,.sv-sl .kn{transition:none}
   .sv-g.no{animation:svdip .42s linear}   /* không lắc: vòng bị khoá nháy mờ một nhịp; gạch dưới họ tên chỉ báo đỏ */
   .sv-ul.err{animation:none}
