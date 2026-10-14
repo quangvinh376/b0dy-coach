@@ -102,10 +102,16 @@ function H(page){
     /* v2.14: giảm theo % — phần vạn (625 = 6,25 %), bước 0,25 %; số tiền giảm xuống bước 1.000 ₫ */
     [[24,500],[36,625],[48,750],[72,1000],[12,0]].forEach(function(x){ assert.equal(SVE.pMax(x[0]),x[1]); }); assert.equal(SVE.PSTEP,25);
     assert.equal(SVE.pCap(36,0),625); assert.equal(SVE.pCap(36,1),400); assert.equal(SVE.pCap(36,2),200); assert.equal(SVE.pCap(36,3),0); assert.equal(SVE.pCap(48,1),550); assert.equal(SVE.pCap(24,1),250); assert.equal(SVE.pCap(72,3),550);
-    /* v2.15: tiền giảm làm tròn tới bội của (số kỳ × 1.000 ₫) → tổng sau giảm chia hết cho số kỳ (không còn KỲ 1 THÊM), lệch ≤ 1.500 ₫ */
+    /* v2.15: tiền giảm làm tròn theo bội (số kỳ × 1.000 ₫) → tổng sau giảm chia hết cho số kỳ (không còn KỲ 1 THÊM).
+       v2.17.1 (chủ studio 14/10, rà công thức — "luôn có lợi cho khách"): làm tròn LÊN → khách luôn được ít nhất đúng % ghi trên vé, phần
+       làm tròn < một bội; kiểm mọi tổ hợp gói × hình thức × tặng × % hợp lệ (ghép với bản tính độc lập phân số ở scratchpad audit) */
     assert.equal(SVE.dOf('1:1',36,150),216000); assert.equal(SVE.dOf('1:1',48,25),45000); assert.equal(SVE.dOf('1:1',24,25),27000);
-    SVE.PKG.forEach(function(S){ ['1:1','1:2'].forEach(function(md){ var k=(SVE.INST[S]||[]).length+1; for(var pc=0; pc<=SVE.pMax(S); pc+=SVE.PSTEP){ var q=SVE.quote(md,S,0,pc), sp=SVE.split(q.total,k);
-      assert.ok(sp.every(function(v){ return v===sp[0]; }), 'kỳ đều nhau '+md+' '+S+' '+pc+': '+sp); assert.ok(Math.abs(q.d-S*SVE.price(md,S)*pc/10000)<=1500, 'lệch ≤ 1.500 ₫'); } }); });
+    assert.equal(SVE.dOf('1:1',48,75),135000, 'gói 48 giảm 0,75 %: đúng 133.200 → 135.000 (bản cũ 132.000 — khách thiệt 1.200)'); assert.equal(SVE.dOf('1:2',24,25),21000, '1:2 gói 24 giảm 0,25 %: đúng 20.400 → 21.000 (bản cũ 20.000)');
+    SVE.PKG.forEach(function(S){ ['1:1','1:2'].forEach(function(md){ var k=(SVE.INST[S]||[]).length+1, u=1000*k; for(var b=0;b<=SVE.giftMax(S);b++) for(var pc=0; pc<=SVE.pCap(S,b); pc+=SVE.PSTEP){ var q=SVE.quote(md,S,b,pc), sp=SVE.split(q.total,k), ex=S*SVE.price(md,S)*pc/10000;
+      assert.ok(sp.every(function(v){ return v===sp[0] && v%1000===0; }), 'kỳ đều nhau, tròn nghìn '+md+' '+S+' '+pc+': '+sp); assert.equal(q.total%u, 0);
+      assert.ok(q.d>=ex && q.d-ex<u, 'giảm ≥ đúng % và chỉ làm tròn lên dưới một bội '+md+' '+S+' '+b+' '+pc+': '+q.d+' / '+ex); } }); });
+    /* v2.17.1: số tiền dạng triệu ở tâm ghi đủ tới nghìn (mọi số tiền đều tròn nghìn → đúng tuyệt đối) */
+    [[7200000,'7,2'],[5905000,'5,905'],[17715000,'17,715'],[14112000,'14,112'],[6000000,'6'],[14400000,'14,4'],[25200000,'25,2']].forEach(function(x){ assert.equal(SVE.tr(x[0]), x[1], 'tr '+x[0]); });
     assert.equal(SVE.pcTxt(625),'6,25'); assert.equal(SVE.pcTxt(250),'2,50'); assert.equal(SVE.pcTxt(25),'0,25'); assert.equal(SVE.pcTxt(0),'0,00'); assert.equal(SVE.pcTxt(1000),'10,00');
     assert.ok(SVE.locked(36,3,25) && !SVE.locked(36,2,200) && SVE.locked(36,2,225) && !SVE.locked(36,1,400) && SVE.locked(36,1,425), 'vòng tặng khoá khi % giảm đã chiếm chỗ');
     var q=SVE.quote('1:1',36,2,0); assert.equal(q.unit,378947); assert.equal(q.sessions,38); assert.equal(q.weeks,13); assert.equal(q.pc,0); assert.equal(q.pcap,200);

@@ -30,6 +30,9 @@
    GIÁ GỐC), bỏ dòng kỳ trả góp (chưa chọn cách trả), cuống: tổng + mã vạch Code 128 B0DY-<gói>B-<tổng>. In thẳng ra từ khe → ĐƠN GIÁ
    bay xuống ô giá chính → xé khỏi cuộn (nghiêng 1,6°, cuống mở 2,6°, mẩu giấy răng khớp ở lại trong khe); rời phiếu: vé thẳng lại,
    khớp vào khe rồi bị kéo vào.
+   v2.17.1 (14/10, chủ studio sau đợt rà công thức): tiền giảm làm tròn LÊN tới bội của (số kỳ × 1.000 ₫) — khách luôn được ít nhất đúng %
+   ghi trên vé, các kỳ vẫn bằng nhau tròn nghìn; số tiền dạng triệu ở tâm (TRẢ MỖI KỲ / THANH TOÁN) ghi đủ tới nghìn (5,905TR, không 5,91TR).
+   Sửa lỗi v2.17.0: hằng vé TKW trùng tên độ cứng lò xo bánh xe chữ số → số lăn ở Ưu đãi gần như nhảy thẳng; vé nay dùng object VE.
    ===================================================================== */
 'use strict';
 
@@ -49,7 +52,8 @@ var SVE=(function(){
   var FREQ=[2,3,4,5], MONTHS=[1,2,3,4,6];
 
   function vnd(v){ return String(Math.round(v)).replace(/\B(?=(\d{3})+(?!\d))/g,'.'); }
-  function tr(v){ return String(Math.round(v/10000)/100).replace('.',','); }            /* 7.200.000 → 7,2 · 5.920.000 → 5,92 */
+  function tr(v){ return String(Math.round(v/1000)/1000).replace('.',','); }            /* triệu, đủ tới nghìn (chủ studio 14/10 — rà công thức): 7.200.000 → 7,2 · 5.905.000 → 5,905
+                                                                                          (mọi số tiền của luồng Bán đều tròn nghìn → luôn đúng tuyệt đối; bản cũ làm tròn 10.000 ₫: 5,91) */
   function pctTxt(f){ return String(f/1000).replace('.',','); }                          /* 1815 → 1,815 */
   /* gói khớp nguyện vọng: mọi tổ hợp buổi/tuần × số tháng (1 tháng = 4 tuần) trong khoảng, làm tròn lên gói có sẵn, trần 72 */
   function match(f0,f1,m0,m1){
@@ -61,13 +65,15 @@ var SVE=(function(){
   function price(mode,S){ return PRICE[mode==='1:2'?'1:2':'1:1'][S]; }
   function giftMax(S){ return (CAP[S]||[0,0])[0]; }
   /* giảm theo % tổng giá gói (chủ studio 12/10 23:08 — số to ở Ưu đãi đã là đơn giá tuyệt đối): bước 0,25 % (25 ‱), chạm đúng các
-     trần 5 · 6,25 · 7,5 · 10 %. Số tiền giảm = tổng giá × %, làm tròn tới bội gần nhất của (số kỳ × 1.000 ₫) — gói trả góp: tổng sau giảm
-     chia hết cho số kỳ nên các kỳ luôn bằng nhau, không còn "KỲ 1 THÊM" (chủ studio 13/10 01:05); lệch tối đa 1.500 ₫ so với % đúng */
+     trần 5 · 6,25 · 7,5 · 10 %. Số tiền giảm = tổng giá × %, làm tròn LÊN tới bội của (số kỳ × 1.000 ₫) — chủ studio 14/10 (rà công thức):
+     "luôn có lợi cho khách": khách luôn được ÍT NHẤT đúng % ghi trên vé (bản 13/10 làm tròn tới bội gần nhất → 68 tổ hợp khách trả nhiều hơn
+     % đã ghi, tới 1.200 ₫); tổng sau giảm vẫn chia hết cho số kỳ nên các kỳ bằng nhau, tròn nghìn (chủ studio 13/10 01:05). Tính bằng số
+     nguyên: S × giá × ‱ chính xác, chia lấy trần — không sai số dấu phẩy động */
   var PSTEP=25;
   function pMax(S){ return (CAP[S]||[0,0])[1]; }
   /* tặng và giảm trừ nhau trong một trần: tặng b trên B buổi → giảm ≤ trần % × (1 − b ÷ B), xuống bước 0,25 % */
   function pCap(S,b){ var B=giftMax(S); if(!B) return 0; b=Math.max(0,Math.min(B,b)); return Math.floor(pMax(S)*(B-b)/B/PSTEP+1e-9)*PSTEP; }
-  function dOf(mode,S,pc){ var u=1000*(INST[S] ? INST[S].length+1 : 1); return Math.round(S*price(mode,S)*pc/10000/u+1e-9)*u; }
+  function dOf(mode,S,pc){ var u=1000*(INST[S] ? INST[S].length+1 : 1), num=S*price(mode,S)*pc, den=10000*u; return Math.floor((num+den-1)/den)*u; }
   /* vòng tặng thứ k (1…B) bị khoá khi phần giảm đang dùng đã chiếm chỗ của nó */
   function locked(S,k,pc){ return pc>pCap(S,k); }
   function quote(mode,S,b,pc){
@@ -730,18 +736,18 @@ if(typeof window!=='undefined' && typeof document!=='undefined') SVX=(function()
      cột các dòng phụ, dòng giá chính to + gạch dưới: SAU ƯU ĐÃI CÒN khi có tặng / giảm, không thì ĐƠN GIÁ GỐC (chủ studio 14/10 10:49 —
      chưa chọn cách trả nên KHÔNG có dòng kỳ trả góp). Cuống: TỔNG GIÁ TRỊ GÓI + mã vạch Code 128 tượng trưng (B0DY-36B-tổng, dữ liệu
      thật của phiếu) + dòng chữ của mã. Hình giấy là SVG dựng theo chiều cao đo được (tkFit) */
-  var TKW=313, TKN=35, TKZ=5, TKH=[];   /* bề ngang giấy · số răng · độ sâu răng · tâm các lỗ xé */
-  (function(){ for(var x=17;x<TKW-12;x+=9) TKH.push(x); })();
-  function tkZig(){ var w=TKW/TKN, d='', i; for(i=0;i<TKN;i++) d+='L'+((i+.5)*w).toFixed(3)+' 0L'+((i+1)*w).toFixed(3)+' '+TKZ; return d; }   /* răng nhọn lên ở nửa bước — từ (0, 5) tới (313, 5) */
+  var VE={W:313, N:35, Z:5, H:[]};   /* vé: bề ngang giấy · số răng · độ sâu răng · tâm các lỗ xé (một object riêng — VE.W đã là độ cứng lò xo của bánh xe chữ số) */
+  (function(){ for(var x=17;x<VE.W-12;x+=9) VE.H.push(x); })();
+  function tkZig(){ var w=VE.W/VE.N, d='', i; for(i=0;i<VE.N;i++) d+='L'+((i+.5)*w).toFixed(3)+' 0L'+((i+1)*w).toFixed(3)+' '+VE.Z; return d; }   /* răng nhọn lên ở nửa bước — từ (0, 5) tới (313, 5) */
   /* thân vé: răng trên · khía phải (¼ tròn) · nửa lỗ xé dọc mép dưới · khía trái */
-  function tkMainD(py){ var d='M0 '+TKZ+tkZig()+'L'+TKW+' '+(py-11)+'A11 11 0 0 0 '+(TKW-11)+' '+py, i;
-    for(i=TKH.length-1;i>=0;i--) d+='L'+(TKH[i]+2)+' '+py+'A2 2 0 0 0 '+(TKH[i]-2)+' '+py;
+  function tkMainD(py){ var d='M0 '+VE.Z+tkZig()+'L'+VE.W+' '+(py-11)+'A11 11 0 0 0 '+(VE.W-11)+' '+py, i;
+    for(i=VE.H.length-1;i>=0;i--) d+='L'+(VE.H[i]+2)+' '+py+'A2 2 0 0 0 '+(VE.H[i]-2)+' '+py;
     return d+'L11 '+py+'A11 11 0 0 0 0 '+(py-11)+'Z'; }
   /* cuống: nửa lỗ xé dọc mép trên · khía phải · răng dưới nhọn xuống ở bước nguyên (khớp răng nhọn lên của mẩu giấy trong khe) · khía trái */
-  function tkStubD(sh){ var w=TKW/TKN, d='M11 0', i;
-    TKH.forEach(function(x){ d+='L'+(x-2)+' 0A2 2 0 0 0 '+(x+2)+' 0'; });
-    d+='L'+(TKW-11)+' 0A11 11 0 0 0 '+TKW+' 11L'+TKW+' '+sh;
-    for(i=TKN-1;i>=0;i--) d+='L'+((i+.5)*w).toFixed(3)+' '+(sh-TKZ)+'L'+(i*w).toFixed(3)+' '+sh;
+  function tkStubD(sh){ var w=VE.W/VE.N, d='M11 0', i;
+    VE.H.forEach(function(x){ d+='L'+(x-2)+' 0A2 2 0 0 0 '+(x+2)+' 0'; });
+    d+='L'+(VE.W-11)+' 0A11 11 0 0 0 '+VE.W+' 11L'+VE.W+' '+sh;
+    for(i=VE.N-1;i>=0;i--) d+='L'+((i+.5)*w).toFixed(3)+' '+(sh-VE.Z)+'L'+(i*w).toFixed(3)+' '+sh;
     return d+'L0 11A11 11 0 0 0 11 0Z'; }
   /* mã vạch: mỗi vạch một hình chữ nhật trong hệ toạ độ mô-đun (viewBox n × 1, co giãn theo CSS) */
   function barD(code){ var p=SVE.c128(code), x=0, d='', i; for(i=0;i<p.length;i++){ var w=+p[i]; if(!(i%2)) d+='M'+x+' 0h'+w+'v1h-'+w+'z'; x+=w; } return {d:d, n:x}; }
@@ -753,7 +759,7 @@ if(typeof window!=='undefined' && typeof document!=='undefined') SVX=(function()
     if(q.weeks) g.push(['THỜI HẠN GÓI', String(q.weeks), 'TUẦN']);
     var hero=off ? ['SAU ƯU ĐÃI CÒN', vnd(q.unit)] : ['ĐƠN GIÁ GỐC', vnd(q.P)], code='B0DY-'+q.S+'B-'+q.total, bar=barD(code);
     return '<div class="sv-ans sv-billw"><i class="sv-slot" aria-hidden="true"></i><div class="sv-bc">'+
-      '<svg class="sv-roll" viewBox="0 0 '+TKW+' 12" preserveAspectRatio="none" aria-hidden="true"><path d="M0 12V'+TKZ+tkZig()+'V12Z"/></svg>'+   /* mẩu giấy còn trong khe (vết xé lần trước) */
+      '<svg class="sv-roll" viewBox="0 0 '+VE.W+' 12" preserveAspectRatio="none" aria-hidden="true"><path d="M0 12V'+VE.Z+tkZig()+'V12Z"/></svg>'+   /* mẩu giấy còn trong khe (vết xé lần trước) */
       '<div class="sv-tk"><div class="sv-tm"><svg class="pp" aria-hidden="true"><path/></svg>'+
         '<div class="hd"><svg class="wm" viewBox="0 0 132 43" aria-label="B0DY"><use href="#b0dy-k"/></svg><div class="hr"><div class="ty">PHIẾU ĐỀ XUẤT</div><div class="dt">'+when+'</div></div></div>'+
         '<div class="gl">GÓI</div><div class="bg"><b class="n">'+q.S+'</b><span class="bu">BUỔI</span><span class="md">'+(ST.mode==='1:2' ? '1:2' : '1:1')+'</span></div><i class="hl"></i>'+
@@ -930,8 +936,8 @@ if(typeof window!=='undefined' && typeof document!=='undefined') SVX=(function()
     var t1=TKA.a1*Math.PI/180, t2=TKA.a2*Math.PI/180, c1=Math.cos(t1), s1=Math.sin(t1), c2=Math.cos(t2), s2=Math.sin(t2);
     /* tầm với quanh gốc biến đổi (giữa mép đáy hộp vé): lên tới đỉnh răng trên cùng bên phải, xuống tới đỉnh răng trái của cuống đã mở;
        ngang: góc trên trái · góc dưới phải của cuống (vé quay quanh tâm hộp) */
-    function geo(){ var py=tm.offsetHeight, sh=ts.offsetHeight, H=py+sh, top=(34.5*TKW/TKN-TKW/2)*s1+H*c1, vx=TKW/2-TKW*c2+sh*s2, vy=TKW*s2+sh*(c2-1), bot=-vx*s1+vy*c1;
-      return {py:py, sh:sh, H:H, top:top, bot:bot, E:top+bot, X:TKW/2*c1+(H/2-TKZ)*s1+(TKW/2+sh*s2)*c1+(sh*c2-sh)*s1+H/2*s1}; }
+    function geo(){ var py=tm.offsetHeight, sh=ts.offsetHeight, H=py+sh, top=(34.5*VE.W/VE.N-VE.W/2)*s1+H*c1, vx=VE.W/2-VE.W*c2+sh*s2, vy=VE.W*s2+sh*(c2-1), bot=-vx*s1+vy*c1;
+      return {py:py, sh:sh, H:H, top:top, bot:bot, E:top+bot, X:VE.W/2*c1+(H/2-VE.Z)*s1+(VE.W/2+sh*s2)*c1+(sh*c2-sh)*s1+H/2*s1}; }
     tk.classList.remove('tight');
     var g=geo(), k=Math.min(1, (Ws-2*TKA.side)/g.X, (room-TKA.F0)/g.E);
     if(k<TKA.kmin){ tk.classList.add('tight'); g=geo(); k=Math.min(1, (Ws-2*TKA.side)/g.X, (room-TKA.F0)/g.E); }
@@ -940,12 +946,12 @@ if(typeof window!=='undefined' && typeof document!=='undefined') SVX=(function()
     g.tk=tk; g.ts=ts; g.k=k; g.F=F; g.Tx=k*g.H/2*s1; g.Ty=-22-F+7*k-k*g.bot; g.sunkY=k*(g.H+7)+2;   /* gốc ở đáy hộp; đáy hộp lúc in = 7k trên đáy khung cắt (răng khớp mẩu giấy) */
     g.float='translate('+g.Tx.toFixed(2)+'px,'+g.Ty.toFixed(2)+'px) rotate(-'+TKA.a1+'deg) scale('+K+')';
     g.printed='translate(0px,0px) rotate(0deg) scale('+K+')';
-    g.start='translate(0px,'+(k*(g.H-TKZ)).toFixed(2)+'px) rotate(0deg) scale('+K+')';   /* đầu vé trùng răng mẩu giấy trong khe */
+    g.start='translate(0px,'+(k*(g.H-VE.Z)).toFixed(2)+'px) rotate(0deg) scale('+K+')';   /* đầu vé trùng răng mẩu giấy trong khe */
     g.sunk='translate(0px,'+g.sunkY.toFixed(2)+'px) rotate(0deg) scale('+K+')';
     g.open='rotate(-'+TKA.a2+'deg)';
     tk.style.bottom=(7*k).toFixed(2)+'px'; tk.style.transform=g.float; ts.style.transform=g.open;
     w.querySelector('.sv-roll').style.transform='scale('+K+')'; w.querySelector('.sv-shade').style.transform='scaleX('+K+')';
-    [[tm, g.py, tkMainD], [ts, g.sh, tkStubD]].forEach(function(x){ var sv=x[0].querySelector('.pp'); sv.setAttribute('viewBox', '0 0 '+TKW+' '+x[1]); sv.style.height=x[1]+'px'; sv.firstChild.setAttribute('d', x[2](x[1])); });
+    [[tm, g.py, tkMainD], [ts, g.sh, tkStubD]].forEach(function(x){ var sv=x[0].querySelector('.pp'); sv.setAttribute('viewBox', '0 0 '+VE.W+' '+x[1]); sv.style.height=x[1]+'px'; sv.firstChild.setAttribute('d', x[2](x[1])); });
     tk._g=g; return g;
   }
   /* toạ độ màn của một phần tử trên vé ở dáng in (thẳng, đáy khớp khe, thu k quanh giữa mép đáy) */
@@ -964,7 +970,7 @@ if(typeof window!=='undefined' && typeof document!=='undefined') SVX=(function()
     var HOLD=150, DUR=450, T=HOLD+DUR, a0=[r0.left, r0.top], b0=[r1.left, r1.top+r1.height/2-r0.height*k/2], c0=[lerp(a0[0],b0[0],.5), lerp(a0[1],b0[1],.35)];
     /* lúc mép trên tờ vé (đang in ra) đi qua giữa con số */
     var bb=layRect(tk), pt=bb.top+bb.height-g.k*g.H, d0=RISE.delay*1000, dp=RISE.dur*1000, tc=T;
-    for(var t=0;t<=T;t+=4){ var u=clamp((t-d0)/dp,0,1), top=pt+g.k*(g.H-TKZ)*(1-EB(u)), y;
+    for(var t=0;t<=T;t+=4){ var u=clamp((t-d0)/dp,0,1), top=pt+g.k*(g.H-VE.Z)*(1-EB(u)), y;
       if(t<=HOLD) y=r0.top+r0.height/2; else { var e=EB((t-HOLD)/DUR), P=qbez(a0,c0,b0,e); y=P[1]+r0.height*lerp(1,k,e)/2; }
       if(top<=y){ tc=t; break; } }
     var f=flyText(src, {left:r0.left, top:r0.top, height:r0.height}, {text:txt, color:'#FAFAFA'});

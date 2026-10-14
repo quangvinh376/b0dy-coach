@@ -3,7 +3,7 @@
    Font/asset tĩnh: cache-first. Không đụng tới API (script.google.com).
    v2.15.1: font cùng origin (fonts/) cũng cache-first (trước đây rơi vào nhánh network-first → mỗi lần mở app hỏi mạng lại,
    mạng chậm thì chữ hiện font dự phòng rồi mới đổi); không cất phản hồi lỗi (404) vào cache; cài sẵn woff2. */
-var VER='b0dy-coach-v2.17.0';
+var VER='b0dy-coach-v2.17.1';
 var SHELL=['./','./index.html','./app.css','./app.js','./sell.js','./manifest.webmanifest','./icon-192.png','./icon-512.png','./apple-touch-icon.png','./fonts/SVN-Switzer-Medium.woff2'];
 self.addEventListener('install',function(e){ e.waitUntil(caches.open(VER).then(function(c){ return c.addAll(SHELL); }).then(function(){ return self.skipWaiting(); })); });
 self.addEventListener('activate',function(e){ e.waitUntil(caches.keys().then(function(ks){ return Promise.all(ks.filter(function(k){return k!==VER}).map(function(k){return caches.delete(k)})); }).then(function(){ return self.clients.claim(); })); });
