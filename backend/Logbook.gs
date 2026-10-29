@@ -226,15 +226,21 @@ function lbCoach_(p) {
   if (!coach) return { ok: false, error: 'sai_pin' };
   var mem = lbMembers_(true);                     /* BA: {ok, members:[{name,total,done,left,coach,start,end,exp,kind,pkg,status}]} — cả khách đã hết gói (v2.2) */
   if (!mem || !mem.ok) return { ok: false, error: (mem && mem.error) || 'members_failed' };
-  var mine = [], names = {}, cn = lbNorm_(coach);
+  var mine = [], names = {}, cn = lbNorm_(coach), owner = {};
   (mem.members || []).forEach(function (m) {
+    owner[String(m.name).trim()] = m.coach;       /* v2.11: dòng cuối trên sheet = coach hiện hành (như memberCoachMap_) — list sort ổn định theo tên */
     if (lbNorm_(m.coach) === cn) { mine.push(m); names[String(m.name).trim()] = 1; }
   });
   mine = lbOnePerName_(mine);                     /* v2.11 (29/10): khách gia hạn = MỘT dòng, như admMembers_ */
   var snap = lbSnapshot_(lbReadAll_(), names);
-  /* đã check-in hôm nay (bất kỳ thiết bị/kiosk nào) → checked + giờ ký, để app hiện A3.1 */
+  /* đã check-in hôm nay (bất kỳ thiết bị/kiosk nào) → checked + giờ ký, để app hiện A3.1.
+     v2.11: chỉ khi khách ĐANG thuộc coach này — giai đoạn mới ở coach khác (011A Quyết Hán → 011B Hiền Mai) tập với coach kia
+     thì không hiện ở "Khách hôm nay" của coach cũ (SESSION LOG không ghi coach theo dòng, chỉ theo tên). */
   var sg = lbSignedToday_();
-  mine.forEach(function (m) { var t = sg[lbNorm_(m.name)]; if (t !== undefined) { m.checked = true; m.signed = t; } });
+  mine.forEach(function (m) {
+    var t = sg[lbNorm_(m.name)];
+    if (t !== undefined && lbNorm_(owner[String(m.name).trim()]) === cn) { m.checked = true; m.signed = t; }
+  });
   return { ok: true, coach: coach, members: mine, snapshot: snap, library: lbLibrary_(), today: lbToday_(),
            server: Utilities.formatDate(new Date(), LB_TZ, 'yyyy-MM-dd HH:mm') };
 }

@@ -150,6 +150,7 @@ Mã do app dựng là **VietQR động** (NAPAS 247 · EMVCo MPM): tài khoản 
 MEMBERS ghi mỗi hợp đồng / giai đoạn một dòng, nên khách gia hạn có hai dòng cùng tên (gói cũ hết buổi + gói mới). Trước v2.11 lệnh `coach` trả cả hai dòng (Admin thì đã gộp từ v2.4 — `admMembers_` / Worker `admPick`), app coi là hai khách: "Khách hôm nay" hiện hai lần, app lấy nhầm dòng gói cũ (đếm buổi trong logbook từ gói cũ, khách 1:2 bị bỏ chọn, hồ sơ nhảy về gói cũ).
 
 - `lbOnePerName_(list)`: giữ dòng **còn buổi** cuối cùng, không có thì dòng cuối — cùng luật với Admin. `lbCoach_` gọi sau khi lọc khách của coach.
+- "Đã tập hôm nay" (`checked` / `signed`) chỉ gắn khi khách **đang thuộc coach này** = coach của dòng cuối cùng cùng tên trên MEMBERS (cùng luật `memberCoachMap_` dùng để chặn check-in hộ). SESSION LOG nhận diện theo tên, nên trước đây khách chuyển giai đoạn sang coach khác (vd. 011A Quyết Hán → 011B Hiền Mai) tập với coach mới vẫn hiện trong "Khách hôm nay" của coach cũ.
 - App v2.18.3 gộp cùng luật ở `buildClients` (`oneRowPerName`), nên chạy đúng với cả máy chủ cũ lẫn mới; bản máy chủ này để Apps Script, Worker và app trả cùng một danh sách.
 - Cài đặt: dán `backend/Logbook.gs` vào file `Logbook` ▸ Save ▸ **Deploy ▸ Manage deployments ▸ ✏️ ▸ New version ▸ Deploy**. Không đổi `Code.gs`.
 - Worker (lệnh `coach` đi Worker trước): `apiCoach` thêm `admPick` sau khi lọc khách của coach — một cặp thay chuỗi trên Worker v8, doc dự án `claude/b0dy-kiosk-worker-v9.md`.

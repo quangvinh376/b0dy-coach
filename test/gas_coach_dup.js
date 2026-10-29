@@ -1,6 +1,7 @@
-/* v2.11 máy chủ (29/10) — lệnh `coach` của Apps Script (Logbook.gs lbCoach_) gộp các dòng MEMBERS cùng tên.
+/* v2.11 máy chủ (29/10) — lệnh `coach` của Apps Script (Logbook.gs lbCoach_) gộp các dòng MEMBERS cùng tên,
+   và chỉ gắn "đã tập hôm nay" khi khách đang thuộc coach này (dòng cuối trên sheet).
    Chạy Logbook.gs THẬT trong VM Node; MEMBERS / SESSION LOG / Customer database thay bằng hàm giả (không mạng, không Code.gs).
-   Chạy: node test/gas_coach_dup.js        (Logbook.gs trước v2.11: G1 G2 G4 G6 trượt) */
+   Chạy: node test/gas_coach_dup.js        (Logbook.gs trước v2.11: G1 G2 G4 G6 G7 trượt) */
 var fs = require('fs'), vm = require('vm'), path = require('path');
 var ROOT = process.env.ROOT || path.join(__dirname, '..');
 var pass = 0, fail = 0;
@@ -44,6 +45,8 @@ check(by['Khách Đôi A'] && by['Khách Đôi A'].left === 8 && by['Khách Đô
 check(by['Khách Ngược'] && by['Khách Ngược'].left === 3, 'G3 dòng còn buổi đứng trên vẫn được giữ', by['Khách Ngược']);
 check(by['Khách Xong'] && by['Khách Xong'].total === 24, 'G4 cả hai hết buổi → dòng cuối', by['Khách Xong']);
 check(by['Khách Hai Giai Đoạn'] && by['Khách Hai Giai Đoạn'].coach === 'Coach Một' && by['Khách Hai Giai Đoạn'].left === 0, 'G5 chỉ gộp trong khách của coach này (dòng coach khác không lọt vào)', by['Khách Hai Giai Đoạn']);
+check(by['Khách Hai Giai Đoạn'] && !by['Khách Hai Giai Đoạn'].checked && !by['Khách Hai Giai Đoạn'].signed, 'G7 giai đoạn mới ở coach khác tập hôm nay → KHÔNG hiện ở Khách hôm nay của coach cũ', by['Khách Hai Giai Đoạn']);
+check(by['Khách Một'] && !by['Khách Một'].checked, 'G8 khách chưa tập hôm nay không bị gắn cờ', by['Khách Một']);
 check(typeof ctx.lbOnePerName_ === 'function' && ctx.lbOnePerName_([]).length === 0, 'G6 lbOnePerName_ với danh sách rỗng');
 console.log('\n' + pass + ' PASS, ' + fail + ' FAIL');
 process.exit(fail ? 1 : 0);
