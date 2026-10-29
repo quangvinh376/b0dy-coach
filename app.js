@@ -7,7 +7,7 @@
    ===================================================================== */
 'use strict';
 var $=function(id){ return document.getElementById(id); };
-var APP_VER='v2.18.3';
+var APP_VER='v2.19.0';
 
 /* ---------------- tiện ích ---------------- */
 function isoToday(d){ d=d||new Date(); return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2); }
@@ -258,13 +258,16 @@ function ipWhy(){
 /* ---- v2.18.3: MỘT khách = MỘT dòng. MEMBERS có thể nhiều dòng cùng tên (khách gia hạn: dòng gói cũ hết buổi + dòng gói mới).
    Giữ dòng CÒN BUỔI cuối cùng, không có thì dòng cuối — đúng luật admPick (Worker) / admMembers_ (Apps Script) của Admin.
    Trước đây mỗi dòng là một khách: "Khách hôm nay" hiện 2 lần, findClient lấy dòng gói cũ (đếm buổi sai, mất chọn 1:2, hồ sơ nhảy gói). ---- */
+/* v2.19.0 (29/10): khách nhận diện theo KHOÁ — máy chủ (Worker v10 / Apps Script v2.12) gửi key = tên khi tên chỉ thuộc MỘT người
+   trong danh sách, trùng tên → mã khách (pid, VD B004DY). Máy chủ cũ không gửi key → khoá = tên như trước. Tên chỉ để HIỂN THỊ. */
+function KEY(x){ return x ? String(x.key||x.name||'') : ''; }
 function rowLeft(m){ return m.left!=null ? (+m.left||0) : Math.max(0,(+m.total||0)-(+m.done||0)); }
 function rowWins(cur, m){ return rowLeft(m)>0 || !(rowLeft(cur)>0); }   /* m (đứng sau cur trên sheet) thay cur? */
-function rowOf(list, name){ var r=null; (list||[]).forEach(function(m){ if(m.name===name && (!r || rowWins(r,m))) r=m; }); return r; }
+function rowOf(list, key){ var r=null; (list||[]).forEach(function(m){ if(KEY(m)===key && (!r || rowWins(r,m))) r=m; }); return r; }
 function oneRowPerName(list){
   var at={}, out=[];
   (list||[]).forEach(function(m){
-    var i=at[m.name]; if(i==null){ at[m.name]=out.length; out.push(m); return; }
+    var k=KEY(m), i=at[k]; if(i==null){ at[k]=out.length; out.push(m); return; }
     var cur=out[i], win=rowWins(cur,m)?m:cur, lose=win===m?cur:m;
     if(lose.checked && !win.checked) win=Object.assign({}, win, {checked:true, signed:win.signed||lose.signed||''});   /* đã tập hôm nay gắn theo tên */
     out[i]=win;
@@ -276,20 +279,20 @@ function buildClients(res, t0){
   var snap=res.snapshot||{};
   state.coach=res.coach; state.lib=res.library||null;
   state.clients=oneRowPerName(res.members).map(function(m){
-    var c=snap[m.name]||{};
-    return {name:m.name, done:+m.done||0, total:+m.total||0, left:(m.left!=null?+m.left:Math.max(0,(+m.total||0)-(+m.done||0))), coach:m.coach,
+    var c=snap[KEY(m)]||{};
+    return {name:m.name, key:KEY(m), pid:m.pid||'', done:+m.done||0, total:+m.total||0, left:(m.left!=null?+m.left:Math.max(0,(+m.total||0)-(+m.done||0))), coach:m.coach,
             start:m.start||'', end:m.end||'', exp:m.exp||m.expiry||'', kind:m.kind||m.type||'', checked:!!m.checked, signed:m.signed||'',
             measures:(c.measures||[]).slice().sort(function(a,b){return a.d<b.d?-1:a.d>b.d?1:0}), target:c.target||{}, main:c.main||'weight', last:c.last||{}, plans:c.plans||{}};
   });
   if(res.today) TODAY_ISO=res.today, TODAY=vn(TODAY_ISO);
   /* máy chủ nói CHƯA check-in hôm nay (ví dụ dòng SESSION LOG đã bị xoá) → bỏ bản ghi "đã tập" trong máy, trừ check-in vừa xong sau lúc gửi yêu cầu */
-  if(t0){ var ch=false; state.clients.forEach(function(m){ var ci=CI[m.name]; if(ci && ci.day===TODAY_ISO && ci.status==='ok' && !m.checked && (ci.t||0)<t0){ delete CI[m.name]; ch=true; } }); if(ch) ciSave(); }
+  if(t0){ var ch=false; state.clients.forEach(function(m){ var ci=CI[KEY(m)]; if(ci && ci.day===TODAY_ISO && ci.status==='ok' && !m.checked && (ci.t||0)<t0){ delete CI[KEY(m)]; ch=true; } }); if(ch) ciSave(); }
   applyPending();
 }
 /* sự kiện còn nằm trong hàng đợi (máy chủ chưa nhận) vẫn phải hiện trên UI */
 function applyPending(){
   OUT.q.forEach(function(e){
-    var c=findClient(e.name); if(!c) return;
+    var c=findClient(KEY(e)); if(!c) return;
     if(e.type==='ĐO'){ var m=c.measures.filter(function(x){return x.d===e.date})[0]; if(!m){ m={d:e.date}; c.measures.push(m); c.measures.sort(function(a,b){return a.d<b.d?-1:a.d>b.d?1:0}); } m[e.metric]=e.val; }
     else if(e.type==='MỤC TIÊU'){ c.target[e.metric]=e.val; c.main=e.metric; }
     else if(e.type==='SET'){ if(e.ok) c.last[e.ex]={kg:e.kg,rep:e.rep,d:e.date}; }
@@ -331,7 +334,7 @@ function setAdmin(on, pin){
 }
 function loadCache(coach){ try{ var c=JSON.parse(ST('lb_data_'+coach)||'null'); return c&&c.res?c:null; }catch(e){ return null; } }
 function hashPin(p){ var h=2166136261; p=String(p||''); for(var i=0;i<p.length;i++){ h^=p.charCodeAt(i); h=Math.imul(h,16777619)>>>0; } return h.toString(16); }
-function findClient(name){ return (state.clients||[]).filter(function(c){return c.name===name})[0]; }
+function findClient(key){ return (state.clients||[]).filter(function(c){return KEY(c)===key})[0]; }
 /* đồng bộ ngầm: lấy lại toàn bộ (stale-while-revalidate) */
 /* v2.4.1: danh sách + thống kê chạy SONG SONG (trước đây thống kê chờ danh sách xong mới gọi → Admin chờ ~15 s + ~12 s).
    ep=AUTH_EP: kết quả về sau khi đã đổi người dùng (coach ⇄ Admin, đăng xuất) bị bỏ — không đổ dữ liệu phiên cũ vào phiên mới. */
@@ -345,7 +348,7 @@ function refreshData(quiet){
     if(!res||!res.ok){ if(res&&res.error==='sai_pin') pinGone(ep); return; }
     var before=JSON.stringify(state.clients);
     buildClients(res, t0); saveCache(res); state.dataTs=Date.now();
-    if(state.client) state.client=findClient(state.client.name)||state.client;
+    if(state.client) state.client=findClient(KEY(state.client))||state.client;
     if(JSON.stringify(state.clients)!==before && HOOK[state.screen] && REFRESHABLE[state.screen]){ HOOK[state.screen](null,true); afterShow($(state.screen)); }
     /* máy chủ vừa đổi TODAY_ISO sang tháng mới mà thống kê đã về theo tháng cũ → lấy lại */
     if(!state._stats && state.stats && state.stats.month && state.stats.month!==TODAY_ISO.slice(0,7)) refreshStats(true);
@@ -1365,7 +1368,7 @@ function adminLogout(){ logout(); }
    1 — TRANG CHỦ
    ===================================================================== */
 function monthOf(iso){ return iso.slice(0,7); }
-function statsFor(name){ var s=state.stats; return (s && s.perClient && s.perClient[name]) || null; }
+function statsFor(key){ var s=state.stats; return (s && s.perClient && s.perClient[key]) || null; }
 /* slowClients()/slowList(): định nghĩa v2.7 ở mục 1d (trang Khách tập chậm) */
 HOOK['p-home']=function(dir, quiet){ renderHome(!quiet); };
 function homeRange(r){ state.homeRange=r; $('h-7d').classList.toggle('on', r==='7d'); $('h-1m').classList.toggle('on', r==='1m'); renderBars(true); }
@@ -1402,7 +1405,7 @@ function renderHome(animate){
   else { ht.innerHTML=heroWord()+' <span class="n">'+total+'</span> buổi'; if(animate) countUp(ht.querySelector('.n'), total, 700, 420); }
   renderBars(animate);
   var active=state.clients.filter(function(c){ return c.left>0; }).length;
-  var slow=slowClients(), today=state.clients.filter(function(c){ return c.checked || (ciFor(c.name)&&ciFor(c.name).status==='ok'); }).length;
+  var slow=slowClients(), today=state.clients.filter(function(c){ return c.checked || (ciFor(KEY(c))&&ciFor(KEY(c)).status==='ok'); }).length;
   /* ô tiền: coach = Hoa hồng của mình (tab COM) · Admin = Doanh thu cả phòng (dòng Tổng tab COM). Tháng COM khác tháng này → ghi rõ "T8". */
   /* v2.7: coach = hoa hồng tính thẳng từ SESSION LOG tháng này (stats.comMon, khớp trang Hoa hồng); máy chủ cũ → tab COM */
   /* v2.7.1: Admin = Doanh thu tháng này từ SESSION LOG (stats.comMon, khớp trang Doanh thu); máy chủ cũ → dòng Tổng tab COM */
@@ -1468,10 +1471,10 @@ function renderBars(animate){
 var CS_OPEN=false, CS_KIND='';
 function csClients(kind){
   if(kind==='slow') return slowClients()||[];                       /* chưa có thống kê → rỗng */
-  return state.clients.filter(function(c){ return c.checked || (ciFor(c.name)&&ciFor(c.name).status==='ok'); });
+  return state.clients.filter(function(c){ return c.checked || (ciFor(KEY(c))&&ciFor(KEY(c)).status==='ok'); });
 }
 function csMeta(m, kind){
-  if(kind==='today'){ var ci=ciFor(m.name), at=(ci && ci.status==='ok' && ci.at) || m.signed || ''; return 'ĐÃ TẬP HÔM NAY'+(at?' · '+at:''); }
+  if(kind==='today'){ var ci=ciFor(KEY(m)), at=(ci && ci.status==='ok' && ci.at) || m.signed || ''; return 'ĐÃ TẬP HÔM NAY'+(at?' · '+at:''); }
   return clientMeta(m)+' <svg class="ic s13 slow"><use href="#t-trend"/></svg>';
 }
 function openClientSheet(kind){ CS_KIND=kind; CS_OPEN=true; $('cs-q').value=''; renderClientSheet(true); $('cs-dim').classList.add('on'); $('csheet').classList.add('on'); syncTheme(); }
@@ -1512,15 +1515,15 @@ var SLOW_ICO=' <svg class="ic s13 slow"><use href="#t-trend"/></svg>';   /* khá
 function renderClients(animate){
   var q=norm($('cl-q').value), el=$('cl-list'), f=state.clFilter||''; el.innerHTML=''; var i=0;
   var all=state.clients.filter(function(m){ return !q || norm(m.name).indexOf(q)>=0; });
-  var slow=slowClients(), slowN={}; (slow||[]).forEach(function(c){ slowN[c.name]=1; });
-  if(f==='slow') all=all.filter(function(m){ return slowN[m.name]; });
-  if(f==='today') all=all.filter(function(m){ return m.checked || (ciFor(m.name)&&ciFor(m.name).status==='ok'); });
+  var slow=slowClients(), slowN={}; (slow||[]).forEach(function(c){ slowN[KEY(c)]=1; });
+  if(f==='slow') all=all.filter(function(m){ return slowN[KEY(m)]; });
+  if(f==='today') all=all.filter(function(m){ return m.checked || (ciFor(KEY(m))&&ciFor(KEY(m)).status==='ok'); });
   var act=all.filter(function(m){ return m.left>0; }), done=all.filter(function(m){ return m.left<=0; });
   if(f==='today'){ act=all; done=[]; }   /* lọc "Khách hôm nay": khách vừa dùng hết gói vẫn thuộc nhóm hôm nay, không rơi sang "ĐÃ HẾT GÓI" */
   function sec(t, list, first){
     if(!list.length) return;
     var d=document.createElement('div'); d.className='lab sec'+(first?' first':''); d.textContent=t+' · '+list.length; el.appendChild(d);
-    list.forEach(function(m){ el.appendChild(clientRow(m, animate, i++, clientMeta(m)+(slowN[m.name]?SLOW_ICO:''), function(){ var h=FX.heroPrep(this.querySelector('.nm'), firstName(m.name)); state.client=m; state.back='p-clients'; go('p-profile','fwd'); FX.heroFly(h, $('pf-name')); })); });
+    list.forEach(function(m){ el.appendChild(clientRow(m, animate, i++, clientMeta(m)+(slowN[KEY(m)]?SLOW_ICO:''), function(){ var h=FX.heroPrep(this.querySelector('.nm'), firstName(m.name)); state.client=m; state.back='p-clients'; go('p-profile','fwd'); FX.heroFly(h, $('pf-name')); })); });
   }
   sec(f==='slow'?'KHÁCH TẬP CHẬM':f==='today'?'KHÁCH HÔM NAY':'KHÁCH ĐANG HOẠT ĐỘNG', act, true);
   sec('KHÁCH ĐÃ HẾT GÓI', done, !act.length);
@@ -1601,11 +1604,11 @@ function clearMeasure(){ state.msForm={}; renderMs(false); }
 function saveMeasure(){
   var m=state.client, n=0, today=last(m.measures);
   if(!today || today.d!==TODAY_ISO){ today={d:TODAY_ISO}; m.measures.push(today); }
-  METRICS.forEach(function(x){ var v=state.msForm[x.id]; if(!v) return; var num=parseFloat(v.replace(',','.')); if(isNaN(num)) return; today[x.id]=num; n++; enqueue({type:'ĐO', name:m.name, metric:x.id, val:num, session:sessionNoFor(m.name)}); });
+  METRICS.forEach(function(x){ var v=state.msForm[x.id]; if(!v) return; var num=parseFloat(v.replace(',','.')); if(isNaN(num)) return; today[x.id]=num; n++; enqueue({type:'ĐO', name:m.name, key:KEY(m), pid:m.pid, metric:x.id, val:num, session:sessionNoFor(KEY(m))}); });
   if(!n){ if(Object.keys(today).length===1) m.measures.pop(); notify('Chưa nhập số đo nào', {err:true}); return; }
   flush(); go('p-measure','back'); notify('Đã lưu số đo');
 }
-function sessionNoFor(name){ var s=state.session; if(!s) return null; var p=s.people.filter(function(p){return p.name===name})[0]; return p?p.no:null; }
+function sessionNoFor(key){ var s=state.session; if(!s) return null; var p=s.people.filter(function(p){return KEY(p)===key})[0]; return p?p.no:null; }
 
 /* ---- SUB 4 — ĐẶT MỤC TIÊU ---- */
 var tgWheel=null;
@@ -1623,18 +1626,18 @@ HOOK['p-target']=function(){
 function saveTarget(){
   var m=state.client, x=metric(state.tgMetric);
   m.main=x.id; m.target[x.id]=state.tgVal; state.pfMetric=x.id;
-  enqueue({type:'MỤC TIÊU', name:m.name, metric:x.id, val:state.tgVal, session:sessionNoFor(m.name)}); flush();
+  enqueue({type:'MỤC TIÊU', name:m.name, key:KEY(m), pid:m.pid, metric:x.id, val:state.tgVal, session:sessionNoFor(KEY(m))}); flush();
   go('p-profile','back'); notify('Đã đặt mục tiêu');
 }
 
 /* ---- SUB 5 — HIỆU SUẤT TẬP (lịch sử set theo bài) ---- */
 HOOK['p-perf']=function(dir, quiet){ if(!quiet) $('pe-q').value=''; renderPerf(!quiet); };
 function perfHist(m){
-  var h={}, srv=state.stats && state.stats.hist && state.stats.hist[m.name];
+  var h={}, srv=state.stats && state.stats.hist && state.stats.hist[KEY(m)];
   if(srv) Object.keys(srv).forEach(function(ex){ h[ex]=(srv[ex]||[]).slice(); });
   Object.keys(m.last||{}).forEach(function(ex){ var l=m.last[ex]; if(!h[ex]) h[ex]=[]; if(!h[ex].some(function(r){ return r.d===l.d && r.kg===l.kg && r.rep===l.rep; })) h[ex].push({d:l.d,kg:l.kg,rep:l.rep,ok:1}); });
-  var s=state.session; if(s) s.people.forEach(function(p){ if(p.name!==m.name) return; Object.keys(p.ex).forEach(function(ex){ (p.ex[ex].sets||[]).forEach(function(st){ if(!h[ex]) h[ex]=[]; h[ex].push({d:TODAY_ISO,kg:st[0],rep:st[1],ok:st[2],live:1}); }); }); });
-  OUT.q.forEach(function(e){ if(e.type==='SET' && e.name===m.name){ if(!h[e.ex]) h[e.ex]=[]; if(!h[e.ex].some(function(r){return r.live && r.kg===e.kg && r.rep===e.rep})) h[e.ex].push({d:e.date,kg:e.kg,rep:e.rep,ok:e.ok}); } });
+  var s=state.session; if(s) s.people.forEach(function(p){ if(KEY(p)!==KEY(m)) return; Object.keys(p.ex).forEach(function(ex){ (p.ex[ex].sets||[]).forEach(function(st){ if(!h[ex]) h[ex]=[]; h[ex].push({d:TODAY_ISO,kg:st[0],rep:st[1],ok:st[2],live:1}); }); }); });
+  OUT.q.forEach(function(e){ if(e.type==='SET' && KEY(e)===KEY(m)){ if(!h[e.ex]) h[e.ex]=[]; if(!h[e.ex].some(function(r){return r.live && r.kg===e.kg && r.rep===e.rep})) h[e.ex].push({d:e.date,kg:e.kg,rep:e.rep,ok:e.ok}); } });
   Object.keys(h).forEach(function(ex){ h[ex].sort(function(a,b){ return a.d<b.d?1:a.d>b.d?-1:0; }); });
   return h;
 }
@@ -1696,16 +1699,16 @@ function slowWeeks(){ var s=state.stats; if(!s||!s.perClient) return false; if(s
 function slowInfo(c){
   var s=state.stats; if(!s || !(c.left>0)) return null;
   var exp=dayIso(c.exp||c.end); if(!exp) return null;
-  var p=(s.perClient && s.perClient[c.name])||{}, tN=isoN(TODAY_ISO), st=isoN(dayIso(c.start));
+  var p=(s.perClient && s.perClient[KEY(c)])||{}, tN=isoN(TODAY_ISO), st=isoN(dayIso(c.start));
   var since=isNaN(st) ? 28 : tN-st+1; if(since<14) return null;
   var rate=(+p.n28||0)/(Math.min(28, since)/7), days=isoN(exp)-tN, wl=Math.max(0, days/7);
-  var plan=+((s.plan && s.plan[c.name])||0);
+  var plan=+((s.plan && s.plan[KEY(c)])||0);
   return {m:c, rate:rate, need: wl>0 ? c.left/wl : Infinity, wl:wl, exp:exp, days:days, extra:Math.max(0, c.left-rate*wl),
           plan:plan, extraPlan: plan>0 && wl>0 ? c.left-plan*wl : null, w8:p.w8||[0,0,0,0,0,0,0,0], last:p.lastAll||p.last||''};
 }
 function slowList(){
   var s=state.stats; if(!s || !s.perClient) return null;
-  if(!slowWeeks()) return state.clients.filter(function(c){ var p=s.perClient[c.name]; return c.left>0 && p && (+p.m||0)<10; }).map(function(c){ return {m:c, old:1}; });
+  if(!slowWeeks()) return state.clients.filter(function(c){ var p=s.perClient[KEY(c)]; return c.left>0 && p && (+p.m||0)<10; }).map(function(c){ return {m:c, old:1}; });
   return state.clients.map(slowInfo).filter(function(i){ return i && Math.round(i.extra)>=SLOW_MIN; }).sort(function(a,b){ return b.extra-a.extra || a.days-b.days; });
 }
 function slowClients(){ var l=slowList(); return l ? l.map(function(i){ return i.m; }) : null; }
@@ -1744,10 +1747,10 @@ function renderSlow(animate){
       if(i.old){ el.appendChild(clientRow(i.m, animate, k++, slowMeta(i), function(){ var h=FX.heroPrep(this.querySelector('.nm'), firstName(i.m.name)); state.client=i.m; state.back='p-slow'; go('p-profile','fwd'); FX.heroFly(h, $('pf-name')); })); return; }
       var b=clientRow(i.m, animate, k++, slowMeta(i), null, 'i-chev', 'dn'), x=document.createElement('div'); x.className='xp';
       el.appendChild(b); el.appendChild(x);
-      if(SL_OPEN[i.m.name]) slowOpen(b, x, i, false);
+      if(SL_OPEN[KEY(i.m)]) slowOpen(b, x, i, false);
       b.onclick=function(){
-        if(b.classList.contains('open')){ b.classList.remove('open'); delete SL_OPEN[i.m.name]; }
-        else { SL_OPEN[i.m.name]=1; slowOpen(b, x, i, true); }
+        if(b.classList.contains('open')){ b.classList.remove('open'); delete SL_OPEN[KEY(i.m)]; }
+        else { SL_OPEN[KEY(i.m)]=1; slowOpen(b, x, i, true); }
         setTimeout(function(){ fogUpdate(el); },20);
       };
     });
@@ -1858,9 +1861,9 @@ function comShift(dir){
    ===================================================================== */
 HOOK['p-pick']=function(dir, quiet){ if(!quiet) $('pk-q').value=''; renderPick(!quiet); };
 function doneToday(m){
-  if(state.session && state.session.people.some(function(p){ return p.name===m.name; })) return null;
-  var s=loadSession(); if(s && s.people.some(function(p){ return p.name===m.name; })) return null;
-  var ci=ciFor(m.name); if(ci && ci.status==='ok') return ci.at||m.signed||'';
+  if(state.session && state.session.people.some(function(p){ return KEY(p)===KEY(m); })) return null;
+  var s=loadSession(); if(s && s.people.some(function(p){ return KEY(p)===KEY(m); })) return null;
+  var ci=ciFor(KEY(m)); if(ci && ci.status==='ok') return ci.at||m.signed||'';
   if(m.checked) return m.signed||'';
   return null;
 }
@@ -1870,7 +1873,7 @@ function pickMeta(m, at){ return at!=null ? 'ĐÃ TẬP HÔM NAY · '+(at||'—'
 /* chip tên khách 1:2 đã chọn — vào/ra bằng transition (ngắt được), xoá sau khi mờ hết */
 function pickChip(n){
   var c=document.createElement('button'); c.className='chip pre'; c.setAttribute('data-name', n);
-  c.innerHTML='<span>'+esc(firstName(n))+'</span>'+ico('i-x'); c.onclick=function(){ togglePick(n); }; return c;
+  var m=findClient(n); c.innerHTML='<span>'+esc(firstName(m?m.name:n))+'</span>'+ico('i-x'); c.onclick=function(){ togglePick(n); }; return c;
 }
 function pickChipsSync(){
   var chips=$('pk-chips'), wrap=$('pk-chipw'), go=$('pk-go'), keep={};
@@ -1891,12 +1894,12 @@ function pickIcon(b, name, cls){
   w.appendChild(nu); nu.offsetWidth; nu.classList.remove('icin');
 }
 function pickRow(m, animate, i){
-  var at=doneToday(m), duo=isDuo(m), sel=duo && state.sel.indexOf(m.name)>=0, b;
+  var at=doneToday(m), duo=isDuo(m), sel=duo && state.sel.indexOf(KEY(m))>=0, b;
   if(at!=null) b=clientRow(m, animate, i, pickMeta(m, at), null, false);
-  else if(duo) b=clientRow(m, animate, i, clientMeta(m), function(){ togglePick(m.name); }, sel?'i-check':'i-plus', sel?'acid':'paper');
-  else b=clientRow(m, animate, i, clientMeta(m), function(){ var h=FX.heroPrep(this.querySelector('.nm'), firstName(m.name)); state.sel=[m.name]; if(navigator.vibrate) navigator.vibrate(6); go('p-confirm','fwd'); FX.heroFly(h, $('cf-body').querySelector('.head .t1')); }, 'i-arr');
+  else if(duo) b=clientRow(m, animate, i, clientMeta(m), function(){ togglePick(KEY(m)); }, sel?'i-check':'i-plus', sel?'acid':'paper');
+  else b=clientRow(m, animate, i, clientMeta(m), function(){ var h=FX.heroPrep(this.querySelector('.nm'), firstName(m.name)); state.sel=[KEY(m)]; if(navigator.vibrate) navigator.vibrate(6); go('p-confirm','fwd'); FX.heroFly(h, $('cf-body').querySelector('.head .t1')); }, 'i-arr');
   var ic=b.querySelector('.ic'); if(ic){ var w=document.createElement('span'); w.className='icw'; ic.setAttribute('data-i', ic.querySelector('use').getAttribute('href').slice(1)); b.replaceChild(w, ic); w.appendChild(ic); }
-  b.setAttribute('data-name', m.name); if(duo) b.classList.add('duo'); if(sel) b.classList.add('sel'); if(at!=null) b.classList.add('off');
+  b.setAttribute('data-name', KEY(m)); if(duo) b.classList.add('duo'); if(sel) b.classList.add('sel'); if(at!=null) b.classList.add('off');
   return b;
 }
 function renderPick(animate){
@@ -1916,10 +1919,10 @@ function renderPick(animate){
   pickChipsSync();
   fogUpdate(el); if(!animate) mqInit(el);
 }
-function togglePick(name){
-  var k=state.sel.indexOf(name), m=findClient(name);
+function togglePick(key){
+  var k=state.sel.indexOf(key), m=findClient(key);
   if(k>=0) state.sel.splice(k,1);
-  else { if(!m || !isDuo(m)) return; if(state.sel.length>=2){ notify('Tối đa 2 khách', {err:true}); return; } state.sel.push(name); if(navigator.vibrate) navigator.vibrate(6); }
+  else { if(!m || !isDuo(m)) return; if(state.sel.length>=2){ notify('Tối đa 2 khách', {err:true}); return; } state.sel.push(key); if(navigator.vibrate) navigator.vibrate(6); }
   /* cập nhật đúng dòng + chip, không dựng lại danh sách */
   var el=$('pk-list'); [].slice.call(el.querySelectorAll('.row.duo')).forEach(function(b){
     var on=state.sel.indexOf(b.getAttribute('data-name'))>=0; if(on===b.classList.contains('sel')) return;
@@ -1932,12 +1935,12 @@ function togglePick(name){
    3 — XÁC NHẬN · CHECK-IN
    ===================================================================== */
 function personNo(m){
-  var s=state.session||loadSession(); if(s){ var p=s.people.filter(function(p){return p.name===m.name})[0]; if(p) return p.no; }
-  var ci=ciFor(m.name); if(ci && ci.no) return ci.no;
+  var s=state.session||loadSession(); if(s){ var p=s.people.filter(function(p){return KEY(p)===KEY(m)})[0]; if(p) return p.no; }
+  var ci=ciFor(KEY(m)); if(ci && ci.no) return ci.no;
   return m.done+1;
 }
 function lastSessionDay(m){
-  var p=statsFor(m.name), d=(p&&p.last)||'';
+  var p=statsFor(KEY(m)), d=(p&&p.last)||'';
   Object.keys(m.last||{}).forEach(function(ex){ var l=m.last[ex]; if(l && l.d && l.d>d && l.d!==TODAY_ISO) d=l.d; });
   return d;
 }
@@ -1961,10 +1964,10 @@ function countUpAll(els, to, dur, delay){
   setTimeout(function(){ var t0=performance.now(); (function f(t){ var p=Math.min(1,(t-t0)/dur); p=1-Math.pow(1-p,3); set(Math.round(to*p)); if(p<1) requestAnimationFrame(f); })(t0); }, delay||0);
 }
 HOOK['p-confirm']=function(dir, quiet){
-  var names=state.sel.length?state.sel:(state.session?state.session.people.map(function(p){return p.name}):[]);
+  var names=state.sel.length?state.sel:(state.session?state.session.people.map(function(p){return KEY(p)}):[]);
   var body=$('cf-body'), pg=$('p-confirm'), two=names.length>1, anyDone=false, ss=loadSession(), html='';
   names.forEach(function(n){
-    var m=findClient(n); if(!m) return; var at=doneToday(m), no=personNo(m), resumed=!!(ss && ss.people.some(function(p){return p.name===n}));
+    var m=findClient(n); if(!m) return; var at=doneToday(m), no=personNo(m), resumed=!!(ss && ss.people.some(function(p){return KEY(p)===n}));
     if(at!=null) anyDone=true;
     var lines= at!=null
       ? '<div class="a ac">Buổi thứ '+no+' đã xong</div><div class="a">Còn '+m.left+' buổi</div><div class="lab">ĐÃ KÝ LÚC <span class="ac">'+(at||'—')+'</span> · '+vnFull(TODAY_ISO)+'</div>'
@@ -1999,40 +2002,41 @@ function doCheckin(){
   });
 }
 function startSession(names){
-  var people=names.map(function(n){ var m=findClient(n); var no=personNo(m); return {name:n, no:no, cur:0, setNo:1, phase:'setup', reps:10, kg:20, restTotal:90, restStart:0, ex:{}, form:0, note:'', okDone:false}; });
+  var people=names.map(function(n){ var m=findClient(n); var no=personNo(m); return {name:m?m.name:n, key:n, pid:(m&&m.pid)||'', no:no, cur:0, setNo:1, phase:'setup', reps:10, kg:20, restTotal:90, restStart:0, ex:{}, form:0, note:'', okDone:false}; });
   state.session={day:TODAY_ISO, coach:state.coach, kind:names.length>1?'1:2':'1:1', people:people, plan:[], started:0, startedAt:0};
   saveSession(); state.sel=[];
   go('p-plan','fwd');
 }
 /* một lượt check-in cho một khách → Promise<true|false>; many = đang check-in 2 khách (pill ghi tên) */
 function sendCheckin(m, many){
-  var prev=ciFor(m.name), day=TODAY_ISO, localNo=(prev&&prev.no)||personNo(m);
+  var prev=ciFor(KEY(m)), day=TODAY_ISO, localNo=(prev&&prev.no)||personNo(m);
   if(prev && prev.status==='ok') return Promise.resolve(true);
-  CI[m.name]={name:m.name, day:day, no:localNo, status:'pending'}; ciSave();
+  CI[KEY(m)]={name:m.name, day:day, no:localNo, status:'pending'}; ciSave();
   busyLine(true);
-  var live=function(){ return findClient(m.name)||m; };
-  return api({action:'checkin_coach', name:m.name, date:day}, 0, 600, 0, 30000).then(function(res){
-    busyLine(false); m=live(); var ci=ciFor(m.name); if(!ci) return false;
+  var live=function(){ return findClient(KEY(m))||m; };
+  /* v2.19.0: gửi kèm key + pid → máy chủ ghi đúng NGƯỜI (cột Q Mã KH), kể cả khi hai khách trùng tên */
+  return api({action:'checkin_coach', name:m.name, key:KEY(m), pid:m.pid||'', date:day}, 0, 600, 0, 30000).then(function(res){
+    busyLine(false); m=live(); var ci=ciFor(KEY(m)); if(!ci) return false;
     var err=res&&res.error;
     if(res && res.ok){
       if(res.member){ var sd=+res.member.done||0; m.total=+res.member.total||m.total; m.done=Math.max(sd, m.done+1); m.left=(sd>=m.done && res.member.left!=null)?+res.member.left:Math.max(0,m.total-m.done); }
       else { m.done+=1; m.left=Math.max(0,m.total-m.done); }
       ciOk(m, ci, m.done, res.at, many);
-      var c=loadCache(state.coach); if(c){ var mm=rowOf(c.res.members, m.name); if(mm){ mm.done=m.done; mm.left=m.left; mm.checked=true; mm.signed=ci.at; saveCache(c.res); } }
+      var c=loadCache(state.coach); if(c){ var mm=rowOf(c.res.members, KEY(m)); if(mm){ mm.done=m.done; mm.left=m.left; mm.checked=true; mm.signed=ci.at; saveCache(c.res); } }
       return true;
     }
     if(err==='da_checkin'){ ciOk(m, ci, ci.no, res.at||m.signed||'', many); return true; }
-    if(err==='sai_pin'){ delete CI[m.name]; ciSave(); pinGone(); return false; }
+    if(err==='sai_pin'){ delete CI[KEY(m)]; ciSave(); pinGone(); return false; }
     if(err==='wrong_ip'){ var why=ipWhy(); ciFail(m, ci, why.text, many, !why.retry); return false; }
-    ciFail(m, ci, err==='khong_phai_khach_cua_ban' ? 'Không phải khách của bạn' : err==='khong_thay_khach' ? 'Không thấy khách trong MEMBERS' : 'Chưa check-in', many);
+    ciFail(m, ci, err==='khong_phai_khach_cua_ban' ? 'Không phải khách của bạn' : err==='khong_thay_khach' ? 'Không thấy khách trong MEMBERS' : err==='trung_ten' ? 'Trùng tên — mở lại app để cập nhật' : 'Chưa check-in', many);
     return false;
-  }).catch(function(){ busyLine(false); m=live(); var ci=ciFor(m.name); if(ci) ciFail(m, ci, 'Chưa check-in', many); return false; });
+  }).catch(function(){ busyLine(false); m=live(); var ci=ciFor(KEY(m)); if(ci) ciFail(m, ci, 'Chưa check-in', many); return false; });
 }
 function ciOk(m, ci, no, at, many){
   var old=ci.no; ci.no=no; ci.status='ok'; ci.at=at||ci.at||nowHM(); ci.t=Date.now(); ciSave();
   m.checked=true; if(!m.signed) m.signed=ci.at;
-  var s=state.session; if(s){ s.people.forEach(function(p){ if(p.name===m.name && p.no!==no){ p.no=no; } }); saveSession(); }
-  if(old!==no){ var ch=false; OUT.q.forEach(function(e){ if(e.name===m.name && e.date===ci.day && e.session===old){ e.session=no; ch=true; } }); if(ch) outSave(); }
+  var s=state.session; if(s){ s.people.forEach(function(p){ if(KEY(p)===KEY(m) && p.no!==no){ p.no=no; } }); saveSession(); }
+  if(old!==no){ var ch=false; OUT.q.forEach(function(e){ if(KEY(e)===KEY(m) && e.date===ci.day && e.session===old){ e.session=no; ch=true; } }); if(ch) outSave(); }
   if(state.screen!=='p-pin') notify('Đã check-in'+(many?' '+firstName(m.name):''));
   if(state.screen==='p-done') HOOK['p-done']();
 }
@@ -2225,7 +2229,7 @@ function openLib(){ LIB_OPEN=true; $('lib-q').value=''; renderLib(true); $('lib-
 function closeLib(silent){ if(!LIB_OPEN) return;
   if(LIB_W){ if(!silent){ closeWS(); return; } LIB_OPEN=false; var lb=$('lib'); lb.classList.add('down'); lb.classList.remove('on'); return; }   /* trang 2 của window: đóng = đóng cả window */
   LIB_OPEN=false; $('lib-dim').classList.remove('on'); $('lib').classList.remove('on'); if(!silent && state.session && state.screen==='p-plan') renderPlan(false); setTimeout(syncTheme, 380); }
-function lastFor(name){ var s=state.session, p=s&&((WS.open && LIB_W && s.people[WS.idx]) || s.people[0]), m=p&&findClient(p.name); return m&&m.last&&m.last[name]; }
+function lastFor(name){ var s=state.session, p=s&&((WS.open && LIB_W && s.people[WS.idx]) || s.people[0]), m=p&&findClient(KEY(p)); return m&&m.last&&m.last[name]; }
 function renderLib(animate){
   var s=state.session, q=norm($('lib-q').value), el=$('lib-list'); el.innerHTML=''; var i=0, any=false;
   libGroups().forEach(function(g){
@@ -2337,7 +2341,7 @@ function planOpen(i){
 /* reps/kg mặc định cho bài đang chọn: set gần nhất trong buổi → lần trước của khách → 10 × 20 */
 function primePerson(p){
   var s=state.session, ex=s.plan[p.cur], e=p.ex[ex]; if(!e){ e=p.ex[ex]={sets:[], done:false}; }
-  var m=findClient(p.name), l=m&&m.last&&m.last[ex], ls=last(e.sets);
+  var m=findClient(KEY(p)), l=m&&m.last&&m.last[ex], ls=last(e.sets);
   if(ls){ p.kg=ls[0]; p.reps=ls[1]; } else if(l){ p.kg=+l.kg||20; p.reps=+l.rep||10; } else if(!p.primed){ p.kg=20; p.reps=10; }
   p.primed=1; p.setNo=e.sets.length+1; if(p.phase!=='setup' && p.phase!=='active' && p.phase!=='rest-setup' && p.phase!=='rest') p.phase='setup';
 }
@@ -2632,9 +2636,9 @@ function Loop(host, p, o){
   }
   function judgeSet(ok){
     if(p.phase!=='active') return;
-    var e=E(), ev=enqueue({type:'SET', name:p.name, session:p.no, plan:exPart(ex()), ex:ex(), set:e.sets.length+1, kg:p.kg, rep:p.reps, ok:ok?1:0, main:0}, true);
+    var e=E(), ev=enqueue({type:'SET', name:p.name, key:KEY(p), pid:p.pid||'', session:p.no, plan:exPart(ex()), ex:ex(), set:e.sets.length+1, kg:p.kg, rep:p.reps, ok:ok?1:0, main:0}, true);
     e.sets.push([p.kg, p.reps, ok?1:0, ev.id]); p.setNo=e.sets.length;
-    var m=findClient(p.name); if(m && ok) m.last[ex()]={kg:p.kg, rep:p.reps, d:TODAY_ISO};
+    var m=findClient(KEY(p)); if(m && ok) m.last[ex()]={kg:p.kg, rep:p.reps, d:TODAY_ISO};
     p.phase='rest-setup'; p.restStart=0; saveSession(); guard();
     flyStop(); lastTen=false; zeroed=false; lastSec=-1; frozen=null; afterKill(K+'unfreeze'); digitsAcid(false,true);
     restW.set(p.restTotal);
@@ -2871,8 +2875,8 @@ function summaryNext(){
   /* SET của người này nhả ngay; BÀI/CHECKOUT giữ (hold) tới khi xác nhận người cuối — quay lại được */
   s.plan.forEach(function(n){ var e=p.ex[n]; if(e) e.sets.forEach(function(st){ if(st[3]) release(st[3]); }); });
   p.evIds=[];
-  s.plan.forEach(function(n){ var e=p.ex[n]; if(!e||!e.sets.length||e.sent) return; e.sent=1; p.evIds.push(enqueue({type:'BÀI', name:p.name, session:p.no, plan:exPart(n), ex:n, set:e.sets.length, ok:e.sets.filter(function(x){return x[2]}).length, main:0}, true).id); });
-  p.evIds.push(enqueue({type:'CHECKOUT', name:p.name, session:p.no, plan:'', ex:'', form:p.form||null, note:p.note}, true).id);
+  s.plan.forEach(function(n){ var e=p.ex[n]; if(!e||!e.sets.length||e.sent) return; e.sent=1; p.evIds.push(enqueue({type:'BÀI', name:p.name, key:KEY(p), pid:p.pid||'', session:p.no, plan:exPart(n), ex:n, set:e.sets.length, ok:e.sets.filter(function(x){return x[2]}).length, main:0}, true).id); });
+  p.evIds.push(enqueue({type:'CHECKOUT', name:p.name, key:KEY(p), pid:p.pid||'', session:p.no, plan:'', ex:'', form:p.form||null, note:p.note}, true).id);
   p.okDone=true; p.signedAt=nowHM(); saveSession();
   if(state.sumIdx<s.people.length-1){ state.sumIdx++; go('p-summary','fwd'); return; }
   release();
@@ -2883,7 +2887,7 @@ function summaryNext(){
 HOOK['p-done']=function(){
   var s=state.lastDone; if(!s) return; var body=$('dn-body'), pg=$('p-done'), two=s.people.length>1, html='';
   s.people.forEach(function(p){
-    var m=findClient(p.name)||{name:p.name,total:0,left:0}, ci=ciFor(p.name), st=ci?ci.status:'ok';
+    var m=findClient(KEY(p))||{name:p.name,total:0,left:0}, ci=ciFor(KEY(p)), st=ci?ci.status:'ok';
     html+='<div'+(two?' class="half"':'')+'><div class="head"><span class="t1 mq"><span>'+esc(firstName(m.name))+'</span></span></div>'+cardHtml(m, p.no, two?'sm':'big', true)
       +'<div class="lines'+(two?' sm':'')+'"><div class="a ac">Buổi thứ '+p.no+' đã xong</div><div class="a">'+(st==='ok'?'Còn '+m.left+' buổi':st==='pending'?'Đang check-in…':'<span class="er">Chưa check-in</span>')+'</div><div class="lab">ĐÃ KÝ LÚC <span class="ac">'+(p.signedAt||nowHM())+'</span> · '+vnFull(TODAY_ISO)+'</div></div></div>';
   });
@@ -2900,7 +2904,7 @@ function doneBurst(body, s){
   if(rm()) return;
   [].forEach.call(body.querySelectorAll('.card'), function(c, i){
     var p=s.people[i]; if(!p) return; var sets=0; Object.keys(p.ex||{}).forEach(function(n){ sets+=(p.ex[n].sets||[]).length; });
-    var r=c.getBoundingClientRect(), m=findClient(p.name)||{total:0}, x=parseFloat(c.style.getPropertyValue('--x'))||100, seg=Math.max(14, r.width*(m.total>0?1/m.total:.1));
+    var r=c.getBoundingClientRect(), m=findClient(KEY(p))||{total:0}, x=parseFloat(c.style.getPropertyValue('--x'))||100, seg=Math.max(14, r.width*(m.total>0?1/m.total:.1));
     var end=r.left+r.width*x/100;
     FX.burst({left:end-seg, top:r.top+8, width:seg, height:r.height-16}, clamp(sets*3, 24, 60), .5);
   });

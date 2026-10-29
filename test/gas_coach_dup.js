@@ -1,7 +1,8 @@
 /* v2.11 máy chủ (29/10) — lệnh `coach` của Apps Script (Logbook.gs lbCoach_) gộp các dòng MEMBERS cùng tên,
    và chỉ gắn "đã tập hôm nay" khi khách đang thuộc coach này (dòng cuối trên sheet).
    Chạy Logbook.gs THẬT trong VM Node; MEMBERS / SESSION LOG / Customer database thay bằng hàm giả (không mạng, không Code.gs).
-   Chạy: node test/gas_coach_dup.js        (Logbook.gs trước v2.11: G1 G2 G4 G6 G7 trượt) */
+   Chạy: node test/gas_coach_dup.js        (Logbook.gs trước v2.11: G1 G2 G4 G6 G7 trượt)
+   v2.12: MEMBERS giả có SĐT (dòng cùng tên = cùng SĐT) + Mã KH; "đã tập hôm nay" trả theo pid. */
 var fs = require('fs'), vm = require('vm'), path = require('path');
 var ROOT = process.env.ROOT || path.join(__dirname, '..');
 var pass = 0, fail = 0;
@@ -30,11 +31,19 @@ var ctx = {
 vm.createContext(ctx);
 vm.runInContext(fs.readFileSync(path.join(ROOT, 'backend/Logbook.gs'), 'utf8'), ctx, { filename: 'Logbook.gs' });
 /* thay phần đọc sheet bằng dữ liệu giả (hàm toàn cục của .gs → gán đè trên ctx) */
-ctx.lbMembers_ = function () { return { ok: true, members: JSON.parse(JSON.stringify(MEMBERS)) }; };
+/* v2.12: người = các dòng cùng SĐT → dòng cùng tên ở đây cùng SĐT giả (như khách gia hạn thật); _r = thứ tự dòng trên sheet */
+var PH = {}; MEMBERS.forEach(function (m) { if (!PH[m.name]) PH[m.name] = '09000000' + ('0' + Object.keys(PH).length).slice(-2); });
+var MS = [['Tên', 'Coach', 'Còn lại', 'SĐT', 'Ngày bắt đầu', 'Mã KH']].concat(MEMBERS.map(function (m, i) { return [m.name, m.coach, m.left, PH[m.name], m.start, 'C' + (i + 1)]; }));
+var FAKE_MEM = { getRange: function (r, c, nr, nc) { return { getValues: function () { return MS.slice(r - 1, r - 1 + (nr || 1)).map(function (x) { return x.slice(c - 1, c - 1 + (nc || 1)); }); } }; },
+  getLastColumn: function () { return 6; }, getLastRow: function () { return MS.length; } };
+ctx.chkSS_ = function () { return { getSheetByName: function (n) { return n === 'MEMBERS' ? FAKE_MEM : null; }, getSpreadsheetTimeZone: function () { return 'Asia/Ho_Chi_Minh'; } }; };
+ctx.memHdrRow_ = function () { return 1; };
+ctx.lbMembers_ = function () { return { ok: true, members: JSON.parse(JSON.stringify(MEMBERS)).map(function (m, i) { return ctx.idTag_(m, i + 1); }) }; };
 ctx.lbReadAll_ = function () { return []; };
 ctx.lbLibrary_ = function () { return null; };
 ctx.lbToday_ = function () { return '2026-10-29'; };
-ctx.lbSignedToday_ = function () { var o = {}; o[ctx.lbNorm_('Khách Đôi A')] = '08:18'; o[ctx.lbNorm_('Khách Hai Giai Đoạn')] = '10:00'; return o; };
+/* v2.12: lbSignedToday_ trả theo pid (Mã KH dòng đầu của người) */
+ctx.lbSignedToday_ = function () { var o = {}; o.C1 = '08:18'; o.C3 = '10:00'; return o; };
 
 var r = ctx.lbCoach_({ pin: '1111' });
 check(r.ok === true && r.coach === 'Coach Một', 'G0 lbCoach_ ok', r.error);

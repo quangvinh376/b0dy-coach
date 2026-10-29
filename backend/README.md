@@ -155,3 +155,19 @@ MEMBERS ghi mỗi hợp đồng / giai đoạn một dòng, nên khách gia hạ
 - Cài đặt: dán `backend/Logbook.gs` vào file `Logbook` ▸ Save ▸ **Deploy ▸ Manage deployments ▸ ✏️ ▸ New version ▸ Deploy**. Không đổi `Code.gs`.
 - Worker (lệnh `coach` đi Worker trước): `apiCoach` thêm `admPick` sau khi lọc khách của coach — một cặp thay chuỗi trên Worker v8, doc dự án `claude/b0dy-kiosk-worker-v9.md`.
 - Test: `node test/gas_coach_dup.js` (Logbook.gs thật trong VM) · `node test/renew_dup.js` (app).
+
+## 10. Nhận diện khách theo MÃ, không theo tên — `Logbook.gs` v2.12 · `Admin.gs` · `Stats.gs` · `Archive.gs` (29/10/2026)
+
+Hai khách khác nhau trùng tên (B004DY · B069DY cùng "Nguyễn Quang Minh") làm mọi thứ đi theo tên bị lẫn: buổi tập, hoa hồng, check-in, hồ sơ. Từ v2.12 (Worker v10 cùng luật):
+
+- **Người** = mọi dòng MEMBERS cùng **SĐT** (luật của chủ studio: khớp SĐT là cùng một khách; khách nước ngoài dùng số tượng trưng, vd. `0000000029`). SĐT trống → theo `Mã KH`, không có mã → theo tên. `pid` = `Mã KH` đầu tiên của người (ổn định qua các lần gia hạn) — app chỉ nhận `pid`, **SĐT không bao giờ rời máy chủ**.
+- **Mã gói (`Mã KH`, cột U MEMBERS)**: mỗi gói một mã mới, hai giai đoạn A/B của một gói chung mã. Mã của người tại ngày *d* = dòng có "Ngày bắt đầu" ≤ *d* muộn nhất (đúng luật cột P).
+- **SESSION LOG cột Q "Mã KH"**: check-in (app coach · Admin · kiosk tên duy nhất) ghi mã gói vào Q. Cột P `_mrow` tra theo Q, dòng trống Q mới tra theo tên như cũ:
+  `=IF($H5="","",IFERROR(IF($Q5<>"",MATCH($Q5&"|"&MAXIFS(MEMBERS!$P$6:$P$1013,MEMBERS!$U$6:$U$1013,$Q5,MEMBERS!$P$6:$P$1013,"<="&$C5),MEMBERS!$W$6:$W$1013,0),MATCH($H5&"|"&MAXIFS(MEMBERS!$P$6:$P$1013,MEMBERS!$C$6:$C$1013,$H5,MEMBERS!$P$6:$P$1013,"<="&$C5),MEMBERS!$T$6:$T$1013,0)),""))`
+  MEMBERS cột W `_mkey` = `ARRAYFORMULA(U & "|" & P)` (ẩn, như T `_key`). Đổi tên khách trên MEMBERS không còn làm rơi buổi.
+- Dòng SESSION LOG → người: P (sheet đã tra) → Q → tên (chỉ khi tên thuộc đúng một người).
+- **Customer database cột S "Mã KH"** (19 cột A..S): mỗi sự kiện ghi mã gói của người tại ngày sự kiện. Tab cũ 18 cột tự thêm cột S khi ghi (`lbWiden_`). Hồ sơ (snapshot) và Hiệu suất tập gom theo người (S → tên duy nhất); dòng thiếu S của tên trùng không gán bừa.
+- **Khoá trả app (`key`)**: tên nếu trong danh sách trả về chỉ một người mang tên đó, trùng tên → `pid`. snapshot · perClient · plan · hist khoá theo `key`. App cũ (chỉ biết tên) chạy y nguyên ở chế độ coach; app v2.19.0 dùng `key`, gửi `pid` khi check-in / ghi nhật ký.
+- Check-in (`lbCheckin_` · `admCheckin_`) dùng chung `idCheckinWrite_` (ghi Q, chặn trùng theo NGƯỜI) — `lbCheckin_` không còn qua `apiCheckin_` + `apiSign_` của Code.gs. App cũ gửi tên trùng không rõ người → `trung_ten`, không ghi gì.
+- Còn theo tên (biết trước): đường kiosk của Code.gs (dự phòng khi Worker lỗi) — dòng tên trùng, trống Q được P tra theo tên; Worker điền Q khi coach ký dòng chờ. Tab `Tổng hợp bài` (lưu trữ) khoá theo tên.
+- Test: `node test/gas_identity.js` (Logbook/Admin/Stats thật + SESSION LOG giả có công thức P) · `node test/same_name.js` (app) · Worker: doc dự án `claude/b0dy-kiosk-worker-v10.md`.

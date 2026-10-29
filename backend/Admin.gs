@@ -1,5 +1,5 @@
 /* =====================================================================
-   B0DY · Coach app — Admin.gs (v2.4.1 · 26/09/2026)
+   B0DY · Coach app — Admin.gs (v2.4.1 · 26/09/2026 · v2.12 nhận diện theo mã 29/10/2026)
    Chế độ ADMIN của app coach: đăng nhập bằng ADMIN_PIN (Script Property) →
    xem và check-in TOÀN BỘ khách, KHÔNG khoá IP; tab Cài đặt quản lý IP phòng.
 
@@ -68,33 +68,26 @@ function admMemRead_() {
     var name = String(vals[r][iName] || '').trim();
     if (!name) continue;
     var left = Number(vals[r][iLeft]) || 0, end = iEnd >= 0 ? dk(vals[r][iEnd]) : '';
-    all.push({ name: name, total: Number(vals[r][iTotal]) || 0, done: Number(vals[r][iDone]) || 0, left: Math.max(0, left), _left: left,
+    all.push(idTag_({ name: name, total: Number(vals[r][iTotal]) || 0, done: Number(vals[r][iDone]) || 0, left: Math.max(0, left), _left: left,
       coach: String(vals[r][iCoach] || ''), start: iStart >= 0 ? dk(vals[r][iStart]) : '', end: end, exp: end,
       kind: iKind >= 0 ? String(vals[r][iKind] || '').trim() : '',
       pkg: iPkg >= 0 ? String(vals[r][iPkg] || '').trim() : '',
-      status: iStatus >= 0 ? String(vals[r][iStatus] || '').trim() : '' });
+      status: iStatus >= 0 ? String(vals[r][iStatus] || '').trim() : '' }, r + 1));        /* v2.12: _r = số dòng MEMBERS như cột P */
     if (iCoach >= 0) coachOf[name] = String(vals[r][iCoach] || '').trim();
   }
   return { ok: true, all: all, coachOf: coachOf };
 }
 
-/* ---------- khách: mỗi tên một dòng ----------
-   MEMBERS có thể có nhiều dòng cùng tên (khách gia hạn gói). Giữ dòng CÒN BUỔI
-   cuối cùng; không có thì dòng cuối cùng (sort ổn định nên thứ tự trùng tên = thứ tự dòng trên sheet). */
-function admMembers_(withDone, mr) {
+/* ---------- khách: mỗi NGƯỜI một dòng (v2.12 — trước: mỗi tên) ----------
+   MEMBERS mỗi gói / giai đoạn một dòng; người = các dòng cùng SĐT (idRead_). Giữ dòng CÒN BUỔI cuối cùng;
+   không có thì dòng cuối cùng (thứ tự dòng trên sheet). m._P = người (không gửi app). */
+function admMembers_(withDone, mr, I) {
   mr = mr || admMemRead_();
   if (!mr || !mr.ok) return mr || { ok: false, error: 'members_failed' };
   var list = mr.all.filter(function (m) { return withDone || m._left > 0; }).map(function (m) {
-    var o = {}; for (var k in m) if (k !== '_left') o[k] = m[k]; return o;
+    var o = {}; for (var k in m) if (k !== '_left') o[k] = m[k]; return idTag_(o, m._r);
   });
-  list.sort(function (a, b) { return a.name.localeCompare(b.name, 'vi'); });
-  var pick = {}, order = [];
-  list.forEach(function (m) {
-    var k = String(m.name).trim(), cur = pick[k];
-    if (!cur) { pick[k] = m; order.push(k); return; }
-    if (m.left > 0 || !(cur.left > 0)) pick[k] = m;
-  });
-  return { ok: true, members: order.map(function (k) { return pick[k]; }) };
+  return { ok: true, members: idPick_(I || idRead_(), list) };
 }
 
 /* ---------- SESSION LOG: đọc cột B (ngày) MỘT lần → dòng dữ liệu cuối; bỏ ~4.000 dòng công thức kéo sẵn phía dưới ---------- */
@@ -109,11 +102,12 @@ function admLogB_() {
   return { log: log, R1: R1, last: R1 + k, b: b.slice(0, k + 1) };
 }
 
-/* SESSION LOG hôm nay → {tên chuẩn hoá: 'HH:mm'} — cùng kết quả lbSignedToday_ nhưng chỉ đọc cột B + khối dòng hôm nay */
-function admSignedToday_(ix) {
+/* SESSION LOG hôm nay → {pid: 'HH:mm'} — cùng kết quả lbSignedToday_ nhưng chỉ đọc cột ngày + khối dòng hôm nay */
+function admSignedToday_(ix, I) {
   var out = {};
   try {
     if (!ix || ix.last < ix.R1) return out;
+    I = I || idRead_();
     var tz = chkSS_().getSpreadsheetTimeZone(), today = lbToday_(), hit = [];
     for (var i = 0; i < ix.b.length; i++) {
       var d = ix.b[i][0]; if (!d) continue;
@@ -122,13 +116,14 @@ function admSignedToday_(ix) {
     }
     if (!hit.length) return out;
     var lo = hit[0], hi = hit[hit.length - 1];
-    var c0 = CHECKIN.COL_DATE, iN = CHECKIN.COL_NAME - c0, iS = CHECKIN.COL_NOTE - c0;     /* v2.9: cột theo chkInit_ (dò tiêu đề) */
-    var blk = ix.log.getRange(ix.R1 + lo, c0, hi - lo + 1, Math.max(iN, iS) + 1).getValues();
+    var L = statsLogCols_(ix.log);                                                        /* v2.12: + cột P (_mrow) · Q (Mã KH) */
+    var blk = ix.log.getRange(ix.R1 + lo, 1, hi - lo + 1, L.w).getValues();
     for (var j = 0; j < hit.length; j++) {
       var v = blk[hit[j] - lo];
-      var name = String(v[iN] || '').trim(); if (!name) continue;                          /* Học viên */
-      var m = String(v[iS] || '').match(/(\d{1,2}):(\d{2})/);                              /* Ký điện tử */
-      out[lbNorm_(name)] = m ? (('0' + m[1]).slice(-2) + ':' + m[2]) : '';
+      var name = String(v[L.n] || '').trim(); if (!name) continue;                         /* Học viên */
+      var P = idOfLog_(I, L.mr >= 0 ? v[L.mr] : '', L.q >= 0 ? v[L.q] : '', name); if (!P) continue;
+      var m = String(v[L.sig] || '').match(/(\d{1,2}):(\d{2})/);                          /* Ký điện tử */
+      out[P.pid] = m ? (('0' + m[1]).slice(-2) + ':' + m[2]) : '';
     }
   } catch (e) {}
   return out;
@@ -141,13 +136,13 @@ function admSignedToday_(ix) {
 function admData_(p) {
   if (!adminOk_(p)) return { ok: false, error: 'sai_pin' };
   var T = admT_();
-  var mem = admMembers_(true); T.lap('members');
+  var I = idRead_();
+  var mem = admMembers_(true, null, I); T.lap('members');
   if (!mem || !mem.ok) return { ok: false, error: (mem && mem.error) || 'members_failed' };
-  var names = {};
-  mem.members.forEach(function (m) { names[String(m.name).trim()] = 1; });
-  var snap = lbSnapshot_(lbReadAll_(), names); T.lap('snapshot');
-  var sg = admSignedToday_(admLogB_()); T.lap('signed');
-  mem.members.forEach(function (m) { var t = sg[lbNorm_(m.name)]; if (t !== undefined) { m.checked = true; m.signed = t; } });
+  var keyOf = idKeys_(mem.members);                                   /* v2.12: pid + key (trùng tên → pid) */
+  var snap = lbSnapshot_(lbReadAll_(), I, keyOf); T.lap('snapshot');
+  var sg = admSignedToday_(admLogB_(), I); T.lap('signed');
+  mem.members.forEach(function (m) { var t = m._P ? sg[m._P.pid] : undefined; if (t !== undefined) { m.checked = true; m.signed = t; } });
   var lib = lbLibrary_(); T.lap('library');
   T.done('data');
   return { ok: true, coach: ADM_NAME, admin: true, members: mem.members, snapshot: snap, library: lib,
@@ -167,57 +162,21 @@ function admData_(p) {
 function admCheckin_(p) {
   if (!adminOk_(p)) return { ok: false, error: 'sai_pin' };
   var name = String(p.name || '').trim();
-  if (!name) return { ok: false, error: 'thieu_ten' };
+  if (!name && !p.pid) return { ok: false, error: 'thieu_ten' };
   var T = admT_();
   var mr = admMemRead_(); T.lap('members');
   if (!mr || !mr.ok) return { ok: false, error: (mr && mr.error) || 'members_failed' };
-  var owner = mr.coachOf[name];
-  if (owner == null) return { ok: false, error: 'khong_thay_khach' };     /* kiểm TRƯỚC khi ghi: không để lại dòng treo */
-  var lock = LockService.getScriptLock();
-  lock.waitLock(10000);
-  try {
-    var ix = admLogB_(); T.lap('logB');
-    if (!ix) return { ok: false, error: 'khong_thay_SESSION_LOG' };
-    var log = ix.log, R1 = ix.R1, W = CHECKIN.WIDTH, cnt = ix.last - R1 + 1;
-    var today = Utilities.formatDate(new Date(), CHECKIN.TZ, 'yyyy-MM-dd');
-    var vals = cnt > 0 ? log.getRange(R1, 1, cnt, W).getValues() : [];
-    var firstEmpty = -1;
-    for (var r = 0; r < vals.length; r++) {
-      var d = vals[r][CHECKIN.COL_DATE - 1];
-      if (d instanceof Date) {
-        if (Utilities.formatDate(d, CHECKIN.TZ, 'yyyy-MM-dd') === today &&
-            String(vals[r][CHECKIN.COL_NAME - 1]).trim() === name &&
-            String(vals[r][CHECKIN.COL_STATUS - 1]).trim() !== CHECKIN.ST_CANCEL) {
-          return { ok: false, error: 'da_checkin', status: String(vals[r][CHECKIN.COL_STATUS - 1]).trim() };
-        }
-      } else if (firstEmpty < 0 && String(d) === '' && String(vals[r][CHECKIN.COL_NAME - 1]) === '') {
-        firstEmpty = r + R1;
-      }
-    }
-    if (firstEmpty < 0) firstEmpty = vals.length + R1;                     /* = dòng ngay dưới dữ liệu cuối */
-    T.lap('scan');
-    var now = new Date(), hm = Utilities.formatDate(now, CHECKIN.TZ, 'HH:mm');
-    /* Ghi dạng chuỗi M/d/yyyy để Sheets (locale US) tự parse thành ngày — giống nhập tay, KHÔNG setValue(Date) */
-    log.getRange(firstEmpty, CHECKIN.COL_DATE).setValue(Utilities.formatDate(now, CHECKIN.TZ, 'M/d/yyyy'));
-    log.getRange(firstEmpty, CHECKIN.COL_NAME).setValue(name);
-    log.getRange(firstEmpty, CHECKIN.COL_STATUS).setValue(CHECKIN.ST_OK);
-    log.getRange(firstEmpty, CHECKIN.COL_NOTE).setValue('app ' + hm + ' · ký: ' + ADM_NAME);
-    SpreadsheetApp.flush();
-    T.lap('write');
-    var back = log.getRange(firstEmpty, 1, 1, W).getValues()[0];
-    if (String(back[CHECKIN.COL_NAME - 1]).trim() !== name || String(back[CHECKIN.COL_STATUS - 1]).trim() !== CHECKIN.ST_OK) {
-      T.done('checkin');
-      return { ok: false, error: 'dong_bi_chiem', row: firstEmpty };     /* máy khác ghi đè đúng lúc — client báo lỗi, thử lại sẽ chặn trùng */
-    }
-    /* member: số buổi TRƯỚC lượt này (client tự cộng 1 — xem sendCheckin) */
-    var me = null;
-    var mm = admMembers_(false, mr);
-    if (mm && mm.ok) mm.members.forEach(function (x) { if (x.name === name) me = x; });
-    T.done('checkin');
-    return { ok: true, row: firstEmpty, member: me, coach: owner, by: ADM_NAME, at: hm };
-  } finally {
-    lock.releaseLock();
-  }
+  var I = idRead_(), f = idFind_(I, p);                                 /* v2.12: người theo pid; app cũ: tên thuộc đúng một người */
+  if (!f.P) return { ok: false, error: f.n > 1 ? 'trung_ten' : 'khong_thay_khach' };     /* kiểm TRƯỚC khi ghi: không để lại dòng treo */
+  var w = idCheckinWrite_(I, f.P, ' · ký: ' + ADM_NAME); T.lap('write');
+  if (!w.ok) { T.done('checkin'); return w; }
+  /* member: số buổi TRƯỚC lượt này (client tự cộng 1 — xem sendCheckin) — dòng gói vừa ghi (Mã KH) */
+  var me = null;
+  var mm = admMembers_(false, mr, I);
+  if (mm && mm.ok) mm.members.forEach(function (x) { if (x._P === f.P) me = x; });
+  if (me) { me.pid = f.P.pid; if (p.key) me.key = String(p.key); }
+  T.done('checkin');
+  return { ok: true, row: w.row, member: me, coach: f.P.owner, by: ADM_NAME, at: w.at };
 }
 
 /* =====================================================================
@@ -233,7 +192,7 @@ function admLog_(p) {
   if (ev.length > 200) return { ok: false, error: 'qua_nhieu' };
   var mr = admMemRead_();
   if (!mr || !mr.ok) return { ok: false, error: (mr && mr.error) || 'members_failed' };
-  var mc = mr.coachOf;
+  var mc = mr.coachOf, I = idRead_();
   var lock = LockService.getScriptLock();
   lock.waitLock(20000);
   try {
@@ -249,13 +208,10 @@ function admLog_(p) {
       have[id] = 1;
       /* coach phụ trách hiện tại (dòng dưới cùng thắng); bỏ hậu tố "(giai đoạn 1)" để
          không đẻ sheet "Khách của Hiền Mai (giai đoạn 1)" — hồ sơ khách vẫn liền vì snapshot đọc mọi sheet */
-      var who = String(e.name || '').trim(), owner = String(mc[who] || '').split('(')[0].trim() || ADM_NAME;
+      /* v2.12: người theo pid / tên (một người) → coach hiện hành của NGƯỜI; tên trùng không rõ người → coach dòng cuối cùng tên (như cũ) */
+      var who = String(e.name || '').trim(), w = idWho_(I, e), owner = String(w.P ? w.P.owner : (mc[who] || '')).split('(')[0].trim() || ADM_NAME;
       if (!groups[owner]) { groups[owner] = []; order.push(owner); }
-      groups[owner].push([id, now, lbKey_(e.date || lbToday_()), who, e.session == null ? '' : Number(e.session),
-        String(e.type || ''), e.plan || '', e.ex || '', e.set == null ? '' : Number(e.set),
-        e.kg == null ? '' : Number(e.kg), e.rep == null ? '' : Number(e.rep), e.ok == null ? '' : (String(e.type) === 'BÀI' ? Number(e.ok) : (e.ok ? 1 : 0)),
-        e.main == null ? '' : (e.main ? 1 : 0), e.metric || '', e.val == null ? '' : Number(e.val),
-        e.form == null ? '' : Number(e.form), e.note || '', ADM_NAME]);
+      groups[owner].push(lbEvRow_(e, now, who, w.code, ADM_NAME));
     });
     var written = 0;
     order.forEach(function (owner) {
@@ -292,6 +248,7 @@ function admStats_(p) {
   var ctx = statsCtx_(today); out.w0 = ctx.w0;                        /* v2.7: w8/n28/lastAll cho trang Khách tập chậm */
   var cFrom = statsPrevMonth_(month) + '-01', raw = [];                /* v2.7.1: trang Doanh thu — buổi từ đầu tháng trước */
   out.comFrom = cFrom;
+  var I = idRead_(ba), keyOf = idScopeKeys_(I, null);                 /* v2.12: khoá = key của adm_data (trùng tên → pid) */
   if (log) {
     var r1 = ix ? ix.R1 : 1, nr = ix ? (ix.last - ix.R1 + 1) : log.getLastRow(), L = statsLogCols_(log);   /* v2.9: cột theo tiêu đề (cột lề A) */
     var vals = nr > 0 ? log.getRange(r1, 1, nr, L.w).getValues() : [];
@@ -299,7 +256,8 @@ function admStats_(p) {
       var r = vals[i], d = statsIso_(r[L.d], tz), name = String(r[L.n] || '').trim(), st = String(r[L.st] || '');
       if (!d || !name) continue;
       if (st.indexOf('ã tập') < 0) continue;
-      var pc = out.perClient[name] || (out.perClient[name] = { m: 0, last: '' });
+      var who = idKeyOf_(keyOf, idOfLog_(I, L.mr >= 0 ? r[L.mr] : '', L.q >= 0 ? r[L.q] : '', name), name);
+      var pc = out.perClient[who] || (out.perClient[who] = { m: 0, last: '' });
       if (d.slice(0, 7) === month) { out.days[d] = (out.days[d] || 0) + 1; out.monthTotal++; pc.m++; }
       if (d < today && d > pc.last) pc.last = d;
       statsPcAdd_(pc, d, ctx);
@@ -308,7 +266,7 @@ function admStats_(p) {
   }
   try {                                                               /* v2.7: buổi/tuần đăng ký (MEMBERS) mọi khách */
     var memA = statsMem_(ba);
-    if (memA) { out.plan = {}; memA.rows.forEach(function (m) { if (!(m.name in out.plan) || m.left > 0) out.plan[m.name] = m.plan; }); }
+    if (memA) { out.plan = {}; memA.rows.forEach(function (m) { var x = I.byMrow[m.r], k = idKeyOf_(keyOf, x ? x.P : null, m.name); if (!(k in out.plan) || m.left > 0) out.plan[k] = m.plan; }); }
     /* v2.7.1 — Doanh thu từng buổi = đơn giá buổi (MEMBERS theo mã HV) — cùng công thức cột "Doanh thu" tab COM.
        sess giữ thứ tự dòng SESSION LOG trong ngày; comMon = doanh thu theo tháng (ô Doanh thu trang chủ + trang chi tiết). */
     var sessA = [], monA = {}; monA[statsPrevMonth_(month)] = 0; monA[month] = 0;
@@ -341,11 +299,12 @@ function admStats_(p) {
   /* 3. Lịch sử set theo bài — mọi sheet "Khách của …" + tab "Tổng hợp bài" (v2.8: set cao nhất mỗi ngày, 24 ngày — Stats.gs) */
   try {
     var ctz = lbDb_().getSpreadsheetTimeZone(), acc = {};
+    var whoOf = function (code, nm) { return idKeyOf_(keyOf, idOfLog_(I, 0, code, nm), nm); };
     lbCoachSheets_().forEach(function (sh) {
       if (sh.getLastRow() < 2) return;
-      statsHistRows_(acc, sh.getRange(2, 1, sh.getLastRow() - 1, 12).getValues(), ctz);
+      statsHistRows_(acc, sh.getRange(2, 1, sh.getLastRow() - 1, statsW_(sh, 19)).getValues(), ctz, whoOf);
     });
-    statsHistSum_(acc, lbDb_().getSheetByName(STATS_SUM), ctz, null);
+    statsHistSum_(acc, lbDb_().getSheetByName(STATS_SUM), ctz, null, whoOf);
     out.hist = statsHistOut_(acc);
   } catch (err) { out.histError = String(err).slice(0, 200); }
   T.lap('hist');

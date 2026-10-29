@@ -27,6 +27,7 @@ Sheet.prototype.setFrozenRows = function(n){ this.frozen = n; };
 Sheet.prototype.insertRowsAfter = function(after, n){ var c = this.getMaxColumns(), add = []; for (var i = 0; i < n; i++) add.push(new Array(c).fill('')); this.g.splice.apply(this.g, [after, 0].concat(add)); };
 Sheet.prototype.deleteRows = function(start, n){ if (start < 1 || start + n - 1 > this.g.length) throw new Error('deleteRows ngoài lưới ' + [start, n, this.g.length]); if (n >= this.g.length) throw new Error('không xoá được mọi dòng'); this.g.splice(start - 1, n); if (this.hooks.del) this.hooks.del(start, n); };
 Sheet.prototype.deleteColumns = function(start, n){ this.g.forEach(function (r) { r.splice(start - 1, n); }); };
+Sheet.prototype.insertColumnsAfter = function(after, n){ this.g.forEach(function (r) { for (var i = 0; i < n; i++) r.splice(after, 0, ''); }); };   /* v2.12: tab 18 cột → thêm cột S */
 Sheet.prototype.getRange = function(r, c, nr, nc){
   var self = this; nr = nr == null ? 1 : nr; nc = nc == null ? 1 : nc;
   if (r < 1 || c < 1 || nr < 1 || nc < 1 || r + nr - 1 > self.g.length || c + nc - 1 > self.getMaxColumns())
@@ -36,6 +37,8 @@ Sheet.prototype.getRange = function(r, c, nr, nc){
     setValues: function(v){ if (v.length !== nr || v.some(function (x) { return x.length !== nc; })) throw new Error('setValues sai kích thước'); for (var i = 0; i < nr; i++) for (var j = 0; j < nc; j++) self.g[r - 1 + i][c - 1 + j] = v[i][j]; if (self.hooks.write) self.hooks.write(r, nr); return rg; },
     setNumberFormat: function(f){ for (var i = 0; i < nr; i++) for (var j = 0; j < nc; j++) self.fmt[(r + i) + ':' + (c + j)] = f; return rg; },
     setFontWeight: function(){ return rg; },
+    getValue: function(){ return self.g[r - 1][c - 1]; },
+    setValue: function(v){ self.g[r - 1][c - 1] = v; return rg; },
     clearContent: function(){ for (var i = 0; i < nr; i++) for (var j = 0; j < nc; j++) self.g[r - 1 + i][c - 1 + j] = ''; return rg; }
   };
   return rg;
@@ -175,7 +178,7 @@ var r1 = E.run({});
 console.log('   ', r1.sheets.map(function (s) { return s.tab + ': ' + s.data + ' dòng → giữ ' + s.keep + ' · lưu ' + s.archived + ' · trống ' + s.blank + ' · lưới ' + s.gridBefore + ' → ' + s.gridAfter + ' · tổng hợp +' + s.sum + (s.error ? ' · LỖI ' + s.error : ''); }).join('\n     '));
 check(r1.ok && r1.sheets.every(function (s) { return !s.error; }), 'G2 chạy thật không lỗi');
 var newTabs = [E.DB.getSheetByName('Tổng hợp bài'), E.DB.getSheetByName('Nhật ký lưu trữ')].concat(Object.keys(E.files).map(function (k) { return E.files[k].s; }).reduce(function (a, b) { return a.concat(b); }, []));
-check(newTabs.every(function (t) { return t && t.getMaxColumns() <= 18 && t.getMaxRows() <= Math.max(100, t.getLastRow() + 200); }), 'G2b tab mới tạo không mang lưới trống 1.000 × 26: ' + newTabs.map(function (t) { return t.n + ' ' + t.getMaxRows() + '×' + t.getMaxColumns(); }).join(' · '));
+check(newTabs.every(function (t) { return t && t.getMaxColumns() <= 19 && t.getMaxRows() <= Math.max(100, t.getLastRow() + 200); }), 'G2b tab mới tạo không mang lưới trống 1.000 × 26: ' + newTabs.map(function (t) { return t.n + ' ' + t.getMaxRows() + '×' + t.getMaxColumns(); }).join(' · '));
 check(E.snap() === snap0, 'G3 hồ sơ khách (snapshot: số đo, mục tiêu, mức tạ lần trước, buổi tập) Y HỆT trước khi lưu trữ');
 var h1 = E.hist();
 check(!h1.err && h1.one === hist0.one && h1.two === hist0.two && h1.adm === hist0.adm, 'G4 Hiệu suất tập (hist coach Một, coach Hai, Admin) Y HỆT ' + (h1.err || ''));
@@ -187,7 +190,7 @@ var cut = '2026-09-01', badKeep = [];
 E.coachTabs().forEach(function (s) { s.g.slice(1).forEach(function (r) { /* dòng còn nóng mà cũ phải là ĐO/MỤC TIÊU/không id/dòng mốc */ }); });
 Object.keys(arch).forEach(function (id) { if (/#dup$/.test(id)) return; var r = JSON.parse(arch[id]); var d = String(r[2]).slice(0, 10); if (!(d < cut) || r[5] === 'ĐO' || r[5] === 'MỤC TIÊU') badKeep.push(id); });
 check(!badKeep.length, 'G6 chỉ lưu trữ dòng trước ' + cut + ' và không bao giờ ĐO / MỤC TIÊU' + (badKeep.length ? ': ' + badKeep.slice(0, 5) : ''));
-check(E.coachTabs().every(function (s) { return blankInside(s) === 0 && s.getMaxRows() === s.getLastRow() + 50 && s.getMaxColumns() === 18; }), 'G7 dọn lưới: không còn dòng trống giữa, chừa đúng 50 dòng cuối, 18 cột — ' + E.grid());
+check(E.coachTabs().every(function (s) { return blankInside(s) === 0 && s.getMaxRows() === s.getLastRow() + 50 && s.getMaxColumns() >= 18 && s.getMaxColumns() <= 19; }), 'G7 dọn lưới: không còn dòng trống giữa, chừa đúng 50 dòng cuối, 18–19 cột (v2.12: S Mã KH) — ' + E.grid());
 var fileIds = Object.keys(E.files), fb = fileIds.map(function (k) { return E.files[k]; });
 check(Object.keys(arch).length === 0 || (fb.length >= 1 && fb.every(function (b) { return /Lưu trữ \d{4}$/.test(b.name) && b.tz === 'Asia/Ho_Chi_Minh' && !b.getSheetByName('Sheet1'); }) && Object.keys(E.props).filter(function (k) { return /^LB_ARCHIVE_\d{4}$/.test(k); }).length === fb.length),
   'G8 file lưu trữ theo năm: ' + fb.map(function (b) { return b.name + ' [' + b.s.map(function (s) { return s.n + ' ' + (s.getLastRow() - 1); }).join(', ') + ']'; }).join(' · '));

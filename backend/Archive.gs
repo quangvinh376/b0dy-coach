@@ -76,8 +76,10 @@ function ltSheet_(sh, cutoff, o, tz, hotKeys, newSum) {
   var maxR = sh.getMaxRows(), maxC = sh.getMaxColumns(), last = sh.getLastRow(), lastC = sh.getLastColumn();
   var res = { tab: tab, cutoff: cutoff, gridBefore: maxR + '×' + maxC, data: 0, keep: 0, archived: 0, blank: 0, sum: 0, file: '', note: '' };
   if (last < 2) { res.gridAfter = res.gridBefore; return res; }
-  var W = Math.max(LB_W, Math.min(lastC, maxC));
+  var W = Math.min(Math.max(LB_W, lastC), maxC);       /* v2.12: tab chưa có cột S (18 cột) → đọc A..R, ltRow_ bù cột S trống */
   var v = sh.getRange(2, 1, last - 1, W).getValues();
+  var I = null; try { I = idRead_(); } catch (eI) { I = null; }   /* v2.12: khoá "mới nhất mỗi khách × bài" theo NGƯỜI (cột S / tên duy nhất) */
+  function who(r) { var nm = String(r[3] || '').trim(), P = I ? idOfLog_(I, 0, r[18], nm) : null; return P ? 'p:' + P.pid : 'n:' + nm; }
 
   /* 1. phân loại */
   var info = [], mark = {};
@@ -85,12 +87,12 @@ function ltSheet_(sh, cutoff, o, tz, hotKeys, newSum) {
   for (var i = 0; i < v.length; i++) {
     var r = v[i];
     if (ltBlank_(r)) { info.push({ blank: 1 }); continue; }
-    var x = { id: String(r[0] || '').trim(), ts: String(r[1] || ''), d: lbKey_(r[2]), name: String(r[3] || '').trim(), type: String(r[5] || '').trim(),
+    var x = { id: String(r[0] || '').trim(), ts: String(r[1] || ''), d: lbKey_(r[2]), name: String(r[3] || '').trim(), who: who(r), type: String(r[5] || '').trim(),
               plan: String(r[6] || '').trim(), ex: String(r[7] || '').trim(), kg: lbNum_(r[9]), rep: lbNum_(r[10]), ok: ltOk_(r[11]) ? 1 : 0 };
     info.push(x);
     if (!x.id || !/^\d{4}-\d{2}-\d{2}$/.test(x.d)) continue;
-    if (x.type === 'SET' && x.ex) { newer(i, 'x|' + x.name + '|' + x.ex); if (x.ok && x.kg != null) newer(i, 'o|' + x.name + '|' + x.ex); }
-    if (x.plan && (x.type === 'SET' || x.type === 'BÀI' || x.type === 'CHECKOUT')) newer(i, 'p|' + x.name + '|' + x.plan);
+    if (x.type === 'SET' && x.ex) { newer(i, 'x|' + x.who + '|' + x.ex); if (x.ok && x.kg != null) newer(i, 'o|' + x.who + '|' + x.ex); }
+    if (x.plan && (x.type === 'SET' || x.type === 'BÀI' || x.type === 'CHECKOUT')) newer(i, 'p|' + x.who + '|' + x.plan);
   }
   var keepIdx = {}; for (var k in mark) keepIdx[mark[k]] = 1;
   var arch = [], blanks = [];
@@ -203,7 +205,7 @@ function ltIds_(sh) {
   if (n >= 2) sh.getRange(2, 1, n - 1, 1).getValues().forEach(function (r) { if (r[0] !== '' && r[0] != null) out[String(r[0]).trim()] = 1; });
   return out;
 }
-/* dòng 18 cột như cũ; ô ngày Date (dòng nhập tay) → chuỗi yyyy-MM-dd để file lưu trữ không lệch múi giờ */
+/* dòng LB_W cột (v2.12: 19 — cột S Mã KH); ô ngày Date (dòng nhập tay) → chuỗi yyyy-MM-dd để file lưu trữ không lệch múi giờ */
 function ltRow_(r) {
   var o = r.slice(0, LB_W);
   while (o.length < LB_W) o.push('');
