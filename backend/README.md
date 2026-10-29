@@ -144,3 +144,13 @@ Cài đặt (Apps Script **B0DY Discord KPI**):
 Lệnh `bank` (POST `{action:'bank', pin}` hoặc `{action:'bank', apin}`) → `{ok:true, bin, acc, bank, name}` · `sai_pin` · `no_bank`. Không khoá IP (mã dùng được cả ngoài phòng), không ghi log. App nhớ kết quả vào `localStorage.lb_bank` (mất mạng vẫn vẽ được mã), hỏi lại mỗi lần bấm **Sell**; máy chủ báo `no_bank` thì xoá bản nhớ.
 
 Mã do app dựng là **VietQR động** (NAPAS 247 · EMVCo MPM): tài khoản + số tiền kỳ này + nội dung `HỌ TÊN + GÓI + TRA GOP` (≤ 25 ký tự; dài hơn thì họ và tên đệm rút còn chữ cái đầu). Kiểm thử: `node test/gas_sales.js` (chạy thật `Sales.gs` với PropertiesService giả) và `node test/sell.js`.
+
+## 9. Khách gia hạn = MỘT khách — `backend/Logbook.gs` v2.11 (29/10/2026)
+
+MEMBERS ghi mỗi hợp đồng / giai đoạn một dòng, nên khách gia hạn có hai dòng cùng tên (gói cũ hết buổi + gói mới). Trước v2.11 lệnh `coach` trả cả hai dòng (Admin thì đã gộp từ v2.4 — `admMembers_` / Worker `admPick`), app coi là hai khách: "Khách hôm nay" hiện hai lần, app lấy nhầm dòng gói cũ (đếm buổi trong logbook từ gói cũ, khách 1:2 bị bỏ chọn, hồ sơ nhảy về gói cũ).
+
+- `lbOnePerName_(list)`: giữ dòng **còn buổi** cuối cùng, không có thì dòng cuối — cùng luật với Admin. `lbCoach_` gọi sau khi lọc khách của coach.
+- App v2.18.3 gộp cùng luật ở `buildClients` (`oneRowPerName`), nên chạy đúng với cả máy chủ cũ lẫn mới; bản máy chủ này để Apps Script, Worker và app trả cùng một danh sách.
+- Cài đặt: dán `backend/Logbook.gs` vào file `Logbook` ▸ Save ▸ **Deploy ▸ Manage deployments ▸ ✏️ ▸ New version ▸ Deploy**. Không đổi `Code.gs`.
+- Worker (lệnh `coach` đi Worker trước): `apiCoach` thêm `admPick` sau khi lọc khách của coach — một cặp thay chuỗi trên Worker v8, doc dự án `claude/b0dy-kiosk-worker-v9.md`.
+- Test: `node test/gas_coach_dup.js` (Logbook.gs thật trong VM) · `node test/renew_dup.js` (app).

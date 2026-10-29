@@ -7,7 +7,7 @@
    ===================================================================== */
 'use strict';
 var $=function(id){ return document.getElementById(id); };
-var APP_VER='v2.18.2';
+var APP_VER='v2.18.3';
 
 /* ---------------- tiện ích ---------------- */
 function isoToday(d){ d=d||new Date(); return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2); }
@@ -255,11 +255,27 @@ function ipWhy(){
   return {text:'Mạng chưa được phép check-in', retry:true};
 }
 
+/* ---- v2.18.3: MỘT khách = MỘT dòng. MEMBERS có thể nhiều dòng cùng tên (khách gia hạn: dòng gói cũ hết buổi + dòng gói mới).
+   Giữ dòng CÒN BUỔI cuối cùng, không có thì dòng cuối — đúng luật admPick (Worker) / admMembers_ (Apps Script) của Admin.
+   Trước đây mỗi dòng là một khách: "Khách hôm nay" hiện 2 lần, findClient lấy dòng gói cũ (đếm buổi sai, mất chọn 1:2, hồ sơ nhảy gói). ---- */
+function rowLeft(m){ return m.left!=null ? (+m.left||0) : Math.max(0,(+m.total||0)-(+m.done||0)); }
+function rowWins(cur, m){ return rowLeft(m)>0 || !(rowLeft(cur)>0); }   /* m (đứng sau cur trên sheet) thay cur? */
+function rowOf(list, name){ var r=null; (list||[]).forEach(function(m){ if(m.name===name && (!r || rowWins(r,m))) r=m; }); return r; }
+function oneRowPerName(list){
+  var at={}, out=[];
+  (list||[]).forEach(function(m){
+    var i=at[m.name]; if(i==null){ at[m.name]=out.length; out.push(m); return; }
+    var cur=out[i], win=rowWins(cur,m)?m:cur, lose=win===m?cur:m;
+    if(lose.checked && !win.checked) win=Object.assign({}, win, {checked:true, signed:win.signed||lose.signed||''});   /* đã tập hôm nay gắn theo tên */
+    out[i]=win;
+  });
+  return out;
+}
 /* ---- khách của coach: members (BA) + snapshot (Customer database) → state.clients ---- */
 function buildClients(res, t0){
   var snap=res.snapshot||{};
   state.coach=res.coach; state.lib=res.library||null;
-  state.clients=(res.members||[]).map(function(m){
+  state.clients=oneRowPerName(res.members).map(function(m){
     var c=snap[m.name]||{};
     return {name:m.name, done:+m.done||0, total:+m.total||0, left:(m.left!=null?+m.left:Math.max(0,(+m.total||0)-(+m.done||0))), coach:m.coach,
             start:m.start||'', end:m.end||'', exp:m.exp||m.expiry||'', kind:m.kind||m.type||'', checked:!!m.checked, signed:m.signed||'',
@@ -2002,7 +2018,7 @@ function sendCheckin(m, many){
       if(res.member){ var sd=+res.member.done||0; m.total=+res.member.total||m.total; m.done=Math.max(sd, m.done+1); m.left=(sd>=m.done && res.member.left!=null)?+res.member.left:Math.max(0,m.total-m.done); }
       else { m.done+=1; m.left=Math.max(0,m.total-m.done); }
       ciOk(m, ci, m.done, res.at, many);
-      var c=loadCache(state.coach); if(c){ var mm=(c.res.members||[]).filter(function(x){return x.name===m.name})[0]; if(mm){ mm.done=m.done; mm.left=m.left; mm.checked=true; mm.signed=ci.at; saveCache(c.res); } }
+      var c=loadCache(state.coach); if(c){ var mm=rowOf(c.res.members, m.name); if(mm){ mm.done=m.done; mm.left=m.left; mm.checked=true; mm.signed=ci.at; saveCache(c.res); } }
       return true;
     }
     if(err==='da_checkin'){ ciOk(m, ci, ci.no, res.at||m.signed||'', many); return true; }

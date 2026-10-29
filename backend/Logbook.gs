@@ -13,6 +13,8 @@
 
    v2.2 (25/09/2026): action 'coach' trả thêm kind/pkg/status/exp cho từng
    khách và trả cả khách đã hết gói (lbMembers_(true)). Xem backend/README.md.
+   v2.11 (29/10/2026): action 'coach' gộp các dòng MEMBERS cùng tên (khách gia
+   hạn) thành MỘT khách — lbOnePerName_, cùng luật với Admin. README mục 9.
    ===================================================================== */
 var LB_DB_ID  = '19iWnTT5eWFKCJ9Mnzuv_pcF1MMH4XGnx60Uc0OXMmeM';
 var LB_PREFIX = 'Khách của ';
@@ -200,6 +202,20 @@ function lbMembers_(withDone) {
   return { ok: true, members: list };
 }
 
+/* v2.11 (29/10/2026): MEMBERS có thể nhiều dòng cùng tên (khách gia hạn: dòng gói cũ hết buổi + dòng gói mới; giai đoạn A/B
+   cùng coach). App coi mỗi dòng là một khách → "Khách hôm nay" hiện hai lần, app lấy nhầm dòng gói cũ. Giữ dòng CÒN BUỔI
+   cuối cùng, không có thì dòng cuối — đúng luật admMembers_ (Admin.gs) và admPick (Worker). list đã sort ổn định theo tên
+   → thứ tự các dòng trùng tên = thứ tự trên sheet. */
+function lbOnePerName_(list) {
+  var pick = {}, order = [];
+  (list || []).forEach(function (m) {
+    var k = String(m.name).trim(), cur = pick[k];
+    if (!cur) { pick[k] = m; order.push(k); return; }
+    if (m.left > 0 || !(cur.left > 0)) pick[k] = m;
+  });
+  return order.map(function (k) { return pick[k]; });
+}
+
 /* =====================================================================
    action 'coach' — PIN → coach + khách của coach + snapshot + thư viện.
    Một lượt lấy hết để client cache; KHÔNG khoá IP (xem hồ sơ/nhập liệu
@@ -214,6 +230,7 @@ function lbCoach_(p) {
   (mem.members || []).forEach(function (m) {
     if (lbNorm_(m.coach) === cn) { mine.push(m); names[String(m.name).trim()] = 1; }
   });
+  mine = lbOnePerName_(mine);                     /* v2.11 (29/10): khách gia hạn = MỘT dòng, như admMembers_ */
   var snap = lbSnapshot_(lbReadAll_(), names);
   /* đã check-in hôm nay (bất kỳ thiết bị/kiosk nào) → checked + giờ ký, để app hiện A3.1 */
   var sg = lbSignedToday_();
