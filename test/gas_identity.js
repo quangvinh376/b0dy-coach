@@ -44,10 +44,14 @@ Book.prototype.getSpreadsheetTimeZone = function () { return 'Asia/Ho_Chi_Minh';
 Book.prototype.insertSheet = function (n) { var s = new Sheet(n, [], 26); this.s.push(s); return s; };
 var WR = [], BA, DB;
 
-var MEM_HEAD = ['', '#', 'Tên', 'Gói', 'Số buổi', 'Loại', 'Đơn giá buổi', 'Coach', 'SĐT', 'Người bán gói', 'Ngày ký', 'Ghi chú', 'Đã tập', 'Còn lại', 'Trạng thái', 'Ngày bắt đầu', 'Ngày kết thúc', 'Ngày hết hạn', 'Buổi dư', '_key', 'Mã KH', 'Nguồn', '_mkey'];
-var LOG_HEAD = ['', '#', 'Ngày', 'Thứ', 'Khung giờ', 'Coach', 'Mã coach', 'Học viên', 'Mã HV', 'Loại', 'Khung', 'Trạng thái', '_h', '_tuần', 'Ký điện tử', '_mrow', 'Mã KH'];
+/* v2.13 (30/10): mặc định bố cục mới — SESSION LOG P "Mã KH" (công thức hiển thị) · Q "_mrow" · R "_makh" (cột nhập, ẩn) · S "_kh"
+   (khoá người), MEMBERS X "_kh". LAYOUT=v10 node test/gas_identity.js → bố cục 29/10 (P "_mrow" · Q "Mã KH" nhập). */
+var NEW = process.env.LAYOUT !== 'v10';
+var MEM_HEAD = ['', '#', 'Tên', 'Gói', 'Số buổi', 'Loại', 'Đơn giá buổi', 'Coach', 'SĐT', 'Người bán gói', 'Ngày ký', 'Ghi chú', 'Đã tập', 'Còn lại', 'Trạng thái', 'Ngày bắt đầu', 'Ngày kết thúc', 'Ngày hết hạn', 'Buổi dư', '_key', 'Mã KH', 'Nguồn', '_mkey'].concat(NEW ? ['_kh'] : []);
+var LOG_HEAD = ['', '#', 'Ngày', 'Thứ', 'Khung giờ', 'Coach', 'Mã coach', 'Học viên', 'Mã HV', 'Loại', 'Khung', 'Trạng thái', '_h', '_tuần', 'Ký điện tử'].concat(NEW ? ['Mã KH', '_mrow', '_makh', '_kh'] : ['_mrow', 'Mã KH']);
+var IN = NEW ? 17 : 16, MRC = NEW ? 16 : 15, DISP = NEW ? 15 : -1, KHC = NEW ? 18 : -1;
 var LB_HEAD = ['id', 'Ghi lúc', 'Ngày', 'Khách', 'Buổi #', 'Loại', 'Buổi tập', 'Bài tập', 'Set #', 'KG', 'REP', 'Đạt', 'Bài chính', 'Chỉ số', 'Giá trị', 'Form', 'Ghi chú', 'Coach', 'Mã KH'];
-function M(ma, name, total, coach, phone, code, start) { var r = []; for (var i = 0; i < 23; i++) r.push(''); r[1] = ma; r[2] = name; r[4] = total; r[5] = '1:1'; r[6] = 300000; r[7] = coach; r[8] = phone; r[15] = D(start); r[20] = code; return r; }
+function M(ma, name, total, coach, phone, code, start) { var r = []; for (var i = 0; i < 24; i++) r.push(''); r[1] = ma; r[2] = name; r[4] = total; r[5] = '1:1'; r[6] = 300000; r[7] = coach; r[8] = phone; r[15] = D(start); r[20] = code; return r; }
 function build(o) {
   o = o || {};
   var mem = [[''], [''], [''], [''], MEM_HEAD.slice(), M('001', 'Khách Một', 72, 'Quyết Hán', '0900000001', 'B001DY', '2026-06-17'),
@@ -56,12 +60,12 @@ function build(o) {
     M('059', 'Khách Gia Hạn', 36, 'Khải Phan', '0900000035', 'B059DY', '2026-10-07'), M('069', o.n069 || 'Trùng Tên', 48, 'Khải Phan', '0900000069', 'B069DY', '2026-10-26'),
     M('070', 'Trùng Cùng Coach', 12, 'Quyết Hán', '0900000070', 'B070DY', '2026-10-01'), M('071', 'Trùng Cùng Coach', 12, 'Quyết Hán', '0900000071', 'B071DY', '2026-10-02')];
   var L = [[''], [''], [''], LOG_HEAD.slice()];
-  function S(d, name, q) { var r = []; for (var i = 0; i < 17; i++) r.push(''); r[2] = D(d); r[7] = name; r[11] = 'Đã tập'; r[14] = 'app 08:00 · ký: X'; r[16] = q; L.push(r); }
+  function S(d, name, q) { var r = []; for (var i = 0; i < 19; i++) r.push(''); r[2] = D(d); r[7] = name; r[11] = 'Đã tập'; r[14] = 'app 08:00 · ký: X'; r[IN] = q; L.push(r); }
   S('2026-06-20', 'Khách Một', 'B001DY'); S('2026-06-21', 'Khách Hai', 'B002DY'); S('2026-06-22', 'Khách Hai', 'B002DY'); S('2026-06-23', 'Khách Hai', 'B002DY');
   S('2026-09-05', 'Khách Hai', 'B002DY'); S('2026-07-01', 'Trùng Tên', 'B004DY'); S('2026-10-27', 'Trùng Tên', 'B004DY');
   S('2026-08-20', 'Khách Gia Hạn', 'B035DY'); S('2026-08-21', 'Khách Gia Hạn', 'B035DY'); S('2026-10-08', 'Khách Gia Hạn', 'B059DY');
   function ev(id, d, name, type, x, code) { return [id, d + ' 09:00', d, name, 1, type, '', x.ex || '', 1, x.kg == null ? '' : x.kg, x.rep == null ? '' : x.rep, x.ok == null ? '' : x.ok, '', x.metric || '', x.val == null ? '' : x.val, '', '', 'c', code || '']; }
-  BA = new Book([new Sheet('MEMBERS', mem, 23), new Sheet('SESSION LOG', L, 26)]);
+  BA = new Book([new Sheet('MEMBERS', mem, 24), new Sheet('SESSION LOG', L, 26)]);
   DB = new Book([
     new Sheet('Khách của Quyết Hán', [LB_HEAD.slice(), ev('q1', '2026-10-27', 'Trùng Tên', 'SET', { ex: 'BB Back Squat', kg: 60, rep: 8, ok: 1 }, 'B004DY'),
       ev('q2', '2026-10-27', 'Trùng Tên', 'ĐO', { metric: 'weight', val: 70 }, 'B004DY'), ev('q3', '2026-10-20', 'Khách Một', 'SET', { ex: 'Leg Extension', kg: 30, rep: 12, ok: 1 }, 'B001DY'),
@@ -76,15 +80,17 @@ var busy = false;
 function recalc() {
   if (busy || !BA) return; busy = true;
   var mem = BA.getSheetByName('MEMBERS'), log = BA.getSheetByName('SESSION LOG'), mr = mem.g.slice(5);
+  if (NEW) mr.forEach(function (x) { var f = mr.filter(function (y) { return y[8] && y[8] === x[8]; })[0]; x[23] = x[20] ? (x[8] && f ? f[20] : x[20]) : ''; });   /* MEMBERS X "_kh" */
   for (var i = 4; i < log.g.length; i++) {
-    var r = log.g[i]; if (!r) continue; while (r.length < 17) r.push('');
-    var name = String(r[7] || ''), d = r[2], q = String(r[16] || ''), P = '';
+    var r = log.g[i]; if (!r) continue; while (r.length < 19) r.push('');
+    var name = String(r[7] || ''), d = r[2], q = String(r[IN] || ''), P = '';
     if (name && d instanceof RD) {
       var by = q ? function (x) { return x[20] === q; } : function (x) { return x[2] === name; }, best = null;
       mr.forEach(function (x) { if (by(x) && x[15] <= d && (!best || x[15] > best)) best = x[15]; });
       if (best) for (var k = 0; k < mr.length; k++) if (by(mr[k]) && +mr[k][15] === +best) { P = k + 1; break; }
     }
-    r[15] = P; r[5] = P ? mr[P - 1][7] : ''; r[8] = P ? mr[P - 1][1] : ''; r[1] = name ? String(i - 3) : '';
+    r[MRC] = P; r[5] = P ? mr[P - 1][7] : ''; r[8] = P ? mr[P - 1][1] : ''; r[1] = name ? String(i - 3) : '';
+    if (NEW) { r[DISP] = P ? mr[P - 1][20] : ''; r[KHC] = P ? mr[P - 1][23] : ''; }
   }
   mr.forEach(function (x) { x[12] = log.g.slice(4).filter(function (r) { return r && r[8] === x[1] && r[11] === 'Đã tập'; }).length; x[13] = x[4] - x[12]; });
   busy = false;
@@ -104,7 +110,7 @@ var ctx = {
   chkSS_: function () { return BA; },
   memHdrRow_: function (sh) { for (var i = 0; i < sh.g.length; i++) if ((sh.g[i] || []).indexOf('Tên') >= 0) return i + 1; return 5; },
   chkInit_: function () {},
-  CHECKIN: { ROW1: 5, COL_DATE: 3, COL_NAME: 8, COL_STATUS: 12, COL_NOTE: 15, WIDTH: 16, TZ: 'Asia/Ho_Chi_Minh', ST_OK: 'Đã tập', ST_CANCEL: 'Hủy' },
+  CHECKIN: { ROW1: 5, COL_DATE: 3, COL_NAME: 8, COL_STATUS: 12, COL_NOTE: 15, WIDTH: NEW ? 19 : 16, TZ: 'Asia/Ho_Chi_Minh', ST_OK: 'Đã tập', ST_CANCEL: 'Hủy' },
   LOG_SHEET: 'SESSION LOG',
   ipOk_: function (p) { return p.ip !== 'ngoai'; },
   adminOk_: function (p) { return p.apin === 'ZZZZ'; }
@@ -142,28 +148,30 @@ check(byName(r.members, 'Khách Hai').length === 1 && byName(r.members, 'Khách 
 console.log('\n== B. checkin_coach (app cũ chỉ gửi tên) ==');
 r = C('lbCheckin_', { pin: 'AAAA', name: 'Trùng Tên' });
 var t = today();
-check(r.ok && t.length === 1 && t[0][16] === 'B004DY' && t[0][8] === '004' && t[0][11] === 'Đã tập' && /^app \d\d:\d\d · ký: Quyết Hán$/.test(t[0][14]), 'B1 Quyết check-in Trùng Tên → Q B004DY, P → 004, Đã tập, ký Quyết Hán', [r, t]);
+check(r.ok && t.length === 1 && t[0][IN] === 'B004DY' && t[0][8] === '004' && t[0][11] === 'Đã tập' && /^app \d\d:\d\d · ký: Quyết Hán$/.test(t[0][14]), 'B1 Quyết check-in Trùng Tên → Q B004DY, P → 004, Đã tập, ký Quyết Hán', [r, t]);
 check(r.member && r.member.done === 3 && r.member.pid === 'B004DY', 'B3 member = dòng 004 sau khi ghi (đã tập 3)', r.member);
 check(C('lbCheckin_', { pin: 'AAAA', name: 'Trùng Tên' }).error === 'da_checkin', 'B4 lần 2 → da_checkin');
 r = C('lbCheckin_', { pin: 'BBBB', name: 'Trùng Tên' });
-check(r.ok && today()[1][16] === 'B069DY' && today()[1][8] === '069', 'B5 Khải check-in Trùng Tên (người khác) → ok, Q B069DY', [r, today()[1]]);
+check(r.ok && today()[1][IN] === 'B069DY' && today()[1][8] === '069', 'B5 Khải check-in Trùng Tên (người khác) → ok, Q B069DY', [r, today()[1]]);
 check(memRow('004')[12] === 3 && memRow('069')[12] === 1, 'B7 MEMBERS 004 = 3, 069 = 1');
 r = C('lbCoach_', { pin: 'AAAA' });
 check(byName(r.members, 'Trùng Tên')[0].checked === true, 'B8 Quyết: Trùng Tên đã tập hôm nay');
 r = C('lbCheckin_', { pin: 'AAAA', name: 'Trùng Cùng Coach' });
 check(r.error === 'trung_ten' && today().length === 2, 'B9 cùng tên cùng coach, không pid → trung_ten, không ghi', r);
 r = C('lbCheckin_', { pin: 'AAAA', name: 'Trùng Cùng Coach', pid: 'B071DY', key: 'B071DY' });
-check(r.ok && today()[2][16] === 'B071DY' && r.member.key === 'B071DY', 'B10 có pid → ok, Q B071DY, member.key = key app gửi', r);
+check(r.ok && today()[2][IN] === 'B071DY' && r.member.key === 'B071DY', 'B10 có pid → ok, Q B071DY, member.key = key app gửi', r);
 check(C('lbCheckin_', { pin: 'AAAA', name: 'Trùng Tên', pid: 'B069DY' }).error === 'khong_phai_khach_cua_ban', 'B11 pid khách coach khác → khong_phai_khach_cua_ban');
 r = C('lbCheckin_', { pin: 'BBBB', name: 'Khách Gia Hạn' });
-check(r.ok && today().slice(-1)[0][16] === 'B059DY' && r.member.total === 36, 'B12 khách gia hạn → Q gói mới B059DY', [r, today().slice(-1)[0]]);
+check(r.ok && today().slice(-1)[0][IN] === 'B059DY' && r.member.total === 36, 'B12 khách gia hạn → Q gói mới B059DY', [r, today().slice(-1)[0]]);
 check(C('lbCheckin_', { pin: 'AAAA', name: 'Trùng Tên', ip: 'ngoai' }).error === 'wrong_ip', 'B13 ngoài phòng → wrong_ip');
 
+if (NEW) check(!WR.some(function (w) { return w[0] === 'SESSION LOG' && w[2] === DISP + 1; }) && WR.some(function (w) { return w[0] === 'SESSION LOG' && w[2] === IN + 1; }), 'B14 (v2.13) không ghi vào cột hiển thị "Mã KH" (P), chỉ ghi "_makh" (R)', WR.filter(function (w) { return w[0] === 'SESSION LOG'; }).map(function (w) { return w[2]; }));
+if (NEW) check(today().every(function (rr) { return rr[DISP] === rr[IN] && rr[KHC]; }), 'B15 (v2.13) cột hiển thị = mã đã ghi, "_kh" có giá trị', today().map(function (rr) { return [rr[7], rr[DISP], rr[IN], rr[KHC]]; }));
 console.log('\n== C. Admin ==');
 check(C('admCheckin_', { apin: 'ZZZZ', name: 'Trùng Tên' }).error === 'trung_ten', 'C1 Admin tên trùng không pid → trung_ten');
 check(C('admCheckin_', { apin: 'ZZZZ', name: 'Trùng Tên', pid: 'B004DY' }).error === 'da_checkin', 'C2 Admin pid B004DY → da_checkin');
 r = C('admCheckin_', { apin: 'ZZZZ', name: 'Trùng Cùng Coach', pid: 'B070DY' });
-check(r.ok && r.coach === 'Quyết Hán' && today().slice(-1)[0][16] === 'B070DY' && /· ký: Admin$/.test(today().slice(-1)[0][14]), 'C3 Admin pid B070DY → ok, coach Quyết Hán, ký Admin', r);
+check(r.ok && r.coach === 'Quyết Hán' && today().slice(-1)[0][IN] === 'B070DY' && /· ký: Admin$/.test(today().slice(-1)[0][14]), 'C3 Admin pid B070DY → ok, coach Quyết Hán, ký Admin', r);
 check(C('admCheckin_', { apin: 'ZZZZ', name: 'Không Có' }).error === 'khong_thay_khach', 'C4 khách lạ → khong_thay_khach');
 r = C('admData_', { apin: 'ZZZZ' });
 check(r.members.filter(function (m) { return ['B004DY', 'B069DY', 'B070DY', 'B071DY'].indexOf(m.pid) >= 0; }).every(function (m) { return m.checked; }), 'C5 Admin: 4 người đã tập hôm nay đều có cờ', r.members.map(function (m) { return m.pid + ':' + !!m.checked; }));
@@ -197,7 +205,7 @@ check(r.ok && hm.cols === 19 && hm.cell(1, 19) === 'Mã KH' && rid(hm.g, 'z1')[1
 console.log('\n== G. đổi tên 069 về đúng tên ==');
 build({ n069: 'Trùng Tên (em)' });
 r = C('lbCheckin_', { pin: 'BBBB', name: 'Trùng Tên (em)' });
-check(r.ok && today()[0][16] === 'B069DY', 'G1 trước đổi tên: Khải check-in 069 → Q B069DY');
+check(r.ok && today()[0][IN] === 'B069DY', 'G1 trước đổi tên: Khải check-in 069 → Q B069DY');
 BA.getSheetByName('MEMBERS').g.slice(5).filter(function (rr) { return rr[1] === '069'; })[0][2] = 'Trùng Tên';
 r = C('lbCoach_', { pin: 'BBBB' });
 x = byName(r.members, 'Trùng Tên')[0];

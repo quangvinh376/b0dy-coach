@@ -36,7 +36,9 @@ function statsLogCols_(log){
       var h = v[r].map(function (x) { return lbNorm_(x); }), d = h.indexOf('ngay'), n = h.indexOf('hoc vien');
       if (d < 0 || n < 0) continue;
       o = { r1: r + 2, d: d, co: h.indexOf('coach'), n: n, id: h.indexOf('ma hv'), st: h.indexOf('trang thai'), sig: h.indexOf('ky dien tu'),
-            q: h.indexOf('ma kh'), mr: h.indexOf('_mrow') };          /* v2.12: Q "Mã KH" · P "_mrow" (dòng MEMBERS sheet đã tra) */
+            q: h.indexOf('_makh') >= 0 ? h.indexOf('_makh') : h.indexOf('ma kh'), mr: h.indexOf('_mrow') };
+      /* v2.12: "_mrow" (dòng MEMBERS sheet đã tra) · cột NHẬP mã khách lúc check-in. v2.13 (30/10): cột nhập là "_makh" (ẩn);
+         "Mã KH" nay là CÔNG THỨC hiển thị như Coach / Mã HV / Loại — không ghi vào. Chưa có "_makh" → "Mã KH" như v2.12. */
       if (o.co < 0) o.co = d + 3; if (o.id < 0) o.id = n + 1; if (o.st < 0) o.st = d + 9; if (o.sig < 0) o.sig = d + 12;
       break;
     }

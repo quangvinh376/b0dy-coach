@@ -16,6 +16,8 @@
    v2.11 (29/10/2026): action 'coach' gộp các dòng MEMBERS cùng tên (khách gia
    hạn) thành MỘT khách — lbOnePerName_, cùng luật với Admin. README mục 9.
    v2.12 (29/10/2026): NHẬN DIỆN KHÁCH THEO MÃ, không theo tên (cùng luật Worker v10).
+   v2.13 (30/10/2026): SESSION LOG cột nhập "_makh" (ẩn) + "Mã KH" là công thức hiển thị; khoá người
+   lấy từ MEMBERS "_kh" (sheet tính) khi có — cùng luật Worker v11. README mục 10.
    Người = mọi dòng MEMBERS cùng SĐT; SESSION LOG cột Q "Mã KH" (ghi lúc check-in),
    Customer database cột S "Mã KH" (ghi kèm từng sự kiện). README mục 10.
    ===================================================================== */
@@ -257,6 +259,7 @@ function idRead_(ss) {
   var hr = memHdrRow_(sh), lastC = sh.getLastColumn();
   var h = sh.getRange(hr, 1, 1, lastC).getValues()[0].map(lbNorm_);
   var iN = h.indexOf('ten'), iC = h.indexOf('coach'), iL = h.indexOf('con lai'), iU = h.indexOf('ma kh'), iI = h.indexOf('sdt'), iS = -1;
+  var iK = h.indexOf('_kh');            /* v2.13: MEMBERS "_kh" (công thức: Mã KH dòng đầu cùng SĐT) = khoá người do SHEET tính — CHART dùng cùng khoá */
   for (var c = 0; c < h.length; c++) if (iS < 0 && h[c].indexOf('bat dau') >= 0) iS = c;
   if (iN < 0) return I;
   var last = (typeof admLastRow_ === 'function') ? admLastRow_(sh, iN + 1, hr + 1) : sh.getLastRow();
@@ -268,9 +271,10 @@ function idRead_(ss) {
     var code = iU >= 0 ? String(v[r][iU] == null ? '' : v[r][iU]).trim() : '', st = iS >= 0 ? v[r][iS] : '';
     var x = { mrow: r + 1, name: name, coach: iC >= 0 ? String(v[r][iC] || '').trim() : '', code: code,
               left: iL >= 0 ? (Number(v[r][iL]) || 0) : 0, start: (st instanceof Date) ? Utilities.formatDate(st, tz, 'yyyy-MM-dd') : lbKey_(st) };
-    var pk = idPhone_(iI >= 0 ? v[r][iI] : '') || (code ? 'c:' + code : 'n:' + lbNorm_(name));
+    var kh = iK >= 0 ? String(v[r][iK] == null ? '' : v[r][iK]).trim() : '';
+    var pk = kh ? 'k:' + kh : (idPhone_(iI >= 0 ? v[r][iI] : '') || (code ? 'c:' + code : 'n:' + lbNorm_(name)));
     var P = byKey[pk];
-    if (!P) { P = byKey[pk] = { pid: '', rows: [] }; I.persons.push(P); }
+    if (!P) { P = byKey[pk] = { pid: '', kh: kh, rows: [] }; I.persons.push(P); }
     P.rows.push(x); x.P = P;
     I.rows.push(x);
     I.byMrow[x.mrow] = x;
@@ -280,7 +284,7 @@ function idRead_(ss) {
     var cur = null;
     P.rows.forEach(function (x) { if (!cur || x.left > 0 || !(cur.left > 0)) cur = x; });   /* dòng còn buổi cuối, không có thì dòng cuối */
     var c0 = P.rows.filter(function (x) { return x.code; })[0];
-    P.pid = c0 ? c0.code : P.rows[0].name;
+    P.pid = P.kh || (c0 ? c0.code : P.rows[0].name);     /* v2.13: có "_kh" → pid = đúng khoá sheet dùng */
     P.cur = cur; P.name = cur.name; P.owner = P.rows[P.rows.length - 1].coach;                /* coach hiện hành = dòng cuối (như memberCoachMap_) */
     if (!I.byPid[P.pid]) I.byPid[P.pid] = P;
     var seen = {};
