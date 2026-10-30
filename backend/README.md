@@ -171,3 +171,22 @@ Hai khách khác nhau trùng tên (B004DY · B069DY cùng "Nguyễn Quang Minh")
 - Check-in (`lbCheckin_` · `admCheckin_`) dùng chung `idCheckinWrite_` (ghi Q, chặn trùng theo NGƯỜI) — `lbCheckin_` không còn qua `apiCheckin_` + `apiSign_` của Code.gs. App cũ gửi tên trùng không rõ người → `trung_ten`, không ghi gì.
 - Còn theo tên (biết trước): đường kiosk của Code.gs (dự phòng khi Worker lỗi) — dòng tên trùng, trống Q được P tra theo tên; Worker điền Q khi coach ký dòng chờ. Tab `Tổng hợp bài` (lưu trữ) khoá theo tên.
 - Test: `node test/gas_identity.js` (Logbook/Admin/Stats thật + SESSION LOG giả có công thức P) · `node test/same_name.js` (app) · Worker: doc dự án `claude/b0dy-kiosk-worker-v10.md`.
+
+### 10.1 v2.13 — "Mã KH" hiện như Coach / Mã HV / Loại (30/10/2026)
+
+Bố cục SESSION LOG từ 30/10 (máy chủ dò cột theo **tên tiêu đề**, không theo vị trí):
+
+| Cột | Tiêu đề | Hiện/ẩn | Nội dung |
+|---|---|---|---|
+| I | Mã HV | hiện | `=IF($Q5="","",INDEX(MEMBERS!$B$6:$B$1013,$Q5))` — mã hợp đồng + giai đoạn (002A/002B) |
+| F · J | Coach · Loại | hiện | cùng kiểu, tra theo `$Q` |
+| **P** | **Mã KH** | **hiện** | `=IF($Q5="","",INDEX(MEMBERS!$U$6:$U$1013,$Q5))` — công thức, **không ghi vào** |
+| Q | `_mrow` | ẩn | dòng MEMBERS (công thức mục 10, nay tra theo `$R`) |
+| R | `_makh` | ẩn | **cột nhập**: check-in ghi mã gói vào đây |
+| S | `_kh` | ẩn | `=IF($Q5="","",INDEX(MEMBERS!$X$6:$X$1013,$Q5))` — khoá NGƯỜI |
+
+- MEMBERS cột X `_kh` (ẩn) = Mã KH của dòng đầu tiên cùng SĐT (không SĐT → Mã KH của chính dòng): khoá người do **sheet** tính. `idRead_` / Worker v11 dùng `_kh` làm `pid` khi có cột này.
+- Máy chủ: cột nhập = `_makh` nếu có, không thì `Mã KH` (bố cục v2.12) · `_mrow` như cũ. Worker v11 cùng luật.
+- **CHART** đếm khách theo `_kh`: bảng nền AX `MÃ KHÁCH` (QUERY MEMBERS X/K) · AY ngày ký HĐ đầu · AZ nguồn · BA buổi đầu (SESSION LOG S) · BB tháng bắt đầu · BC `TÊN KHÁCH`; AH/AI/AJ, D223, D261, cohort E138 đọc SESSION LOG `$S` thay `$H`.
+- **P&L** dòng 7 (doanh thu buổi tập) và 13 (hoa hồng): `VLOOKUP('SESSION LOG'!$Q$5:$Q, …)` — trước 30/10 là `$P` (`_mrow` cũ). Đổi vị trí cột SESSION LOG phải rà cả P&L.
+- **Mã HV vẫn bắt buộc**: MEMBERS M "Đã tập" (COUNTIFS SESSION LOG I), 🚂 1 (hoa hồng từng dòng hợp đồng), COM, đơn giá buổi trên app đều khoá theo Mã HV — một gói có thể có hai giai đoạn giá khác nhau (A/B), Mã KH không phân biệt được.
