@@ -95,9 +95,10 @@ function statsPcAdd_(pc, d, ctx){
   if (n > ctx.tN - 28) pc.n28 = (pc.n28 || 0) + 1;
   if (!pc.lastAll || d > pc.lastAll) pc.lastAll = d;
 }
-/* v2.7.1: giờ KÝ THẬT trên app — cột N "app 08:12 · ký: Quyết" → "08:12" (dòng nhập tay, không có vết app → '') */
+/* v2.7.1: giờ KÝ THẬT trên app — cột "Ký điện tử" "app 08:12 · ký: Quyết" → "08:12" (dòng nhập tay, không có vết app → '')
+   01/11/2026: check-in ở kiosk ghi "kiosk 08:12 · ký: Quyết" → cũng là giờ ký thật */
 function statsSigned_(v){
-  var m = String(v || '').match(/app\s+(\d{1,2}):(\d{2})/i); return m ? ('0' + m[1]).slice(-2) + ':' + m[2] : '';
+  var m = String(v || '').match(/(?:app|kiosk)\s+(\d{1,2}):(\d{2})/i); return m ? ('0' + m[1]).slice(-2) + ':' + m[2] : '';
 }
 /* MEMBERS — mã HV · tên · đơn giá buổi · coach · buổi/tuần · người bán gói · ngày bán hộ · còn lại. Tìm cột theo tên (bỏ dấu). */
 function statsMem_(ba){

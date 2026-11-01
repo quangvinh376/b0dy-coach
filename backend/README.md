@@ -190,3 +190,18 @@ Bố cục SESSION LOG từ 30/10 (máy chủ dò cột theo **tên tiêu đề*
 - **CHART** đếm khách theo `_kh`: bảng nền AX `MÃ KHÁCH` (QUERY MEMBERS X/K) · AY ngày ký HĐ đầu · AZ nguồn · BA buổi đầu (SESSION LOG S) · BB tháng bắt đầu · BC `TÊN KHÁCH`; AH/AI/AJ, D223, D261, cohort E138 đọc SESSION LOG `$S` thay `$H`.
 - **P&L** dòng 7 (doanh thu buổi tập) và 13 (hoa hồng): `VLOOKUP('SESSION LOG'!$Q$5:$Q, …)` — trước 30/10 là `$P` (`_mrow` cũ). Đổi vị trí cột SESSION LOG phải rà cả P&L.
 - **Mã HV vẫn bắt buộc**: MEMBERS M "Đã tập" (COUNTIFS SESSION LOG I), 🚂 1 (hoa hồng từng dòng hợp đồng), COM, đơn giá buổi trên app đều khoá theo Mã HV — một gói có thể có hai giai đoạn giá khác nhau (A/B), Mã KH không phân biệt được.
+
+## 11. Nguồn check-in ở cột "Ký điện tử": `kiosk` / `app` (01/11/2026)
+
+Tách để phân loại dữ liệu: kiosk dùng cho khách không ghi buổi tập và khách đặt lịch mà không đến (vẫn tính buổi, không có dữ liệu buổi tập).
+
+| Đường check-in | Ghi | Sau khi coach ký / duyệt |
+|---|---|---|
+| Kiosk (demo.b0dy.studio) — Worker `checkin` v12 · Apps Script `apiCheckin_` (Code.gs, dự phòng) | `kiosk 09:38` · Chờ xác nhận | `kiosk 09:38 · ký: Hiền Mai` · `kiosk 09:38 · duyệt: …` · `kiosk 09:38 · hủy: …` |
+| App coach — `checkin_coach` (Worker · `Logbook.gs idCheckinWrite_`) | `app 09:38 · ký: Hiền Mai` · Đã tập | — |
+| Admin — `adm_checkin` | `app 09:38 · ký: Admin` · Đã tập | — |
+
+- Dòng trước 01/11 đều là `app …` (kể cả check-in ở kiosk). Dòng nhập tay để trống.
+- Chỗ đọc: `statsSigned_` (Stats.gs, giờ ký ở trang Hoa hồng / Doanh thu) nhận `app` hoặc `kiosk`; `lbSignedToday_` · Admin.gs · Worker chỉ đọc `HH:mm` nên không phụ thuộc chữ đầu. Công thức file BA, card KPI Discord, trang đặt lịch không đọc cột này (rà 01/11).
+- Thêm nguồn mới: sửa cả `statsSigned_`.
+- Test: `test/gas_stats.js` (dòng `kiosk 15:01 · duyệt`) · `GAS_CODE=… node test/gas_admin.js` mục 8 · Worker `test_v12.mjs` (doc dự án `claude/b0dy-kiosk-worker-v12.md`).

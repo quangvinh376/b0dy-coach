@@ -34,7 +34,7 @@ function fakeFixture(){
   s('2026-09-14','15:00 – 16:00','Coach Một','Khách An','101','Hủy','app 15:00 · ký: Một');       /* hủy → bỏ */
   s('2026-09-30','07:00 – 08:00','Coach Một','Khách Cường','103B','','app 07:10 · ký: Admin');    /* tuần 7 */
   s('2026-10-01','06:00 – 07:00','Coach Một','Khách An','101','','app 06:03 · ký: Một · ký: Một');/* tuần 7 · vết ký lặp */
-  s('2026-10-05','15:00 – 16:00','Coach Một','Khách An','101','','app 15:01 · duyệt: Một');       /* tuần 8 */
+  s('2026-10-05','15:00 – 16:00','Coach Một','Khách An','101','','kiosk 15:01 · duyệt: Một');     /* tuần 8 · check-in ở kiosk (01/11: "kiosk HH:mm") */
   s('2026-10-06','09:00 – 10:00','Coach Một','Khách Cường','','','app 09:05 · ký: Một');          /* hôm nay · thiếu mã HV → theo tên (103B) · dòng TRƯỚC Bình dù ký muộn hơn */
   s('2026-10-06','08:00 – 09:00','Coach Một','Khách Bình','102','','app 08:01 · ký: Một');        /* hôm nay, tuần 8 */
   s('2026-10-06','10:00 – 11:00','Coach Hai','Khách Dung','201','','app 10:00 · ký: Hai');        /* coach khác → bỏ (Admin: có) */

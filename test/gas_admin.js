@@ -57,6 +57,9 @@ Sheet.prototype.getRange = function (r, c, nr, nc) {
 Sheet.prototype.setFrozenRows = function (n) { this.frozen = n; };
 /* lưới giả: số dòng tối đa = số dòng đang có (Logbook.gs v2.x nới lưới bằng insertRowsAfter trước khi ghi) */
 Sheet.prototype.getMaxRows = function () { return Math.max(this.rows.length, 1); };
+/* 01/11: Admin.gs / Logbook.gs v2.12+ đọc getMaxColumns (lưới cột) — lưới giả = cột xa nhất đang có dữ liệu */
+Sheet.prototype.getMaxColumns = function () { var m = 1; this.rows.forEach(function (r) { m = Math.max(m, r.length); }); return m; };
+Sheet.prototype.insertColumnsAfter = function (c, n) { this.rows.forEach(function (r) { if (r.length > c) { var a = []; for (var i = 0; i < n; i++) a.push(''); r.splice.apply(r, [c, 0].concat(a)); } }); };
 Sheet.prototype.insertRowsAfter = function (r, n) { var a = []; for (var i = 0; i < n; i++) a.push([]); this.rows.splice.apply(this.rows, [r, 0].concat(a)); };
 function Spreadsheet(id, tz) { this.id = id; this.tz = tz; this.sheets = []; this.writes = []; }
 Spreadsheet.prototype.add = function (name, gid, rows) { var s = new Sheet(name, gid, rows, this); this.sheets.push(s); return s; };
@@ -297,6 +300,18 @@ check('coach: khách đã ký hôm nay → checked + giờ ký (lbSignedToday_)'
 check('coach bằng PIN admin vẫn sai_pin (app lui sang admin)', call({ action: 'coach', pin: 'ZZZZ' }).error === 'sai_pin');
 check('admin action cũ vẫn chạy', call({ action: 'admin', apin: 'ZZZZ' }).ok === true);
 check('ping', call({ action: 'ping' }).ok === true);
+
+console.log('\n== 8. kiosk (01/11): nguồn "kiosk HH:mm" (Code.gs apiCheckin_, đường dự phòng của kiosk) ==');
+F = reset();
+log = F.ba.getSheetByName('SESSION LOG');
+r = call({ action: 'checkin', name: 'Đỗ Thành Công', ip: '203.0.113.7' });
+check('kiosk check-in (dòng Hủy hôm nay không chặn) → ok', r.ok === true, r);
+check('kiosk → K = Chờ xác nhận, N = "kiosk HH:mm"', r.ok && log.cell(r.row, 11 + M) === 'Chờ xác nhận' && /^kiosk \d\d:\d\d$/.test(log.cell(r.row, 14 + M)), r.ok && log.cell(r.row, 14 + M));
+var ks = call({ action: 'sign', pin: 'AAAA', ip: '203.0.113.7', name: 'Đỗ Thành Công', date: TODAY_VN, row: r.row });
+check('coach ký trên kiosk → "kiosk HH:mm · ký: Quyết Hán", Đã tập', ks.ok && log.cell(r.row, 11 + M) === 'Đã tập' && /^kiosk \d\d:\d\d · ký: Quyết Hán$/.test(log.cell(r.row, 14 + M)), [ks, log.cell(r.row, 14 + M)]);
+var ra = call({ action: 'adm_checkin', apin: 'ZZZZ', ip: '9.9.9.9', name: 'Nguyễn Quang Vinh', date: TODAY_VN });
+check('cùng lúc, Admin vẫn ghi "app HH:mm · ký: Admin"', ra.ok && /^app \d\d:\d\d · ký: Admin$/.test(log.cell(ra.row, 14 + M)), ra.ok && log.cell(ra.row, 14 + M));
+check('kiosk ngoài phòng → wrong_ip, không ghi', call({ action: 'checkin', name: 'Nguyễn Quang Vinh', ip: '1.1.1.1' }).error === 'wrong_ip');
 
 console.log('\n' + pass + ' PASS, ' + fail + ' FAIL');
 process.exit(fail ? 1 : 0);
