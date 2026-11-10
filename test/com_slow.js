@@ -50,7 +50,7 @@ var {chromium}=require('playwright'); var serve=require('./serve'); var fs=requi
     rows:[].map.call(document.querySelectorAll('#sl-list .row'), function(r){ return r.querySelector('.nm').textContent+'|'+r.querySelector('.lab').textContent; }) }; });
   console.log('    ', JSON.stringify(S));
   var avgS=(Math.round(S.avg*100)/100).toFixed(2).replace('.',',');
-  check(tile.l==='Tempo' && tile.v===avgS && /^\d+,\d\d$/.test(tile.v) && tile.ic==='#t-tempo', 'S2a ô trang chủ "Tempo" = trung bình tempo từng khách, 2 số lẻ dấu phẩy, icon máy đếm nhịp: '+JSON.stringify(tile)+' / '+avgS);
+  check(tile.l==='Tempo' && tile.v===avgS && /^\d+,\d\d$/.test(tile.v) && tile.ic==='#t-tempo', 'S2a ô trang chủ "Tempo" = trung bình tempo từng khách, 2 số lẻ dấu phẩy, icon t-tempo (v2.20.1: xung nhịp): '+JSON.stringify(tile)+' / '+avgS);
   check(S.head==='Tempo', 'S2b tiêu đề trang: '+S.head);
   check(S.secs.join('|')==='KHÁCH TẬP CHẬM · '+S.list.length+'|KHÁCH TẬP ĐÚNG TIẾN ĐỘ · '+(S.act-S.list.length) && S.list.length===3, 'S2c 2 nhóm, đủ mọi khách còn buổi ('+S.act+'): '+S.secs.join('|'));
   check(S.rows.join(',')===S.list.map(function(i){ return i.n+'|DƯ ~'+i.x+' BUỔI · HẾT '+i.e; }).concat(S.ok).join(','), 'S2d dòng chậm "DƯ ~n BUỔI · HẾT dd/mm" (dư nhiều → ít) · dòng đúng tiến độ "TEMPO x,x · HẾT dd/mm" (tempo thấp → cao)');
