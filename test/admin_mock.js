@@ -127,7 +127,7 @@ async function gas(r){
   await run('AD1', 'Coach 1234: không thấy tab Cài đặt, không lệnh nào mang apin, check-in ngoài phòng VẪN bị chặn', async function(){
     await pin(C_PIN); await screen('p-home'); await w(1500);
     check((await txt('#h-name'))!=='Admin', 'tên coach: '+(await txt('#h-name')));
-    check((await disp('#p-home .tab-adm'))==='none' && (await disp('#p-clients .tab-adm'))==='none', 'tab Cài đặt ẩn với coach');
+    check((await disp('#p-home .tab-adm'))==='none' && !(await ev(function(){ return document.querySelector('#p-clients .tab-adm'); })), 'tab Cài đặt ẩn với coach (v2.21.0: màn Khách hàng không còn cụm tab)');
     check(!(await ev(function(){ return document.body.classList.contains('adm'); })), 'body không có .adm');
     check(SRV.wk.some(function(x){ return x.action==='coach' && x.pin===C_PIN; }), 'coach đi Worker trước');
     var g0=SRV.gas.length, k0=SRV.wk.length;
@@ -169,20 +169,21 @@ async function gas(r){
     check(tiles[0]==='Tổng số khách=4', 'ô 1: '+tiles[0]); check(/^Doanh thu=96,5/.test(tiles[3]), 'ô 4: '+tiles[3]);
     check((await disp('#p-home .tab-adm'))==='flex', 'tab Cài đặt hiện ở trang chủ: '+(await disp('#p-home .tab-adm')));
     check(await ev(function(){ return document.body.classList.contains('adm') && state.coach==='Admin' && !state.pin; }), 'state admin');
-    /* 3 tab + CTA cùng một hàng, không chồng nhau */
+    /* v2.21.0: 2 tab (Trang chủ · Cài đặt) + CTA cùng một hàng, không chồng nhau */
     var nav=await ev(function(){ return [].filter.call(document.querySelectorAll('#p-home .nav button'), function(b){ return getComputedStyle(b).display!=='none'; }).map(function(b){ var r=b.getBoundingClientRect(); return [Math.round(r.left),Math.round(r.right),Math.round(r.top),b.scrollWidth>b.clientWidth+1]; }); });
-    check(nav.length===4 && nav.every(function(n,i){ return i===0 || n[0]>=nav[i-1][1]; }) && nav.every(function(n){ return n[2]===nav[0][2] && !n[3]; }), 'nav 3 tab + CTA thẳng hàng, không chồng/cắt chữ: '+JSON.stringify(nav));
+    check(nav.length===3 && nav.every(function(n,i){ return i===0 || n[0]>=nav[i-1][1]; }) && nav.every(function(n){ return n[2]===nav[0][2] && !n[3]; }), 'nav 2 tab + CTA thẳng hàng, không chồng/cắt chữ: '+JSON.stringify(nav));
     await shot('ad2-admin-home');
   });
 
   await run('AD3', 'Khách hàng (Admin): mọi khách của phòng, meta kèm coach phụ trách', async function(){
-    await page.click('#p-home .nav button[aria-label="Khách hàng"]'); await screen('p-clients'); await w(900);
+    check((await ev(function(){ return document.querySelectorAll('.nav button[aria-label="Khách hàng"]').length; }))===0, 'v2.21.0: không còn tab Khách hàng (Admin: Trang chủ + Cài đặt)');
+    await page.click('#h-tiles .tile:nth-child(1)'); await screen('p-clients'); await w(900);
     var rows=await ev(function(){ return [].map.call(document.querySelectorAll('#cl-list .row'), function(r){ return r.querySelector('.nm').textContent+'|'+r.querySelector('.lab').textContent; }); });
     check(rows.length===5, 'đủ 5 khách: '+rows.length);
     check(rows.some(function(r){ return /^Vũ Sao Mai\|.*· HIỀN MAI$/.test(r); }), 'khách của Hiền Mai có "· HIỀN MAI": '+rows.join(' / '));
     check(rows.some(function(r){ return /^Trần Minh Anh\|.*· HIỀN MAI$/.test(r); }), 'bỏ hậu tố "(giai đoạn 1)"');
     check(rows.some(function(r){ return /^Bùi Doãn Quang\|.*· QUYẾT HÁN$/.test(r); }), 'khách của Quyết: '+rows[0]);
-    check((await disp('#p-clients .tab-adm'))==='flex', 'tab Cài đặt hiện ở Khách hàng');
+    check((await ev(function(){ var b=document.querySelectorAll('#p-clients .nav button'); return b.length===1 && b[0].getAttribute('aria-label')==='Quay lại'; })), 'v2.21.0: màn Khách hàng (Admin) chỉ có nút ←');
     await shot('ad3-admin-clients');
     await page.click('#p-clients .nav .ghost:nth-child(1)'); await screen('p-home'); await w(700);
   });
@@ -390,9 +391,9 @@ async function gas(r){
   });
   await C.ctx.close();
 
-  /* bố cục tab Cài đặt + nav 3 tab ở 375 / 430 */
+  /* bố cục tab Cài đặt + nav ở 375 / 430 (v2.21.0: trang chủ / Cài đặt = 2 tab + CTA · Khách hàng = chỉ nút ←) */
   for(var vp of [{width:375,height:667},{width:430,height:932}]){
-    await run('AD-L'+vp.width, 'Bố cục Admin '+vp.width+'×'+vp.height+': nav 3 tab + CTA, tab Cài đặt không cắt chữ', async function(){
+    await run('AD-L'+vp.width, 'Bố cục Admin '+vp.width+'×'+vp.height+': nav 2 tab + CTA (Khách hàng chỉ ←), tab Cài đặt không cắt chữ', async function(){
       resetSrv(); var D=await mk(vp), pg=D.page; page=pg;
       await pg.goto('http://localhost:'+PORT+'/'); await screen('p-pin'); await w(500);
       await pin(A_PIN); await screen('p-home'); await pg.waitForFunction(function(){ return state.admin && !state.loading; }, null, {timeout:8000}); await w(1500);
@@ -402,7 +403,7 @@ async function gas(r){
           var btn=[].filter.call(pgE.querySelectorAll('.nav button'), function(b){ return getComputedStyle(b).display!=='none'; }).map(function(b){ var q=b.getBoundingClientRect(); return {l:q.left, r:q.right, t:q.top, clip:b.scrollWidth>b.clientWidth+1}; });
           var clip=[].filter.call(pgE.querySelectorAll('.t1,.nm,.lab,.ipval'), function(e){ var q=e.getBoundingClientRect(); return q.width>0 && e.scrollWidth>e.clientWidth+1 && getComputedStyle(e).textOverflow!=='ellipsis'; }).map(function(e){ return e.className+':'+e.textContent.slice(0,20); });
           return {btn:btn, clip:clip, W:W, over:document.documentElement.scrollWidth>W}; }, id);
-        check(r.btn.length===4 && r.btn.every(function(b,i){ return b.l>=0 && b.r<=r.W && !b.clip && (i===0 || b.l>=r.btn[i-1].r); }), id+' nav: '+JSON.stringify(r.btn));
+        check(r.btn.length===(id==='p-clients'?1:3) && r.btn.every(function(b,i){ return b.l>=0 && b.r<=r.W && !b.clip && (i===0 || b.l>=r.btn[i-1].r); }), id+' nav: '+JSON.stringify(r.btn));
         check(!r.clip.length && !r.over, id+' chữ bị cắt / tràn ngang: '+r.clip.join(', '));
         await pg.screenshot({path:path.join(OUT,'ad-l'+vp.width+'-'+id+'.png')});
       }

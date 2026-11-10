@@ -124,7 +124,6 @@
   <div class="nav">
     <div class="left">
       <button class="ghost" onclick="go('p-home','back')" aria-label="Trang chủ"><svg class="ic"><use href="#i-home"/></svg></button>
-      <button class="ghost" onclick="go('p-clients','back')" aria-label="Khách hàng"><svg class="ic"><use href="#i-people"/></svg></button>
       <button class="ghost cur" aria-label="Cài đặt"><svg class="ic"><use href="#i-gear"/></svg></button>
     </div>
     <button class="cta" id="am-add" onclick="addIp()">Thêm IP</button>
@@ -146,7 +145,7 @@
   <div class="nav">
     <div class="left">
       <button class="ghost cur" aria-label="Trang chủ"><svg class="ic"><use href="#i-home"/></svg></button>
-      <button class="ghost" onclick="go('p-clients','fwd')" aria-label="Khách hàng"><svg class="ic"><use href="#i-people"/></svg></button>
+      <!-- v2.21.0: bỏ tab Khách hàng — vào màn Khách hàng bằng ô "Tổng số khách" (chủ studio 10/11) -->
       <button class="ghost tab-adm" onclick="go('p-admin','fwd')" aria-label="Cài đặt"><svg class="ic"><use href="#i-gear"/></svg></button>
     </div>
     <button class="cta" id="h-go" onclick="enterSession()">Vào buổi tập</button>
@@ -162,13 +161,9 @@
     <div class="search"><svg class="ic"><use href="#i-search"/></svg><input id="cl-q" type="search" placeholder="Tìm khách" autocomplete="off" oninput="renderClients(false)"></div>
     <div class="scroll grow ex" id="cl-list"></div>
   </div>
+  <!-- v2.21.0: màn con (vào từ ô "Tổng số khách") — nav chỉ còn nút quay lại, như Tempo / Hoa hồng -->
   <div class="nav">
-    <div class="left">
-      <button class="ghost" onclick="go('p-home','back')" aria-label="Trang chủ"><svg class="ic"><use href="#i-home"/></svg></button>
-      <button class="ghost cur" aria-label="Khách hàng"><svg class="ic"><use href="#i-people"/></svg></button>
-      <button class="ghost tab-adm" onclick="go('p-admin','fwd')" aria-label="Cài đặt"><svg class="ic"><use href="#i-gear"/></svg></button>
-    </div>
-    <button class="cta" onclick="enterSession()">Vào buổi tập</button>
+    <button class="ghost" onclick="go('p-home','back')" aria-label="Quay lại"><svg class="ic s24"><use href="#i-back"/></svg></button>
   </div>
 </section>
 

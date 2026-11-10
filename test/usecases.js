@@ -158,18 +158,21 @@ var CLIP={hard:[], ell:[]};
   });
 
   await run('C', 'Chuyển màn: nav đứng yên (.still), head/body có animation; hồ sơ và quay lại', async function(){
-    await page.click('#p-home .nav .ghost:nth-child(2)');
-    var st=await h.ev(function(){ var pg=document.getElementById('p-clients'); return {scr:state.screen, btns:[].map.call(pg.querySelectorAll('.nav button'), function(b){ return b.className; }),
-      vis:[].filter.call(pg.querySelectorAll('.nav button'), function(b){ return getComputedStyle(b).display!=='none'; }).map(function(b){ return b.className; }),
-      adm:getComputedStyle(pg.querySelector('.nav .tab-adm')).display,
+    /* v2.21.0: bỏ tab Khách hàng — nav trang chủ không còn nút Khách hàng, vào màn Khách hàng bằng ô "Tổng số khách";
+       màn Khách hàng thành màn con: nav chỉ còn nút ← (như Tempo / Hoa hồng) */
+    var hn=await h.ev(function(){ return {lab:[].map.call(document.querySelectorAll('#p-home .nav button'), function(b){ return b.getAttribute('aria-label')||b.textContent.trim(); }),
+      vis:[].filter.call(document.querySelectorAll('#p-home .nav button'), function(b){ return getComputedStyle(b).display!=='none'; }).length,
+      any:document.querySelectorAll('.nav button[aria-label="Khách hàng"]').length}; });
+    check(hn.any===0 && hn.lab.join('|')==='Trang chủ|Cài đặt|Vào buổi tập' && hn.vis===2, 'nav trang chủ coach: Trang chủ + Vào buổi tập (Cài đặt chỉ Admin), không còn tab Khách hàng ở đâu: '+JSON.stringify(hn));
+    await page.click('#h-tiles .tile:nth-child(1)');
+    var st=await h.ev(function(){ var pg=document.getElementById('p-clients'); return {scr:state.screen, btns:[].map.call(pg.querySelectorAll('.nav button'), function(b){ return b.className+'@'+b.getAttribute('aria-label'); }),
       nav:getComputedStyle(pg.querySelector(':scope>.nav')).animationName, head:getComputedStyle(pg.querySelector(':scope>.head')).animationName, body:getComputedStyle(pg.querySelector(':scope>.body')).animationName,
-      leave:getComputedStyle(document.querySelector('#p-home>.body')).animationName}; });
-    check(st.scr==='p-clients', 'sang p-clients');
-    /* v2.4: nav có thêm nút tab Cài đặt (.tab-adm) — chỉ hiện với PIN admin; coach vẫn thấy đúng 3 nút */
-    check(st.vis.length===3 && st.btns.every(function(c){ return /\bstill\b/.test(c); }), 'ghost/CTA nav có .still (3 nút hiện): '+st.vis.join(' | ')+' / tất cả: '+st.btns.join(' | '));
-    check(st.adm==='none', 'coach không thấy tab Cài đặt: display='+st.adm);
+      leave:getComputedStyle(document.querySelector('#p-home>.body')).animationName,
+      old:[].map.call(document.querySelectorAll('#p-home .nav button'), function(b){ return b.className; })}; });
+    check(st.scr==='p-clients', 'ô Tổng số khách → p-clients');
+    check(st.btns.length===1 && /\bswap\b/.test(st.btns[0]) && /@Quay lại$/.test(st.btns[0]), 'nav màn Khách hàng chỉ còn nút ← (hiện mờ vào .swap): '+st.btns.join(' | '));
+    check(st.old.every(function(c){ return /\bfade\b/.test(c); }), 'nút nav trang chủ mờ ra (.fade): '+st.old.join(' | '));
     check(st.nav==='none', '.nav không animation: '+st.nav); check(st.head==='inF', '.head trượt vào: '+st.head); check(st.body==='inF', '.body trượt vào: '+st.body); check(st.leave==='outF', 'trang cũ .body trượt ra: '+st.leave);
-    check(/curswap/.test(st.btns[1]), 'tab Khách hàng đổi .cur mềm (curswap): '+st.btns[1]);
     await h.wait(800); await h.clip('clients');
     await page.click('#cl-list .row');
     /* v2.5: tên bay từ dòng lên tiêu đề hồ sơ (phần họ mờ tại chỗ); tiêu đề thật ẩn tới lúc hạ cánh rồi phải hiện lại */
@@ -187,12 +190,12 @@ var CLIP={hard:[], ell:[]};
     check((await h.count('#cl-list .row'))>=6, 'quay lại danh sách còn dữ liệu');
     await page.click('#p-clients .nav .ghost:nth-child(1)');
     var b2=await h.ev(function(){ return [].map.call(document.querySelectorAll('#p-home .nav button'), function(b){ return b.className; }); });
-    check(b2.every(function(c){ return /\bstill\b/.test(c); }), 'về home: nav .still: '+b2.join(' | '));
+    check(b2.every(function(c){ return /\bswap\b/.test(c); }), 'về home bằng ←: nút nav trang chủ hiện mờ vào (.swap, như từ Tempo về): '+b2.join(' | '));
     await h.waitScreen('p-home'); await h.wait(800);
   });
 
   await run('D', 'Khách hàng: 2 nhóm, khách hết gói mở được, tìm kiếm, ô lọc trang chủ', async function(){
-    await page.click('#p-home .nav .ghost:nth-child(2)'); await h.waitScreen('p-clients'); await h.wait(700);
+    await page.click('#h-tiles .tile:nth-child(1)'); await h.waitScreen('p-clients'); await h.wait(700);
     var secs=await h.ev(function(){ return [].map.call(document.querySelectorAll('#cl-list .sec'), function(d){ return d.textContent; }); });
     var act=await h.ev(function(){ return state.clients.filter(function(c){return c.left>0}).length; }), dn=await h.ev(function(){ return state.clients.filter(function(c){return c.left<=0}).length; });
     check(secs[0]==='KHÁCH ĐANG HOẠT ĐỘNG · '+act && secs[1]==='KHÁCH ĐÃ HẾT GÓI · '+dn, 'nhóm: '+secs.join(' | '));
@@ -227,7 +230,7 @@ var CLIP={hard:[], ell:[]};
   });
 
   await run('E', 'Hồ sơ → Đo lường (mở/đóng, nhập số đo dấu phẩy, lưu), Đặt mục tiêu (bánh xe), Hiệu suất tập', async function(){
-    await page.click('#p-home .nav .ghost:nth-child(2)'); await h.waitScreen('p-clients'); await h.wait(700);
+    await page.click('#h-tiles .tile:nth-child(1)'); await h.waitScreen('p-clients'); await h.wait(700);
     await page.click('#cl-list .row:has-text("Doãn Quang")'); await h.waitScreen('p-profile'); await h.wait(900);
     check((await h.txt('#pf-mval'))==='Nặng 75 kg', 'chỉ số chính: '+(await h.txt('#pf-mval'))); check(/Mục tiêu 65 kg/.test(await h.txt('#pf-target')), 'mục tiêu: '+(await h.txt('#pf-target')));
     await page.click('#pf-tabs button:nth-child(3)'); await h.wait(200); check((await h.txt('#pf-mval'))==='Eo 82 cm', 'tab eo: '+(await h.txt('#pf-mval')));

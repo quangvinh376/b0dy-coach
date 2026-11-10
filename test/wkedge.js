@@ -146,7 +146,7 @@ function wkEdgesInPage(){
   await run('W1', 'PIN · trang chủ · khách hàng (cuộn 40): dải là container ở cả hai mép, màu Ink, pixel mép tối', async function(){
     await expectEdges('PIN', INK, INK, {darkOnly:true});
     await pin('1234'); await screen('p-home'); await w(1600); await expectEdges('trang chủ', INK, INK, {darkOnly:true});
-    await page.click('#p-home .nav button[aria-label="Khách hàng"]'); await screen('p-clients'); await w(1100); await expectEdges('khách hàng', INK, INK, {darkOnly:true, edge:true});
+    await page.click('#h-tiles .tile:nth-child(1)'); await screen('p-clients'); await w(1100); await expectEdges('khách hàng', INK, INK, {darkOnly:true, edge:true});
     await ev(function(){ document.getElementById('cl-list').scrollTop=40; }); await w(200); await expectEdges('khách hàng cuộn 40', INK, INK, {darkOnly:true, edge:true});
     await ev(function(){ document.getElementById('cl-list').scrollTop=0; }); await w(100);
     await page.click('#p-clients .nav .ghost:nth-child(1)'); await screen('p-home'); await w(800);

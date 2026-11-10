@@ -34,7 +34,7 @@ async function run(id, name, fn){ CUR={id:id,name:name,fails:[]}; RES.push(CUR);
 
   await page.goto('http://localhost:'+PORT+'/?demo'); await screen('p-pin'); await w(500);
   await pin('1234'); await screen('p-home'); await w(1500);
-  await page.click('#p-home .nav button[aria-label="Khách hàng"]'); await screen('p-clients'); await w(1100);
+  await page.click('#h-tiles .tile:nth-child(1)'); await screen('p-clients'); await w(1100);
 
   await run('E1', 'Khách hàng: dải chuyển --r co theo vị trí cuộn (đầu 0 → 32 · cuối 48 → 0)', async function(){
     var s=await egState('#cl-list'); check(s.max>30, 'có quãng cuộn: '+s.max);
@@ -65,7 +65,7 @@ async function run(id, name, fn){ CUR={id:id,name:name,fails:[]}; RES.push(CUR);
     await scrollTo('#cl-list', 0);
     var r=await ev(function(){ function at(x,y){ var e=document.elementFromPoint(x,y); return e; }
       var nav=document.querySelector('#p-clients>.nav').getBoundingClientRect(), head=document.querySelector('#p-clients>.head').getBoundingClientRect(), sr=document.querySelector('#p-clients .search').getBoundingClientRect();
-      var cta=document.querySelector('#p-clients .nav .cta').getBoundingClientRect();
+      var cta=document.querySelector('#p-clients .nav .ghost').getBoundingClientRect();   /* v2.21.0: nav màn Khách hàng chỉ còn nút ← */
       /* dòng giao với dải mờ đáy (48px trên nav): chạm vào phần giao phải trúng dòng, không trúng lớp mép */
       var band=[].filter.call(document.querySelectorAll('#cl-list .row'), function(r){ var q=r.getBoundingClientRect(); return q.bottom>nav.top-48 && q.top<nav.top; })[0], dy=null;
       if(band){ var q=band.getBoundingClientRect(); dy=(Math.max(q.top, nav.top-48)+Math.min(q.bottom, nav.top))/2; }

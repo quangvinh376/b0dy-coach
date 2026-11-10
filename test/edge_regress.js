@@ -34,7 +34,7 @@ async function measure(root, port, vp){
   out.home=await page.evaluate(function(){ function R(s){ var e=document.querySelector(s); if(!e) return null; var r=e.getBoundingClientRect(); return [Math.round(r.top),Math.round(r.bottom),Math.round(r.left),Math.round(r.right)]; }
     return {head:R('#p-home>.head'), tiles:R('#h-tiles'), nav:R('#p-home>.nav'), bars:R('#h-bars')}; });
   /* khách hàng → hồ sơ → đo lường → hiệu suất */
-  await page.click('#p-home .nav .ghost:nth-child(2)'); await screen('p-clients'); await snap('clients', '#cl-list', '#p-clients');
+  await page.click('#h-tiles .tile:nth-child(1)'); await screen('p-clients'); await snap('clients', '#cl-list', '#p-clients');
   await page.click('#cl-list .row:has-text("Doãn Quang")'); await screen('p-profile'); await snap('profile', '#pf-scroll', '#p-profile');
   await page.click('button.row:has-text("Đo lường")'); await screen('p-measure'); await snap('measure', '#ms-list', '#p-measure');
   await page.click('#p-measure .nav .ghost'); await screen('p-profile'); await w(500);

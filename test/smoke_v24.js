@@ -10,7 +10,7 @@ var {chromium}=require('playwright'); var serve=require('./serve'); var path=req
   async function pin(p){ for(var k of p) await page.click('#pin-pad button:has-text("'+k+'")'); }
   await page.goto('http://localhost:'+PORT+'/?demo'); await page.waitForTimeout(600);
   await pin('1234'); await shot('home-coach',1600);
-  await page.click('#p-home .nav button[aria-label="Khách hàng"]'); await shot('clients-0',900);
+  await page.click('#h-tiles .tile:nth-child(1)'); await shot('clients-0',900);
   for(var y of [16,60,220]){ await page.evaluate(function(y){ document.getElementById('cl-list').scrollTop=y; }, y); await shot('clients-'+y,250); }
   await page.evaluate(function(){ var el=document.getElementById('cl-list'); el.scrollTop=el.scrollHeight; }); await shot('clients-end',300);
   console.log('eg r', await page.evaluate(function(){ var l=document.getElementById('cl-list'); return [l._egT.style.getPropertyValue('--r'), l._egB.style.getPropertyValue('--r'), l.scrollTop, l.scrollHeight-l.clientHeight]; }));
@@ -18,8 +18,8 @@ var {chromium}=require('playwright'); var serve=require('./serve'); var path=req
   await page.evaluate(function(){ logout(); }); await page.waitForTimeout(500);
   await pin('0000'); await shot('home-admin',2000);
   console.log('admin home', await page.evaluate(function(){ return [document.getElementById('h-name').textContent, document.getElementById('h-taught').textContent, document.getElementById('h-tiles').innerText.replace(/\n/g,' | '), document.body.className, getComputedStyle(document.querySelector('#p-home .tab-adm')).display]; }));
-  await page.click('#p-home .nav button[aria-label="Khách hàng"]'); await shot('admin-clients',900);
-  await page.click('#p-clients .nav button[aria-label="Cài đặt"]'); await shot('admin-settings',1500);
+  await page.click('#h-tiles .tile:nth-child(1)'); await shot('admin-clients',900);
+  await page.click('#p-clients .nav .ghost'); await page.waitForTimeout(700); await page.click('#p-home .nav button[aria-label="Cài đặt"]'); await shot('admin-settings',1500);
   console.log('settings', await page.evaluate(function(){ return document.getElementById('p-admin').innerText.replace(/\n/g,' | '); }));
   console.log('errors', JSON.stringify(errs));
   await ctx.close(); await browser.close(); srv.close();

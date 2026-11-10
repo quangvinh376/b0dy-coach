@@ -10,7 +10,7 @@ var {chromium}=require('playwright'); var serve=require('./serve'); var fs=requi
   await page.goto('http://localhost:'+PORT+'/?demo'); await shot('pin');
   for(var k of ['1','2','3','4']) await page.click('#pin-pad button:has-text("'+k+'")'); await shot('home',1200);
   await page.click('#h-7d'); await shot('home-7d');
-  await page.click('#p-home .nav .ghost:nth-child(2)'); await shot('clients');
+  await page.click('#h-tiles .tile:nth-child(1)'); await shot('clients');
   await page.click('#cl-list .row'); await shot('profile',900);
   await page.click('#pf-tabs button:nth-child(3)'); await shot('profile-eo');
   await page.click('button.row:has-text("Đo lường")'); await shot('measure');
