@@ -1,4 +1,4 @@
-/* v2.7 — hai trang mới: Khách tập chậm (p-slow · Figma 621:336/621:400) và Hoa hồng (p-com · Figma 628:496).
+/* v2.7 — hai trang mới: Khách tập chậm (p-slow · Figma 621:336/621:400) và Hoa hồng (p-com · Figma 628:496). v2.20: p-slow đổi thành trang TEMPO (mọi khách còn buổi, 2 nhóm chậm / đúng tiến độ).
    Chạy: NODE_PATH=/opt/node22/lib/node_modules node test/com_slow.js   (SHOT=1 → ảnh test/out_v27/*.png)
    Dữ liệu: demo (?demo) — khách giả, số tiền giả (repo public). */
 var {chromium}=require('playwright'); var serve=require('./serve'); var fs=require('fs'); var path=require('path');
@@ -37,20 +37,51 @@ var {chromium}=require('playwright'); var serve=require('./serve'); var fs=requi
   check(u.c===null && u.z===null && u.x===null, 'S1c gói < 14 ngày · hết buổi · không có hạn → bỏ qua');
   check(u.y && u.y[0]===0.93, 'S1d gói 15 ngày: tempo chia theo số ngày thật (2 buổi / 15 ngày = 0,93/tuần, không chia 4 tuần): '+JSON.stringify(u.y));
 
-  /* S2 — ô trang chủ → trang riêng, 2 nhóm theo hạn gói, thứ tự dư nhiều → ít */
-  var tileV=await ev(function(){ return document.querySelector('#h-tiles .tile:nth-child(2) .tv').textContent.trim(); });
+  /* S2 — v2.20: ô "Tempo" (buổi/tuần trung bình, 2 số lẻ) → trang Tempo: MỌI khách còn buổi, 2 nhóm chậm / đúng tiến độ */
+  var tile=await ev(function(){ var t=document.querySelector('#h-tiles .tile:nth-child(2)'); return {l:t.querySelector('.tl').textContent, v:t.querySelector('.tv').textContent.trim(), ic:t.querySelector('use').getAttribute('href')}; });
   await page.click('#h-tiles .tile:nth-child(2)'); await waitScreen('p-slow'); await wait(900);
-  var S=await ev(function(){ return {
-    list:slowList().map(function(i){ return {n:i.m.name, d:i.days, x:Math.round(i.extra), e:ddmm(i.exp)}; }),
+  var S=await ev(function(){ var act=state.clients.filter(function(c){ return c.left>0; }), inf=act.map(slowInfo).filter(Boolean);
+    return {
+    head:document.querySelector('#p-slow .head .t1').textContent, act:act.length,
+    avg:inf.reduce(function(a,i){ return a+i.rate; },0)/inf.length,
+    list:slowList().map(function(i){ return {n:i.m.name, x:Math.round(i.extra), e:ddmm(i.exp)}; }),
+    ok:inf.filter(function(i){ return Math.round(i.extra)<SLOW_MIN; }).sort(function(a,b){ return a.rate-b.rate || a.days-b.days; }).map(function(i){ return i.m.name+'|TEMPO '+fmt1(i.rate)+' · HẾT '+ddmm(i.exp); }),
     secs:[].map.call(document.querySelectorAll('#sl-list .sec'), function(e){ return e.textContent; }),
     rows:[].map.call(document.querySelectorAll('#sl-list .row'), function(r){ return r.querySelector('.nm').textContent+'|'+r.querySelector('.lab').textContent; }) }; });
   console.log('    ', JSON.stringify(S));
-  check(tileV===String(S.list.length) && S.list.length===3, 'S2a ô trang chủ = số khách chậm (demo 3): '+tileV);
-  check(S.secs.join('|')==='HẾT HẠN TRONG 60 NGÀY · 2|HẾT HẠN SAU 60 NGÀY · 1', 'S2b 2 nhóm: '+S.secs.join('|'));
-  var g1=S.list.filter(function(i){ return i.d<=60; }), g2=S.list.filter(function(i){ return i.d>60; });
-  check(S.rows.join(',')===g1.concat(g2).map(function(i){ return i.n+'|DƯ ~'+i.x+' BUỔI · HẾT '+i.e; }).join(','), 'S2c dòng: tên + "DƯ ~n BUỔI · HẾT dd/mm", trong nhóm dư nhiều → ít');
-  check(g1.length===2 && g1[0].x>=g1[1].x, 'S2d sắp xếp dư giảm dần');
+  var avgS=(Math.round(S.avg*100)/100).toFixed(2).replace('.',',');
+  check(tile.l==='Tempo' && tile.v===avgS && /^\d+,\d\d$/.test(tile.v) && tile.ic==='#t-tempo', 'S2a ô trang chủ "Tempo" = trung bình tempo từng khách, 2 số lẻ dấu phẩy, icon máy đếm nhịp: '+JSON.stringify(tile)+' / '+avgS);
+  check(S.head==='Tempo', 'S2b tiêu đề trang: '+S.head);
+  check(S.secs.join('|')==='KHÁCH TẬP CHẬM · '+S.list.length+'|KHÁCH TẬP ĐÚNG TIẾN ĐỘ · '+(S.act-S.list.length) && S.list.length===3, 'S2c 2 nhóm, đủ mọi khách còn buổi ('+S.act+'): '+S.secs.join('|'));
+  check(S.rows.join(',')===S.list.map(function(i){ return i.n+'|DƯ ~'+i.x+' BUỔI · HẾT '+i.e; }).concat(S.ok).join(','), 'S2d dòng chậm "DƯ ~n BUỔI · HẾT dd/mm" (dư nhiều → ít) · dòng đúng tiến độ "TEMPO x,x · HẾT dd/mm" (tempo thấp → cao)');
+  check(S.list[0].x>=S.list[1].x && S.list[1].x>=S.list[2].x, 'S2e nhóm chậm sắp xếp dư giảm dần');
   await shot('slow');
+  /* S2f — dòng đúng tiến độ mở ra: biểu đồ 8 tuần, dự báo "ĐÚNG TIẾN ĐỘ" (không đỏ) */
+  var okName=S.ok[0].split('|')[0];
+  await page.click('#sl-list .row:has-text("'+okName+'")'); await wait(700);
+  var ko=await ev(function(n){ var r=[].filter.call(document.querySelectorAll('#sl-list .row'), function(r){ return r.querySelector('.nm').textContent===n; })[0], x=r.nextElementSibling;
+    return {open:r.classList.contains('open'), bars:x.querySelectorAll('.wkb i').length, last:[].map.call(x.querySelectorAll('.kv'), function(k){ return k.children[0].textContent+'='+k.children[1].textContent+(k.children[1].classList.contains('er')?'!':''); }).pop()}; }, okName);
+  check(ko.open && ko.bars===8 && ko.last==='Dự báo=ĐÚNG TIẾN ĐỘ', 'S2f mở "'+okName+'": 8 cột + '+ko.last);
+  await page.click('#sl-list .row:has-text("'+okName+'")'); await wait(300);
+  /* S2g — khách chưa đủ dữ liệu (gói < 14 ngày / chưa có hạn): cuối nhóm đúng tiến độ, KHÔNG tính vào trung bình, chạm mở hồ sơ */
+  var fr=await ev(function(){ var t=isoN(TODAY_ISO), keep=state.clients.slice(), base=tempoAvg(), src=keep.filter(function(c){ return c.left>0; })[0];
+    var mk=function(o){ var c=JSON.parse(JSON.stringify(src)); delete c.key; c.checked=false; return Object.assign(c, o); };
+    state.clients=keep.concat([mk({name:'Khách Mới Toanh', total:12, left:12, done:0, start:nIso(t-5), exp:nIso(t+60), end:''}), mk({name:'Khách Không Hạn', total:12, left:8, done:4, start:nIso(t-90), exp:'', end:''})]);
+    renderSlow(false); var t2=tempoList();
+    var r={avgSame:Math.abs(base-t2.avg)<1e-9, okTail:t2.ok.slice(-2).map(function(i){ return i.m.name+(i.fresh?'*':''); }).join(','),
+      rows:[].map.call(document.querySelectorAll('#sl-list .row'), function(r){ return r.querySelector('.nm').textContent+'|'+r.querySelector('.lab').textContent; }).slice(-2),
+      secs:[].map.call(document.querySelectorAll('#sl-list .sec'), function(e){ return e.textContent; }).join('|'),
+      chev:[].map.call(document.querySelectorAll('#sl-list .row'), function(r){ return r.querySelector('use').getAttribute('href'); }).slice(-2).join(',')};
+    window.__keepCl=keep; return r; }).catch(function(e){ return {err:String(e)}; });
+  console.log('    ', JSON.stringify(fr));
+  check(fr.okTail==='Khách Mới Toanh*,Khách Không Hạn*' && /KHÁCH TẬP ĐÚNG TIẾN ĐỘ · 5$/.test(fr.secs), 'S2g khách chưa đủ dữ liệu ở cuối nhóm đúng tiến độ: '+fr.okTail+' · '+fr.secs);
+  check(fr.rows && fr.rows[0]===('Khách Mới Toanh|GÓI MỚI · HẾT '+await ev(function(){ return ddmm(nIso(isoN(TODAY_ISO)+60)); })) && fr.rows[1]==='Khách Không Hạn|CHƯA CÓ HẠN GÓI', 'S2h nhãn: '+JSON.stringify(fr.rows));
+  check(fr.avgSame===true, 'S2k khách chưa đủ dữ liệu không làm đổi Tempo trung bình');
+  check(fr.chev==='#i-arr,#i-arr', 'S2i dòng chưa đủ dữ liệu = mũi tên mở hồ sơ (không mở rộng): '+fr.chev);
+  await page.click('#sl-list .row:has-text("Khách Mới Toanh")'); await waitScreen('p-profile'); await wait(700);
+  await page.click('#p-profile .nav .ghost'); await waitScreen('p-slow'); await wait(600);
+  check((await screen())==='p-slow', 'S2j hồ sơ ← quay lại đúng trang Tempo');
+  await ev(function(){ state.clients=window.__keepCl; renderSlow(false); });
 
   /* S3 — mở khách 0 buổi có lịch 3 buổi/tuần: dòng "Tập đúng lịch" + chưa có buổi gần nhất */
   await page.click('#sl-list .row:has-text("Châu Khang")'); await wait(700);
@@ -91,8 +122,8 @@ var {chromium}=require('playwright'); var serve=require('./serve'); var fs=requi
   check(!s8.closed.sc || (s8.closed.gap>=s8.closed.rowH && s8.closed.gap<=s8.closed.rowH+24), 'S8b dòng cuối đóng: '+JSON.stringify(s8.closed));
   /* S7 — máy chủ cũ (không w8/w0) → định nghĩa cũ, dòng mở hồ sơ, quay lại về p-slow */
   var old=await ev(function(){ var s=state.stats, keep=JSON.stringify(s); delete s.w0; Object.keys(s.perClient).forEach(function(k){ delete s.perClient[k].w8; }); renderSlow(false);
-    var r={secs:[].map.call(document.querySelectorAll('#sl-list .sec'), function(e){ return e.textContent; }).join('|'), n:document.querySelectorAll('#sl-list .row').length}; window.__keep=keep; return r; });
-  check(/^KHÁCH TẬP CHẬM · \d+$/.test(old.secs) && old.n>0, 'S7a máy chủ cũ → 1 nhóm định nghĩa cũ: '+old.secs);
+    var r={secs:[].map.call(document.querySelectorAll('#sl-list .sec'), function(e){ return e.textContent; }).join('|'), n:document.querySelectorAll('#sl-list .row').length, act:state.clients.filter(function(c){ return c.left>0; }).length, avg:tempoAvg()}; window.__keep=keep; return r; });
+  check(/^KHÁCH TẬP CHẬM · \d+\|KHÁCH TẬP ĐÚNG TIẾN ĐỘ · \d+$/.test(old.secs) && old.n===old.act && old.avg===null, 'S7a máy chủ cũ → chậm theo định nghĩa cũ + phần còn lại, Tempo trung bình "—": '+old.secs+' · avg '+old.avg);
   await page.click('#sl-list .row'); await waitScreen('p-profile'); await wait(700);
   await page.click('#p-profile .nav .ghost'); await waitScreen('p-slow'); await wait(600);
   check((await screen())==='p-slow', 'S7b hồ sơ ← quay lại đúng trang Khách tập chậm');

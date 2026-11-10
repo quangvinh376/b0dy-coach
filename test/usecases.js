@@ -104,8 +104,8 @@ var CLIP={hard:[], ell:[]};
     check((await h.txt('#h-taught'))==='Đã dạy '+exp+' buổi', '#h-taught: '+(await h.txt('#h-taught'))+' (mong '+exp+')');
     var tiles=await h.ev(function(){ return [].map.call(document.querySelectorAll('#h-tiles .tile'), function(t){ return t.querySelector('.tl').textContent+'='+t.querySelector('.tv').textContent.trim(); }); });
     check(tiles.length===4, '4 ô: '+tiles.join(' | '));
-    var active=await h.ev(function(){ return state.clients.filter(function(c){return c.left>0}).length; }), slow=await h.ev(function(){ return slowClients().length; });
-    check(tiles[0]==='Tổng số khách='+active, 'ô 1: '+tiles[0]); check(tiles[1]==='Khách tập chậm='+slow, 'ô 2: '+tiles[1]);
+    var active=await h.ev(function(){ return state.clients.filter(function(c){return c.left>0}).length; }), tempo=await h.ev(function(){ return fmt2(tempoAvg()); });   /* v2.20: ô 2 = Tempo */
+    check(tiles[0]==='Tổng số khách='+active, 'ô 1: '+tiles[0]); check(tiles[1]==='Tempo='+tempo, 'ô 2: '+tiles[1]);
     check(tiles[2]==='Khách hôm nay=0', 'ô 3: '+tiles[2]); var comT=await h.ev(function(){ return 'Hoa hồng='+fmtTr(state.stats.comMon[monthOf(TODAY_ISO)]); }); check(tiles[3].replace(/\s+/g,' ')===comT+' TR', 'ô 4: '+tiles[3]+' (mong '+comT+')');
     check((await h.txt('#h-go'))==='Vào buổi tập', 'CTA: '+(await h.txt('#h-go')));
     check(await h.has('#h-1m','on'), '1M đang chọn');
@@ -208,16 +208,15 @@ var CLIP={hard:[], ell:[]};
     await page.fill('#cl-q','zzz'); await h.wait(200); check((await h.txt('#cl-list .empty'))==='KHÔNG TÌM THẤY TÊN NÀY', 'không tìm thấy');
     await page.fill('#cl-q',''); await h.wait(200); check((await h.count('#cl-list .row'))===act+dn, 'xoá tìm → đủ');
     await page.click('#p-clients .nav .ghost:nth-child(1)'); await h.waitScreen('p-home'); await h.wait(900);
-    /* v2.7: ô "Khách tập chậm" → TRANG riêng p-slow (2 nhóm theo hạn gói, dòng mở rộng biểu đồ 8 tuần) */
+    /* v2.7: ô "Khách tập chậm" → TRANG riêng p-slow · v2.20: trang TEMPO — mọi khách còn buổi, 2 nhóm chậm / đúng tiến độ */
     await page.click('#h-tiles .tile:nth-child(2)'); await h.waitScreen('p-slow'); await h.wait(800);
-    var sl=await h.ev(function(){ return slowList().map(function(i){ return i.m.name+'|'+(i.days<=SLOW_SOON?1:2); }); });
+    var sl=await h.ev(function(){ return slowList().map(function(i){ return i.m.name; }); }), act2=await h.ev(function(){ return state.clients.filter(function(c){ return c.left>0; }).length; });
     secs=await h.ev(function(){ return [].map.call(document.querySelectorAll('#sl-list .sec'), function(d){ return d.textContent; }); });
     names=await h.ev(function(){ return [].map.call(document.querySelectorAll('#sl-list .row .nm'), function(e){ return e.textContent; }); });
-    var g1=sl.filter(function(x){ return /\|1$/.test(x); }).length, g2=sl.length-g1;
-    check(sl.length>=2 && secs.join('|')===['HẾT HẠN TRONG 60 NGÀY · '+g1, 'HẾT HẠN SAU 60 NGÀY · '+g2].filter(function(x,k){ return k?g2:g1; }).join('|'), 'nhóm: '+secs.join('|')+' / '+sl.join(','));
-    check(names.length===sl.length, 'số dòng = số khách chậm: '+names.join(','));
+    check(sl.length>=2 && secs.join('|')===['KHÁCH TẬP CHẬM · '+sl.length, 'KHÁCH TẬP ĐÚNG TIẾN ĐỘ · '+(act2-sl.length)].join('|'), 'nhóm: '+secs.join('|')+' / '+sl.join(','));
+    check(names.length===act2 && names.slice(0,sl.length).join()===sl.join(), 'số dòng = mọi khách còn buổi, khách chậm trước: '+names.join(','));
     await page.fill('#sl-q', 'zzz'); await h.wait(200); check((await h.count('#sl-list .row'))===0 && (await h.txt('#sl-list .empty'))==='KHÔNG TÌM THẤY TÊN NÀY', 'tìm: không thấy');
-    await page.fill('#sl-q', ''); await h.wait(200); check((await h.count('#sl-list .row'))===sl.length, 'xoá tìm → đủ');
+    await page.fill('#sl-q', ''); await h.wait(200); check((await h.count('#sl-list .row'))===act2, 'xoá tìm → đủ');
     await page.click('#sl-list .row'); await h.wait(600);
     check(await h.has('#sl-list .row','open') && (await h.count('#sl-list .xp .wkb i'))===8, 'chạm dòng → mở 8 cột tuần');
     await page.click('#p-slow .nav .ghost'); await h.waitScreen('p-home'); await h.wait(900);
