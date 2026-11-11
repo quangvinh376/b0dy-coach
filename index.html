@@ -8,6 +8,33 @@
      Mọi bản cài (inset 0) được nhận ra bằng html.sb-legacy (--top 2px, tắt dải .wkedge). Các luật html.standalone:not(.sb-legacy) trong app.css
      giữ lại cho ngày black-translucent dùng được. v2.4.2: trong Safari màu vùng dưới thanh không lấy từ theme-color mà từ hai dải .wkedge. -->
 <meta name="viewport" content="width=device-width,height=device-height,initial-scale=1,maximum-scale=1,user-scalable=no,shrink-to-fit=no,viewport-fit=cover">
+<script>
+/* v2.23.0 (11/11/2026) · MÀN LỚN (iPad, tablet): app thiết kế cho khung điện thoại 393 × 852 — trên iPad bố cục đó bị kéo giãn, chữ và nút
+   nhỏ so với màn. Cách chữa: để TRÌNH DUYỆT phóng cả trang (thẻ viewport) sao cho app luôn thấy một màn cỡ điện thoại lớn
+   (đích: rộng 520, cao 760 khi màn dọc / 720 khi màn ngang — điểm CSS) → mọi thứ to lên đều nhau, bố cục / chuyển động / toạ độ chạm / canvas giữ nguyên như bản điện thoại đã duyệt.
+   Chỉ máy có cạnh ngắn ≥ 600 điểm; điện thoại không đổi gì. Màn ngang / cửa sổ rộng: phần thừa hai bên để trống, app đứng giữa (app.css "MÀN RỘNG").
+   Tự kiểm: sau khi đặt mà bề rộng trang không đúng như tính (trình duyệt bỏ qua thẻ viewport — máy tính để bàn) → trả về như cũ.
+   Tắt hẳn trên một máy: mở app với ?vp=0 (nhớ trên máy đó) · bật lại ?vp=1. window.__vps = hệ số đang phóng (canvas vẽ nét theo). */
+(function(){try{
+  var KEY='lb_vp',W=520,HP=760,HL=720,COL=600,MIN=600,d=document.documentElement,m=document.querySelector('meta[name=viewport]'),BASE=m.getAttribute('content'),cur=1,dead=false,tm=0,gen=0;
+  try{var f=/[?&]vp=([01])/.exec(location.search);if(f)localStorage.setItem(KEY,f[1]);}catch(e){}
+  var off=false;try{off=localStorage.getItem(KEY)==='0';}catch(e){}
+  window.__vps=1;
+  function plan(w0,h0){if(off||dead||Math.min(screen.width,screen.height)<MIN||Math.min(w0,h0)<MIN)return 1;var s=Math.min(w0/W,h0/(w0>h0?HL:HP)),lw=w0/s;if(lw>COL&&lw<=COL*1.1)s=w0/COL;   /* trang chỉ rộng hơn cột một chút → phóng vừa khít bề ngang, không để hở viền */
+    if(!(s>1.04))return 1;var lw2=Math.round(w0/s);return Math.round(w0/lw2*100000)/100000;}   /* bề rộng trang là số nguyên → hệ số khớp đúng bề rộng đó (không lệch 1 px) */
+  function set(s,w0){gen++;cur=s;window.__vps=s;d.classList.toggle('vp',s!==1);
+    m.setAttribute('content',s===1?BASE:'width='+Math.round(w0/s)+',initial-scale='+s+',minimum-scale='+s+',maximum-scale='+s+',user-scalable=no,shrink-to-fit=no,viewport-fit=cover');}
+  /* tự kiểm: bề rộng trang vẫn y như trước khi đặt = trình duyệt bỏ qua thẻ viewport → thôi hẳn. Bề rộng đổi sang số khác (đang xoay máy / đổi cỡ cửa sổ) → tính lại */
+  function check(before,want,g,n){setTimeout(function(){if(cur===1||g!==gen)return;var iw=window.innerWidth;if(Math.abs(iw-want)<=3)return;
+    if(Math.abs(iw-before)<=1){if(!n)return check(before,want,g,1);dead=true;set(1,0);}else later();},n?900:350);}   /* chưa đổi sau 350 ms → chờ thêm 900 ms rồi mới kết luận */
+  function run(){var w0=window.innerWidth*cur,h0=window.innerHeight*cur;
+    if(!(w0>0&&h0>0)){var a=Math.min(screen.width,screen.height),b=Math.max(screen.width,screen.height),ls=!!(window.matchMedia&&matchMedia('(orientation:landscape)').matches);w0=ls?b:a;h0=ls?a:b;}   /* <head> chưa có kích thước cửa sổ */
+    if(!(w0>0&&h0>0))return;var s=plan(w0,h0);if(Math.abs(s-cur)<0.02)return;var before=window.innerWidth;set(s,w0);if(s!==1)check(before,Math.round(w0/s),gen);}
+  function later(){var a=document.activeElement;if(a&&/^(INPUT|TEXTAREA)$/.test(a.tagName))return;clearTimeout(tm);tm=setTimeout(run,150);}   /* bàn phím đang mở: không tính lại */
+  window.__vp={run:run,get:function(){return{s:cur,off:off,dead:dead,w:window.innerWidth,h:window.innerHeight};}};
+  run();addEventListener('DOMContentLoaded',run);addEventListener('pageshow',run);addEventListener('resize',later);addEventListener('orientationchange',function(){setTimeout(later,200);});
+}catch(e){}})();
+</script>
 <meta name="color-scheme" content="dark">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="B0DY">

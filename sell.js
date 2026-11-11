@@ -452,7 +452,7 @@ if(typeof window!=='undefined' && typeof document!=='undefined') SVX=(function()
   var cv=null, ctx=null, CW=0, CH=0, CK=0, SZ=1;   /* SZ: cần đo lại khung (mở luồng / đổi cỡ cửa sổ) — không đọc layout trong từng khung hình */
   function canvas(){
     if(!cv){ cv=$id('sv-dial'); ctx=cv.getContext('2d'); }
-    if(SZ){ SZ=0; var w=document.body.clientWidth, h=document.body.clientHeight, k=Math.min(window.devicePixelRatio||1,3);
+    if(SZ){ SZ=0; var w=document.body.clientWidth, h=document.body.clientHeight, k=Math.min((window.devicePixelRatio||1)*(window.__vps||1),3);
       if(w!==CW || h!==CH || k!==CK){ CW=w; CH=h; CK=k; cv.width=Math.round(w*k); cv.height=Math.round(h*k); } }
     ctx.setTransform(CK,0,0,CK,0,0);
   }
@@ -513,7 +513,7 @@ if(typeof window!=='undefined' && typeof document!=='undefined') SVX=(function()
      đếm lên cùng nhịp các tuần sáng dần trên số 0 (như hạt rụng đúng lúc số giây nhảy trong loop) ---------- */
   var CTR_KIND='', CTR_HTML='';
   /* bề ngang lòng số 0 (trừ 3 làn hạt); số Mono rộng 0,6 em/ký tự → biết trước số có lọt không */
-  function inner(){ var G=GEO; if(SMALL || !STEP || G.run || /^(bill|name|qr)$/.test(STEP)) return document.body.clientWidth-48; return 2*(G.rx-14*G.s)-8; }
+  function inner(){ var G=GEO; if(SMALL || !STEP || G.run || /^(bill|name|qr)$/.test(STEP)) return Math.min(document.body.clientWidth,600)-48; return 2*(G.rx-14*G.s)-8; }   /* v2.23.0: màn rộng — trang là cột 600 đứng giữa (app.css "MÀN RỘNG") */
   function monoW(t, size, ls){ return t.length*(0.6*size+ls); }
   function N(cls, t, extra){ return '<span class="'+cls+'" data-t="'+t+'"'+(extra||'')+'>'+t+'</span>'; }
   function ctrRows(kind){
@@ -834,7 +834,7 @@ if(typeof window!=='undefined' && typeof document!=='undefined') SVX=(function()
     if(BARS.test(id)) return runGeo(id, pg);
     var hd=pg.querySelector('.head'), top=hd.offsetTop+hd.offsetHeight, anc=pg.querySelector('.sv-row') || pg.querySelector('.sv-ans') || pg.querySelector('.sv-nav'),
         bot=topIn(anc, pg), h=Math.max(120, bot-top), m=h<420?24:44, rx=Math.max(60, Math.min(128, Math.floor(((h/2-m)-12)/RAT))), s=Math.max(.7, Math.min(1, rx/128));
-    return {cx:pg.clientWidth/2, cy:Math.round(top+h/2), rx:rx, gap:Math.round(8*s*10)/10, s:s};
+    return {cx:pg.offsetLeft+pg.clientWidth/2, cy:Math.round(top+h/2), rx:rx, gap:Math.round(8*s*10)/10, s:s};   /* v2.23.0: + lề trái của trang (màn rộng: trang là cột giữa; điện thoại: 0) — canvas phủ cả body */
   }
   /* đường băng: khối số (nhãn + số, giữ chỗ cả khi chưa có số — đường không nhảy khi số hiện) · khe ¼ D · thân đường từ đầu xa (hàng
      cuối + ½) tới mép gần (trước hàng 1 một khoảng 0,3) — D là độ sâu tới hàng gần nhất (≤ 230 pt). Khe số → đầu xa cố định nên gói ít
@@ -853,7 +853,7 @@ if(typeof window!=='undefined' && typeof document!=='undefined') SVX=(function()
     var W=pg.clientWidth, n=ST.S+ST.b, K=Math.ceil(n/3), kz=K-.5, E=blockExt(id, W-48), Hn=E[1]-E[0], s0=RZ0/(RZ0-.3), s1=RZ0/(RZ0+kz), f=RUN.gm+s0-s1;
     var m=h-Hn>360 ? 24 : 12, D=Math.min(RUN.Dmax, (h-Hn-2*m)/f), small=D<RUN.Dmin; D=Math.max(RUN.Dmin, D);
     var cy=small ? Math.round(top+h/2-(E[0]+E[1])/2) : Math.round(top+(h-Hn-D*f)/2-E[0]), yV=cy+E[1]+D*(RUN.gm-s1);
-    return {cx:W/2, cy:cy, rx:128, gap:8, s:1, fx:W/2, fy:yV, small:small, run:{yV:yV, D:D, Wn:clamp(D*.33, 40, 80), dN:clamp(D*.043, 7, 10), K:K, kz:kz, n:n, E:E}};
+    return {cx:pg.offsetLeft+W/2, cy:cy, rx:128, gap:8, s:1, fx:pg.offsetLeft+W/2, fy:yV, small:small, run:{yV:yV, D:D, Wn:clamp(D*.33, 40, 80), dN:clamp(D*.043, 7, 10), K:K, kz:kz, n:n, E:E}};
   }
   /* toạ độ bố cục (bỏ qua transform đang chạy) của một phần tử HTML trên màn */
   function layRect(el){ var x=0, y=0, e=el; while(e){ x+=e.offsetLeft; y+=e.offsetTop; e=e.offsetParent; } return {left:x, top:y, width:el.offsetWidth, height:el.offsetHeight}; }
@@ -1310,7 +1310,7 @@ if(typeof window!=='undefined' && typeof document!=='undefined') SVX=(function()
   }
   /* chấm tròn 0,86 mô-đun, ba mắt bo 2,2 / 1,4 / 1 mô-đun, vùng trống giữa mã cho ô logo (24,5 % bề rộng mã) — Figma 812:535 */
   function qrGeo(cvs, text){
-    var W=cvs.clientWidth||313, k=Math.min(window.devicePixelRatio||1,3);
+    var W=cvs.clientWidth||313, k=Math.min((window.devicePixelRatio||1)*(window.__vps||1),3);
     if(cvs._g && cvs._g.text===text && cvs._g.W===W && cvs._g.k===k) return cvs._g;   /* mã đã dựng: không mã hoá lại (≈ 5 ms máy thật mỗi lần) */
     var r=QRX.encode(text, 9), n=r.n, M=W/n;
     cvs.width=Math.round(W*k); cvs.height=Math.round(W*k);

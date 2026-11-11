@@ -1098,3 +1098,16 @@ body.adm .tab-adm{display:flex}
   .sv-ul.err{animation:none}
   @keyframes svdip{50%{opacity:.4}}
 }
+
+/* =====================================================================
+   v2.23.0 · MÀN RỘNG — trang rộng hơn 600 điểm CSS (iPad nằm ngang sau khi phóng, cửa sổ máy tính, trình duyệt bỏ qua thẻ viewport).
+   App vẫn là MỘT cột cỡ điện thoại lớn (600 điểm) đứng giữa; phần thừa hai bên là nền Ink, có viền sợi tóc để thấy khung app.
+   Chỉ các lớp giao diện vào cột (trang · cửa sổ · vạch bận); body VẪN phủ kín màn hình nên mọi toạ độ đo theo màn hình
+   (getBoundingClientRect) trùng toạ độ trong body — chữ bay, hạt, canvas toàn màn của luồng Bán, thẻ đang kéo không phải đổi gì.
+   Lớp mờ .dimmer phủ cả màn (chạm ra ngoài cột cũng đóng cửa sổ). Pill đã canh giữa sẵn. Điện thoại (≤ 600) không dính luật nào ở đây.
+   Đặt CUỐI tệp để thắng các luật .page / .sheet cùng độ ưu tiên phía trên.
+   ===================================================================== */
+@media (min-width:601px){
+  body>.page,body>.sheet,body>.busy{left:calc(50% - 300px);right:auto;width:600px}
+  body::before{content:'';position:absolute;top:0;bottom:0;left:calc(50% - 300px);width:600px;box-shadow:0 0 0 1px var(--hair);pointer-events:none}
+}

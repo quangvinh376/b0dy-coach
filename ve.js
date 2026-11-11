@@ -333,7 +333,7 @@ var VE3D=(function(){
      trong khe ~110 ms đầu, chữ hiện sau ~0,5 s) — chữ cần hiện mà chưa xong (lùi về phiếu, giảm chuyển động, test) → làm nốt ngay khung đó */
   function build(c){
     var t0=performance.now(), M=measure(c.tk);
-    c.M=M; c.ts=Math.min(3, Math.max(2, window.devicePixelRatio||1)); c.ulId=0; M.items.forEach(function(o, i){ if(o.k==='ul') c.ulId=i+1; });
+    c.M=M; c.ts=Math.min(3, Math.max(2, (window.devicePixelRatio||1)*(window.__vps||1))); c.ulId=0; M.items.forEach(function(o, i){ if(o.k==='ul') c.ulId=i+1; });
     c.ul=M.items[c.ulId-1] || null;
     c.items=items(c.tk).map(function(it){ var ch=[], e=it.e; while(e && e!==c.tk){ ch.push(e); e=e.parentElement; } return {k:it.k, e:it.e, ch:ch}; });
     var m=V.m, nh=0; for(var hx=17;hx<M.W-12;hx+=9) nh++; c.nh=nh;
@@ -398,7 +398,7 @@ var VE3D=(function(){
     try{ build(c); }catch(e){ return false; }
     bc.appendChild(cv); CUR=c; size(c); w.classList.add('gl'); kick(); return true;
   }
-  function size(c){ var d=Math.min(3, window.devicePixelRatio||1), cw=c.bc.clientWidth, ch=c.bc.clientHeight; c.cw=cw; c.ch=ch; c.dpr=d;
+  function size(c){ var d=Math.min(3, (window.devicePixelRatio||1)*(window.__vps||1)), cw=c.bc.clientWidth, ch=c.bc.clientHeight; c.cw=cw; c.ch=ch; c.dpr=d;
     cv.style.width=cw+'px'; cv.style.height=ch+'px'; var W=Math.round(cw*d), H=Math.round(ch*d); if(cv.width!==W) cv.width=W; if(cv.height!==H) cv.height=H; c.force=1; }
   function refit(pg){ var c=CUR; if(!c || c.pg!==pg || c.dead || !gl || LOST) return; try{ build(c); size(c); }catch(e){} kick(); }
   function kick(){ if(CUR) CUR.idle=0; if(typeof motWake==='function') motWake(); }
