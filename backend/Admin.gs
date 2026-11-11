@@ -9,6 +9,7 @@
      case 'adm_data':    out = admData_(p);    break;
      case 'adm_checkin': out = admCheckin_(p); break;
      case 'adm_noshow':  out = admNoshow_(p);  break;   (v2.14 · 11/11/2026 — dòng "Vắng")
+     case 'adm_noshow_mark': out = admNoshowMark_(p); break;   (v2.15 — đổi thẻ dòng vừa check-in thành "Vắng")
      case 'adm_log':     out = admLog_(p);     break;
      case 'adm_stats':   out = admStats_(p);   break;
      case 'iplist':      out = admIpList_(p);  break;
@@ -203,6 +204,16 @@ function admNoshow_(p) {
   if (me) { me.pid = f.P.pid; if (p.key) me.key = String(p.key); }
   T.done('noshow');
   return { ok: true, row: w.row, member: me, coach: f.P.owner, by: ADM_NAME, at: w.at, absent: true };
+}
+
+/* action 'adm_noshow_mark' (v2.15) — bản Admin của noshow_mark (Logbook.gs idAbsentMark_): dòng do Admin ký hôm nay / hôm qua → "Vắng" */
+function admNoshowMark_(p) {
+  if (!adminOk_(p)) return { ok: false, error: 'sai_pin' };
+  var name = String(p.name || '').trim();
+  if (!name && !p.pid) return { ok: false, error: 'thieu_ten' };
+  var I = idRead_(), f = idFind_(I, p);
+  if (!f.P) return { ok: false, error: f.n > 1 ? 'trung_ten' : 'khong_thay_khach' };
+  return idAbsentMark_(I, f.P, p, ADM_NAME);
 }
 
 /* =====================================================================

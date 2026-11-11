@@ -281,6 +281,39 @@ check(r.ok && ST(today().slice(-1)[0]) === 'Đã tập', 'N30 xoá dòng vắng 
 /* check-in thường không đổi trạng thái ghi */
 check(today().filter(function (rr) { return ST(rr) !== 'Đã tập' && ST(rr) !== 'Hủy'; }).length === 0, 'N31 lbCheckin_ vẫn ghi đúng "Đã tập"');
 
+console.log('\n== P. v2.15 — ghi vắng nhanh: check-in rồi đổi thẻ dòng đó (noshow_mark) ==');
+build();
+r = C('lbCheckin_', { pin: 'AAAA', name: 'Khách Một', pid: 'B001DY' });
+var rowP = r.row, dP = memRow('001')[12];
+check(r.ok && ST(today()[0]) === 'Đã tập', 'P1 bước 1: check-in thường → dòng "Đã tập"');
+check(C('lbNoshowMark_', { pin: 'SAI', name: 'Khách Một', pid: 'B001DY' }).error === 'sai_pin', 'P2 sai PIN → sai_pin');
+check(C('lbNoshowMark_', { pin: 'BBBB', name: 'Khách Một', pid: 'B001DY' }).error === 'khong_phai_khach_cua_ban' && ST(today()[0]) === 'Đã tập', 'P3 coach khác → khong_phai_khach_cua_ban, dòng không đổi');
+check(C('lbNoshowMark_', { pin: 'AAAA', name: 'Khách Một', pid: 'B001DY', date: '2026-10-20', row: rowP }).error === 'qua_han', 'P4 ngày cũ hơn hôm qua → qua_han');
+check(C('lbNoshowMark_', { pin: 'AAAA', name: 'Trùng Tên', pid: 'B004DY', date: TODAY }).error === 'khong_thay_dong', 'P5 khách chưa có dòng hôm nay → khong_thay_dong (lệnh này không tạo buổi)');
+r = C('lbNoshowMark_', { pin: 'AAAA', name: 'Khách Một', pid: 'B001DY', date: TODAY, row: rowP, ip: 'ngoai' });
+check(r.ok && r.absent && r.row === rowP && !r.already && ST(today()[0]) === 'V\u1eafng' && today().length === 1, 'P6 bước 2: đổi thẻ đúng dòng → "Vắng" (không khoá IP, không thêm dòng)', [r, ST(today()[0])]);
+check(memRow('001')[12] === dP && /^app \d\d:\d\d · ký: Quyết Hán$/.test(SIGN(today()[0])), 'P7 số buổi không đổi giữa hai bước (Vắng = Đã tập) · Ký điện tử giữ nguyên');
+r = C('lbNoshowMark_', { pin: 'AAAA', name: 'Khách Một', pid: 'B001DY', date: TODAY, row: rowP });
+check(r.ok && r.already === true && today().length === 1, 'P8 gửi lại → ok + already (gửi lại thoải mái)', r);
+r = C('lbCoach_', { pin: 'AAAA' }); x = byName(r.members, 'Khách Một')[0];
+check(x && x.checked && x.absent === true, 'P9 lbCoach_: absent sau khi đổi thẻ');
+/* dòng kiosk đã ký / dòng coach khác ký / dòng Chờ xác nhận: không đổi */
+(function () { var rr = []; for (var i = 0; i < 19; i++) rr.push(''); rr[2] = D(TODAY); rr[7] = 'Trùng Tên'; rr[11] = 'Đã tập'; rr[14] = 'kiosk 08:00 · ký: Quyết Hán'; rr[IN] = 'B004DY'; BA.getSheetByName('SESSION LOG').g.push(rr); })();
+r = C('lbNoshowMark_', { pin: 'AAAA', name: 'Trùng Tên', pid: 'B004DY', date: TODAY });
+check(r.error === 'khong_phai_dong_app' && ST(today()[1]) === 'Đã tập', 'P10 dòng check-in ở kiosk (khách có đến) → khong_phai_dong_app, không đổi', r);
+(function () { var rr = []; for (var i = 0; i < 19; i++) rr.push(''); rr[2] = D(TODAY); rr[7] = 'Trùng Cùng Coach'; rr[11] = 'Đã tập'; rr[14] = 'app 09:00 · ký: Admin'; rr[IN] = 'B070DY'; BA.getSheetByName('SESSION LOG').g.push(rr); })();
+r = C('lbNoshowMark_', { pin: 'AAAA', name: 'Trùng Cùng Coach', pid: 'B070DY', date: TODAY });
+check(r.error === 'khong_phai_dong_app' && ST(today()[2]) === 'Đã tập', 'P11 dòng do Admin ký, coach gửi → không đổi', r);
+r = C('admNoshowMark_', { apin: 'SAI', name: 'Trùng Cùng Coach', pid: 'B070DY', date: TODAY });
+check(r.error === 'sai_pin', 'P12 Admin sai PIN');
+r = C('admNoshowMark_', { apin: 'ZZZZ', name: 'Trùng Cùng Coach', pid: 'B070DY', date: TODAY });
+check(r.ok && ST(today()[2]) === 'V\u1eafng' && memRow('071')[12] === 0, 'P13 Admin đổi thẻ dòng do Admin ký (B070DY) → "Vắng"; người trùng tên B071DY không đụng', r);
+r = C('admNoshowMark_', { apin: 'ZZZZ', name: 'Khách Một', pid: 'B001DY', date: TODAY });
+check(r.ok && r.already === true, 'P14 Admin gửi cho dòng đã "Vắng" → ok already');
+(function () { var rr = []; for (var i = 0; i < 19; i++) rr.push(''); rr[2] = D(TODAY); rr[7] = 'Khách Gia Hạn'; rr[11] = 'Chờ xác nhận'; rr[14] = 'kiosk 09:10'; rr[IN] = 'B059DY'; BA.getSheetByName('SESSION LOG').g.push(rr); })();
+r = C('lbNoshowMark_', { pin: 'BBBB', name: 'Khách Gia Hạn', pid: 'B035DY', date: TODAY });
+check(r.error === 'khong_o_trang_thai_da_tap' && r.status === 'Chờ xác nhận', 'P15 dòng "Chờ xác nhận" → không đổi', r);
+
 check(!ALL.some(function (j) { return JSON.stringify(j).indexOf('090000') >= 0; }), 'H1 ' + ALL.length + ' phản hồi không chứa SĐT');
 console.log('\n' + pass + ' PASS, ' + fail + ' FAIL');
 process.exit(fail ? 1 : 0);

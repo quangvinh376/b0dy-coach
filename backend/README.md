@@ -229,3 +229,14 @@ case 'adm_noshow':   out = admNoshow_(p); break;
 - File BA (11/11): mọi công thức lọc "Đã tập" trên SESSION LOG nay cộng thêm "Vắng" (MEMBERS Đã tập / Ngày kết thúc · P&L · COM · CHART · CAPACITY · DASHBOARD · 🚂 1 · 🚂 2). `'🚂 2'!D7` (đếm Huỷ + Vắng) giữ nguyên.
 - Test: `node test/gas_identity.js` mục N (32 ca) · `node test/noshow.js` (app, máy chủ giả).
 
+### 12.1 v2.15 — ghi vắng nhanh: check-in rồi đổi thẻ (11/11/2026)
+
+`noshow_coach` mất ~10 s (SpreadsheetApp mở file BA). App v2.24 không gọi nó nữa mà đi hai bước: `checkin_coach` (Worker, ~1–2 s, dòng "Đã tập") → **`noshow_mark`** đổi thẻ dòng đó thành "Vắng" (chạy nền). Thêm 2 case trong `api_()`:
+
+```js
+case 'noshow_mark':     out = lbNoshowMark_(p);  break;
+case 'adm_noshow_mark': out = admNoshowMark_(p); break;
+```
+
+`noshow_mark {pin | apin, name, pid, key, date 'yyyy-MM-dd', row}` → `idAbsentMark_`: tìm dòng của đúng NGƯỜI trong ngày `date` (chỉ nhận hôm nay / hôm qua → khác: `qua_han`), ưu tiên đúng `row` app báo; không có → `khong_thay_dong` (lệnh này không bao giờ tạo buổi). Đã "Vắng" → `{ok, already}`. Chỉ đổi khi dòng đang "Đã tập" (`khong_o_trang_thai_da_tap`) **và** Ký điện tử đúng dạng `app HH:mm · ký: <coach gửi lệnh | Admin>` (`khong_phai_dong_app` — dòng kiosk, dòng người khác ký không đổi được). Không khoá IP (bước 1 đã khoá; gửi lại từ ngoài phòng vẫn được). Gửi lại bao nhiêu lần kết quả vẫn là một dòng "Vắng". Card KPI Discord (`updateDiscord`, Code.gs) từ 11/11 đếm cả "Vắng".
+

@@ -7,6 +7,7 @@
      case 'checkin_coach': out = lbCheckin_(p); break;
      case 'log':           out = lbLog_(p);     break;
      case 'noshow_coach':  out = lbNoshow_(p);  break;   (v2.14 · 11/11/2026)
+     case 'noshow_mark':   out = lbNoshowMark_(p); break; (v2.15 · 11/11/2026)
 
    Dữ liệu cá nhân ghi vào file "[B0DY Studio] Customer database",
    sheet "Khách của <Coach>", 1 dòng = 1 sự kiện (append-only, có id
@@ -510,6 +511,61 @@ function lbNoshow_(p) {
   try { var mem2 = lbMembers_(true); if (mem2 && mem2.ok) mem2.members.forEach(function (x) { if (w.mrow ? x._r === w.mrow : x.name === w.name) me = x; }); } catch (e) {}
   if (me) { me.pid = f.P.pid; if (p.key) me.key = String(p.key); }
   return { ok: true, row: w.row, member: me, coach: coach, at: w.at, absent: true };
+}
+
+/* =====================================================================
+   v2.15 (11/11/2026) — GHI VẮNG NHANH. 'noshow_coach' chạy trên Apps Script mất ~10 s (mở file BA bằng SpreadsheetApp).
+   App v2.24 đi hai bước: (1) check-in như thường qua Worker (~1–2 s: ghi dòng "Đã tập", khoá IP thật, chặn trùng) →
+   (2) lệnh này đổi thẻ của ĐÚNG dòng đó thành "Vắng", chạy nền, gửi lại được (đổi thẻ hai lần vẫn là "Vắng").
+   File BA tính "Vắng" = "Đã tập" nên giữa hai bước không số nào sai; bước 2 chỉ đổi nhãn.
+   Chỉ đổi dòng: của đúng NGƯỜI đó · ngày hôm nay / hôm qua · do app ghi ("app HH:mm · ký: <who>", who = coach này / Admin)
+   · đang "Đã tập" (đã "Vắng" → ok, already). Không khoá IP (bước 1 đã khoá; lệnh này không tạo buổi mới).
+   p: {name, pid, key, date 'yyyy-MM-dd', row (gợi ý)}. who = tên ký phải khớp.
+   ===================================================================== */
+function idAbsentMark_(I, P, p, who) {
+  chkInit_();
+  var tz = CHECKIN.TZ, now = new Date(), today = Utilities.formatDate(now, tz, 'yyyy-MM-dd'),
+      yest = Utilities.formatDate(new Date(now.getTime() - 86400000), tz, 'yyyy-MM-dd');
+  var day = /^\d{4}-\d{2}-\d{2}$/.test(String(p.date || '')) ? String(p.date) : today;
+  if (day !== today && day !== yest) return { ok: false, error: 'qua_han' };
+  var lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    var ix = admLogB_();
+    if (!ix) return { ok: false, error: 'khong_thay_SESSION_LOG' };
+    var log = ix.log, R1 = ix.R1, L = statsLogCols_(log), W = Math.max(CHECKIN.WIDTH || 0, L.w), cnt = ix.last - R1 + 1;
+    var vals = cnt > 0 ? log.getRange(R1, 1, cnt, W).getValues() : [], hit = -1, want = Number(p.row) || 0;
+    for (var r = 0; r < vals.length; r++) {
+      var d = vals[r][CHECKIN.COL_DATE - 1];
+      if (!(d instanceof Date) || Utilities.formatDate(d, tz, 'yyyy-MM-dd') !== day) continue;
+      if (String(vals[r][CHECKIN.COL_STATUS - 1]).trim() === CHECKIN.ST_CANCEL) continue;
+      if (idOfLog_(I, L.mr >= 0 ? vals[r][L.mr] : '', L.q >= 0 ? vals[r][L.q] : '', vals[r][CHECKIN.COL_NAME - 1]) !== P) continue;
+      hit = r; if (r + R1 === want) break;                              /* đúng dòng app báo thì dừng; không thì lấy dòng cuối khớp */
+    }
+    if (hit < 0) return { ok: false, error: 'khong_thay_dong' };
+    var row = hit + R1, st = String(vals[hit][CHECKIN.COL_STATUS - 1]).trim(), sig = String(vals[hit][CHECKIN.COL_NOTE - 1] || '');
+    if (lbIsAbsent_(st)) return { ok: true, row: row, already: true, absent: true };
+    if (st !== CHECKIN.ST_OK) return { ok: false, error: 'khong_o_trang_thai_da_tap', status: st };
+    var m = sig.match(/^app\s+\d{1,2}:\d{2}\s*·\s*ký:\s*(.+)$/);
+    if (!m || lbNorm_(m[1]) !== lbNorm_(who)) return { ok: false, error: 'khong_phai_dong_app' };
+    log.getRange(row, CHECKIN.COL_STATUS).setValue(LB_ST_ABSENT);
+    SpreadsheetApp.flush();
+    if (String(log.getRange(row, CHECKIN.COL_STATUS).getValue()).trim() !== LB_ST_ABSENT) return { ok: false, error: 'dong_bi_chiem', row: row };
+    return { ok: true, row: row, absent: true };
+  } finally {
+    lock.releaseLock();
+  }
+}
+function lbNoshowMark_(p) {
+  var coach = lbCoachByPin_(p && p.pin);
+  if (!coach) return { ok: false, error: 'sai_pin' };
+  var name = String(p.name || '').trim();
+  if (!name && !p.pid) return { ok: false, error: 'thieu_ten' };
+  var I = idRead_(), cn = lbNorm_(coach);
+  var f = idFind_(I, p, function (X) { return lbNorm_(X.owner) === cn; });
+  if (!f.P) return { ok: false, error: f.n > 1 ? 'trung_ten' : 'khong_phai_khach_cua_ban' };
+  if (lbNorm_(f.P.owner) !== cn) return { ok: false, error: 'khong_phai_khach_cua_ban' };
+  return idAbsentMark_(I, f.P, p, coach);
 }
 
 /* =====================================================================
