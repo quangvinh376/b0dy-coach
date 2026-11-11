@@ -7,7 +7,7 @@
    ===================================================================== */
 'use strict';
 var $=function(id){ return document.getElementById(id); };
-var APP_VER='v2.23.0';
+var APP_VER='v2.24.0';
 
 /* ---------------- tiện ích ---------------- */
 function isoToday(d){ d=d||new Date(); return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2); }
@@ -202,7 +202,7 @@ var DEMO=!API || /[?&]demo\b/.test(location.search);
 /* ADMIN (v2.4): PIN admin → "Admin": mọi khách của phòng, check-in không khoá IP, tab Cài đặt (IP phòng).
    Cùng các màn và luồng của coach; api() đổi tên lệnh sang bản admin (Admin.gs ở Apps Script; v2.15.2: adm_data · adm_checkin · adm_log
    có thêm bản trên Worker v8 và đi Worker trước — adm_stats, iplist · addip · delip vẫn chỉ ở Apps Script). */
-var ADM_ACT={coach:'adm_data', stats:'adm_stats', log:'adm_log', checkin_coach:'adm_checkin', noshow_coach:'adm_noshow'};
+var ADM_ACT={coach:'adm_data', stats:'adm_stats', log:'adm_log', checkin_coach:'adm_checkin', noshow_coach:'adm_noshow', noshow_mark:'adm_noshow_mark'};
 var ST=function(k){ try{ return localStorage.getItem(k); }catch(e){ return null; } };
 var SS=function(k,v){ try{ if(v==null) localStorage.removeItem(k); else localStorage.setItem(k,v); }catch(e){} };
 var SES=function(k,v){ try{ if(v===undefined) return sessionStorage.getItem(k); if(v==null) sessionStorage.removeItem(k); else sessionStorage.setItem(k,v); }catch(e){ return null; } };
@@ -404,7 +404,7 @@ function held(id){ return OUT.q.some(function(e){ return e.id===id && e.hold; })
 /* sự kiện gửi được bằng phiên hiện tại: phiên Admin chỉ gửi sự kiện ghi trong chế độ Admin, phiên coach không gửi sự kiện của Admin
    (máy dùng chung: không để dữ liệu của người này đi dưới PIN của người kia — chờ đúng người đăng nhập lại) */
 function mine(e){ return state.admin ? e.coach==='Admin' : e.coach!=='Admin'; }
-function flush(){
+function flush(){ try{ nsFlush(); }catch(e){}
   if(OUT.busy || !authed()) return Promise.resolve();
   var batch=OUT.q.filter(function(e){ return !e.hold && mine(e); }).slice(0,150), ids={}; batch.forEach(function(e){ ids[e.id]=1; });
   if(!batch.length) return Promise.resolve();
@@ -505,6 +505,9 @@ function demoApi(body){
     if(body.action==='adm_stats'){ var sa=JSON.parse(JSON.stringify(db.astats)); var ta=0; Object.keys(sa.days).forEach(function(k){ ta+=sa.days[k]; }); sa.monthTotal=ta; return res(sa); }
     if(body.action==='adm_checkin'){ body.action='checkin_coach'; body._adm=1; }
     if(body.action==='adm_noshow'){ body.action='noshow_coach'; body._adm=1; }
+    if(body.action==='adm_noshow_mark'){ body.action='noshow_mark'; body._adm=1; }
+    if(body.action==='noshow_mark'){ db.absent=db.absent||{}; if(db.checked[body.name]!==isoToday()) return res({ok:false,error:'khong_thay_dong'});
+      db.absent[body.name]=isoToday(); SES('demo_ci', JSON.stringify({checked:db.checked, at:db.at, absent:db.absent})); return res({ok:true,absent:true,row:0}); }
     if(body.action==='adm_log'){ body.action='log'; }
     if(body.pin==='0000') return res({ok:false,error:'sai_pin'});
     if(body.action==='coach'){ var snap={}, own=db.clients.filter(function(c){ return c.coach==='Quyết'; }); own.forEach(function(c){ snap[c.name]=c.snap; });
@@ -2094,18 +2097,55 @@ function nsConfirm(){
     notify('Đã ghi vắng'+(state.sel.length>1?' '+firstName(m.name):''));
     refreshStats(true);
   };
-  refreshIp();                                    /* Apps Script so IP do app tự lấy → lấy lại ngay lúc ghi (như check-in) */
-  ipWait().then(function(){ return api({action:'noshow_coach', name:m.name, key:key, pid:m.pid||'', date:day}, 0, 600, 0, 30000); }).then(function(res){
+  /* v2.24.0 — GHI VẮNG NHANH (chủ studio 11/11: lệnh noshow_coach trên Apps Script mất ~10 s). Hai bước:
+     (1) check-in như thường — Worker trước, ~1–2 s, khoá IP thật, chặn trùng theo người → dòng "Đã tập" (file BA tính "Vắng" = "Đã tập");
+     (2) noshow_mark (Apps Script) đổi thẻ ĐÚNG dòng đó thành "Vắng" — chạy nền, hàng đợi lb_nsq, gửi lại được, không chặn coach.
+     Bấm lại sau lỗi mạng (không biết bước 1 đã ghi chưa): máy chủ trả da_checkin → nếu chính máy này vừa thử (NS_TRY) thì chỉ còn đổi thẻ. */
+  var finish=function(at, res, row){ delete NS_TRY[key]; nsTrySave(); done(at, res); nsqAdd(m, key, day, row); nsFlush(); };
+  var tried=NS_TRY[key]===day; NS_TRY[key]=day; nsTrySave();
+  WK_SEEN=null; refreshIp();
+  api({action:'checkin_coach', name:m.name, key:key, pid:m.pid||'', date:day, ns:1}, 0, 600, 0, 30000).then(function(res){
     if(ep!==AUTH_EP) return end();
     var err=res&&res.error;
-    if(res && res.ok) return done(res.at, res);
-    if(err==='da_checkin' && isVang(res.status)) return done(res.at||'', {});                   /* lần trước đã ghi (mất mạng lúc trả lời) → máy chủ đã tính buổi này */
-    end();
+    if(res && res.ok) return finish(res.at, res, res.row);
+    if(err==='da_checkin' && isVang(res.status)){ delete NS_TRY[key]; nsTrySave(); return done(res.at||'', {}); }   /* đã là "Vắng" (máy khác / lần trước) */
+    if(err==='da_checkin' && tried) return finish(res.at||'', {}, 0);                         /* lần bấm trước của máy này đã ghi, mất trả lời → chỉ còn đổi thẻ */
+    delete NS_TRY[key]; nsTrySave(); end();
     if(err==='da_checkin'){ nsClose(true); notify('Khách đã check-in hôm nay', {err:true}); refreshData(true); return; }
     if(err==='sai_pin'){ nsClose(true); pinGone(); return; }
-    notify(err==='wrong_ip' ? 'Chỉ ghi vắng được ở phòng' : err==='khong_phai_khach_cua_ban' ? 'Không phải khách của bạn' : err==='khong_thay_khach' ? 'Không thấy khách trong MEMBERS' : err==='trung_ten' ? 'Trùng tên — mở lại app để cập nhật' : 'Chưa ghi được vắng', {err:true});
-  }).catch(function(){ if(ep!==AUTH_EP) return end(); end(); notify('Chưa ghi được vắng', {err:true}); });
+    notify(err==='wrong_ip' ? (ipWhy().retry ? 'Chỉ ghi vắng được ở phòng' : ipWhy().text) : err==='khong_phai_khach_cua_ban' ? 'Không phải khách của bạn' : err==='khong_thay_khach' ? 'Không thấy khách trong MEMBERS' : err==='trung_ten' ? 'Trùng tên — mở lại app để cập nhật' : 'Chưa ghi được vắng', {err:true});
+  }).catch(function(){ end(); if(ep===AUTH_EP) notify('Chưa ghi được vắng', {err:true}); });
 }
+/* hàng đợi đổi thẻ "Vắng" (bước 2): mỗi mục {k, pid, name, d, row, adm, coach, n}; chỉ gửi mục của người đang đăng nhập; giữ tới hết hôm sau */
+var NSQ=[], NS_TRY={}, NSQ_BUSY=false, NSQ_T=0;
+try{ NSQ=JSON.parse(ST('lb_nsq')||'[]')||[]; }catch(e){ NSQ=[]; }
+try{ NS_TRY=JSON.parse(ST('lb_nst')||'{}')||{}; Object.keys(NS_TRY).forEach(function(k){ if(NS_TRY[k]!==TODAY_ISO) delete NS_TRY[k]; }); }catch(e){ NS_TRY={}; }
+function nsqSave(){ SS('lb_nsq', NSQ.length?JSON.stringify(NSQ):null); }
+function nsTrySave(){ SS('lb_nst', Object.keys(NS_TRY).length?JSON.stringify(NS_TRY):null); }
+function nsqMine(q){ return state.admin ? !!q.adm : (!q.adm && !!state.coach && q.coach===state.coach); }
+function nsqAdd(m, key, day, row){ NSQ=NSQ.filter(function(q){ return !(q.k===key && q.d===day); }); NSQ.push({k:key, pid:m.pid||'', name:m.name, d:day, row:+row||0, adm:!!state.admin, coach:state.coach, n:0}); nsqSave(); }
+function isoPrev(iso){ var p=String(iso).split('-'); return new Date(Date.UTC(+p[0], +p[1]-1, +p[2])-86400000).toISOString().slice(0,10); }
+function nsFlush(){
+  if(NSQ_BUSY) return;
+  var keep=NSQ.filter(function(q){ return q.d===TODAY_ISO || q.d===isoPrev(TODAY_ISO); }); if(keep.length!==NSQ.length){ NSQ=keep; nsqSave(); }
+  var q=NSQ.filter(nsqMine)[0]; if(!q || !(state.pin || state.apin)) return;
+  NSQ_BUSY=true; var ep=AUTH_EP;
+  var drop=function(){ NSQ=NSQ.filter(function(x){ return x!==q; }); nsqSave(); };
+  var later=function(){ q.n=(q.n||0)+1; nsqSave(); clearTimeout(NSQ_T); NSQ_T=setTimeout(nsFlush, Math.min(60000, 4000*Math.pow(2, Math.min(4, q.n-1)))); };
+  api({action:'noshow_mark', name:q.name, key:q.k, pid:q.pid, date:q.d, row:q.row}, 0, 600, 0, 30000).then(function(res){
+    NSQ_BUSY=false; if(ep!==AUTH_EP) return;
+    var err=res&&res.error;
+    if(res && res.ok){ drop(); refreshStats(true); return nsFlush(); }
+    if(err==='sai_pin') return;                                        /* giữ lại — phiên đăng nhập sau gửi tiếp */
+    if(!err || err==='unknown_action' || err==='dong_bi_chiem' || /^Exception|^Error|lock/i.test(String(err))) return later();   /* máy chủ chưa có lệnh / bận → thử lại */
+    /* máy chủ từ chối hẳn (dòng không còn, không phải dòng app ghi…): dòng trên SESSION LOG vẫn là "Đã tập" → bỏ nhãn vắng trên máy, báo coach */
+    drop(); var c=CI[q.k]; if(c && c.day===q.d && c.absent){ c.absent=false; ciSave(); } var mm=findClient(q.k); if(mm) mm.absent=false;
+    notify('Chưa gắn được thẻ Vắng · '+firstName(q.name), {err:true, ms:9000});
+    if(state.screen==='p-confirm') HOOK['p-confirm'](null,true); else if(state.screen==='p-pick') renderPick(false);
+    nsFlush();
+  }).catch(function(){ NSQ_BUSY=false; if(ep===AUTH_EP) later(); });
+}
+addEventListener('online', function(){ setTimeout(nsFlush, 500); });
 (function(){ var y0=0, on=false, h=$('ns-handle'); if(!h) return;
   h.addEventListener('touchstart', function(e){ if(NS_BUSY) return; on=true; y0=e.touches[0].clientY; }, {passive:true});
   h.addEventListener('touchmove', function(e){ if(!on) return; var dy=e.touches[0].clientY-y0; if(dy>0) $('nsheet').style.transform='translateY('+dy+'px)'; }, {passive:true});

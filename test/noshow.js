@@ -21,7 +21,7 @@ function box(b, x, y, w, h, tol){ return !!b && near(b.x,x,tol) && near(b.y,y,to
     {name:'Lê Khách Lẻ', key:'Lê Khách Lẻ', pid:'B904DY', done:1, total:12, left:11, coach:'Hiền Mai', kind:'1:1', exp:'2027-01-21'}
   ]; }
   var SRV;
-  function reset(o){ SRV=Object.assign({wk:[], gas:[], members:mkMembers(), rows:{}, mode:'ok', statsAbsent:null, wkStatus:false}, o||{}); }
+  function reset(o){ SRV=Object.assign({wk:[], gas:[], marks:[], members:mkMembers(), rows:{}, mode:'ok', mark:'ok', markDelay:0, statsAbsent:null}, o||{}); }
   function send(r, o){ r.fulfill({status:200, contentType:'application/json', body:JSON.stringify(o)}); }
   function memberOut(m){ var o=Object.assign({}, m), rw=SRV.rows[m.pid]; if(rw){ o.checked=true; o.signed=rw.at; if(rw.st==='Vắng' && SRV.sendAbsent!==false) o.absent=true; } return o; }
   function coachOut(p, via){ var adm=/^adm_/.test(p.action), list=SRV.members.filter(function(m){ return adm || m.coach==='Quyết Hán'; }).map(memberOut);
@@ -31,7 +31,7 @@ function box(b, x, y, w, h, tol){ return !!b && near(b.x,x,tol) && near(b.y,y,to
   function write(p, st){ var adm=/^adm_/.test(p.action), m=SRV.members.filter(function(x){ return x.pid===p.pid; })[0];
     if(!m) return {ok:false, error:adm?'khong_thay_khach':'khong_phai_khach_cua_ban'};
     if(SRV.rows[m.pid]) return {ok:false, error:'da_checkin', status:SRV.rows[m.pid].st, at:SRV.rows[m.pid].at};
-    SRV.rows[m.pid]={st:st, at:'16:42'}; m.done++; m.left--;
+    SRV.rows[m.pid]={st:st, at:'16:42', by:adm?'Admin':'Quyết Hán', row:9}; m.done++; m.left--;
     var o={ok:true, row:9, member:Object.assign({}, m), at:'16:42', coach:m.coach}; if(st==='Vắng') o.absent=true; return o; }
   async function wk(r){ var p=JSON.parse(r.request().postData()||'{}'); SRV.wk.push(p);
     if(p.action==='ping') return send(r,{ok:true,pong:1,v:12});
@@ -39,7 +39,7 @@ function box(b, x, y, w, h, tol){ return !!b && near(b.x,x,tol) && near(b.y,y,to
     else if(p.pin!=='1234') return send(r,{ok:false,error:'sai_pin'});
     if(p.action==='coach'||p.action==='adm_data') return send(r, coachOut(p,'wk'));
     if(p.action==='log'||p.action==='adm_log') return send(r,{ok:true,written:(p.events||[]).length});
-    if(p.action==='checkin_coach'||p.action==='adm_checkin'){ var w=write(p,'Đã tập'); if(!w.ok && !SRV.wkStatus) delete w.status; return send(r,w); }
+    if(p.action==='checkin_coach'||p.action==='adm_checkin'){ if(SRV.mode==='wrong_ip') return send(r,{ok:false,error:'wrong_ip'}); if(SRV.mode==='down') return r.abort('internetdisconnected'); if(SRV.mode==='lost'){ write(p,'Đã tập'); return r.abort('internetdisconnected'); } return send(r, write(p,'Đã tập')); }   /* Worker v10+: da_checkin kèm status */
     return send(r,{ok:false,error:'unknown_action'});
   }
   async function gas(r){ var p=JSON.parse(r.request().postData()||'{}'); SRV.gas.push(p);
@@ -49,7 +49,16 @@ function box(b, x, y, w, h, tol){ return !!b && near(b.x,x,tol) && near(b.y,y,to
     else if(p.pin!=='1234') return send(r,{ok:false,error:'sai_pin'});
     if(p.action==='coach'||p.action==='adm_data') return send(r, coachOut(p,'gas'));
     if(p.action==='stats'||p.action==='adm_stats') return send(r, statsOut());
-    if(p.action==='checkin_coach'||p.action==='adm_checkin') return send(r, write(p,'Đã tập'));
+    if(p.action==='checkin_coach'||p.action==='adm_checkin') return send(r, SRV.mode==='wrong_ip' ? {ok:false,error:'wrong_ip'} : write(p,'Đã tập'));
+    if(p.action==='noshow_mark'||p.action==='adm_noshow_mark'){ SRV.marks.push(p);
+      if(SRV.mark==='old') return send(r,{ok:false,error:'unknown_action'});
+      if(SRV.mark==='down') return r.abort('internetdisconnected');
+      if(SRV.mark==='reject') return send(r,{ok:false,error:'khong_phai_dong_app'});
+      if(SRV.markDelay) await new Promise(function(z){ setTimeout(z, SRV.markDelay); });
+      var rw=SRV.rows[p.pid]; if(!rw) return send(r,{ok:false,error:'khong_thay_dong'});
+      if(rw.st==='Vắng') return send(r,{ok:true,row:rw.row,already:true,absent:true});
+      if(rw.by!==(p.action==='adm_noshow_mark'?'Admin':'Quyết Hán')) return send(r,{ok:false,error:'khong_phai_dong_app'});
+      rw.st='Vắng'; return send(r,{ok:true,row:rw.row,absent:true}); }
     if(p.action==='noshow_coach'||p.action==='adm_noshow'){
       if(SRV.mode==='wrong_ip') return send(r,{ok:false,error:'wrong_ip'});
       if(SRV.mode==='old') return send(r,{ok:false,error:'unknown_action'});
@@ -100,8 +109,8 @@ function box(b, x, y, w, h, tol){ return !!b && near(b.x,x,tol) && near(b.y,y,to
   await page.mouse.click(196, 300); await page.waitForTimeout(600);
   ck((await G(page,'#nsheet')).hidden && acts(SRV.gas,/noshow/).length===0, 'B8 chạm lớp mờ → đóng (display:none), không ghi');
   await page.click('#cf-ns'); await page.waitForTimeout(500); await page.click('#ns-go'); await page.waitForTimeout(1400); await shot(page,'C-absent',300);
-  t=acts(SRV.gas,/noshow/); ck(t.length===1 && t[0].action==='noshow_coach' && t[0].name==='Bùi Doãn Quang' && t[0].pid==='B901DY' && t[0].key==='Bùi Doãn Quang' && t[0].pin==='1234' && t[0].ip==='203.0.113.7' && t[0].date===TODAY, 'C1 gửi đúng MỘT lệnh noshow_coach (tên · pid · key · PIN · IP · ngày) tới Apps Script', t);
-  ck(acts(SRV.wk,/noshow|checkin/).length===0, 'C2 Worker không nhận lệnh ghi nào');
+  t=acts(SRV.wk,/checkin/); ck(t.length===1 && t[0].action==='checkin_coach' && t[0].ns===1 && t[0].name==='Bùi Doãn Quang' && t[0].pid==='B901DY' && t[0].key==='Bùi Doãn Quang' && t[0].pin==='1234' && t[0].date===TODAY, 'C1 bước 1: đúng MỘT lệnh check-in (ns) tới Worker (tên · pid · key · PIN · ngày)', t);
+  t=SRV.marks; ck(t.length===1 && t[0].action==='noshow_mark' && t[0].pid==='B901DY' && t[0].row===9 && t[0].date===TODAY && t[0].pin==='1234' && SRV.rows.B901DY.st==='Vắng' && acts(SRV.gas,/noshow_coach|checkin/).length===0 && (await page.evaluate(function(){ return !localStorage.getItem('lb_nsq') && !localStorage.getItem('lb_nst'); })), 'C2 bước 2: đúng MỘT lệnh noshow_mark (pid · dòng 9 · ngày) tới Apps Script → dòng thành "Vắng"; hàng đợi trống', t);
   ck((await G(page,'#nsheet')).hidden, 'C3 cửa sổ đóng');
   b=await G(page,'#p-confirm .card.big .fill.b'); ck(b && b.bg===RED && near(b.x,24) && near(b.w,345*15/24,1.5), 'C4 thẻ: vệt đỏ tới buổi 15 / 24 (Figma C)', b);
   ck(await page.evaluate(function(){ var c=document.querySelector('#p-confirm .card'); return c.classList.contains('vg') && c.classList.contains('done') && c.querySelector('.n').textContent==='15' && c.querySelector('.of').textContent==='/ 24'; }), 'C5 số 15 · / 24');
@@ -111,7 +120,7 @@ function box(b, x, y, w, h, tol){ return !!b && near(b.x,x,tol) && near(b.y,y,to
   ck((await G(page,'#cf-back')).hidden && (await G(page,'#cf-ns')).hidden, 'C8 không còn nút ← và No-show');
   t=await page.evaluate(function(){ var c=JSON.parse(localStorage.getItem('lb_ci'))['Bùi Doãn Quang']; return c && [c.status, c.absent, c.no, c.at]; });
   ck(t && t[0]==='ok' && t[1]===true && t[2]===15 && t[3]==='16:42', 'C9 lb_ci: ok · absent · buổi 15 · 16:42', t);
-  await page.waitForTimeout(3500); ck(acts(SRV.gas,/noshow/).length===1, 'C10 4 giây sau vẫn đúng MỘT lệnh (không tự gửi lại)');
+  await page.waitForTimeout(3500); ck(acts(SRV.wk,/checkin/).length===1 && SRV.marks.length===1, 'C10 4 giây sau vẫn đúng MỘT check-in + MỘT đổi thẻ (không tự gửi lại)');
   await page.click('#cf-go'); await page.waitForTimeout(900);
   ck(await page.evaluate(function(){ return state.screen==='p-home' && !state.session && !localStorage.getItem('lb_session'); }), 'C11 về trang chủ, không mở buổi tập nào');
   await toPick(page); await shot(page,'C-pick',500);
@@ -127,36 +136,65 @@ function box(b, x, y, w, h, tol){ return !!b && near(b.x,x,tol) && near(b.y,y,to
   ck(/VẮNG HÔM NAY/.test(t||''), 'C14 mở lại app: vẫn "VẮNG HÔM NAY"', t);
   await a.ctx.close();
 
-  /* ============ S2 · lỗi: ngoài phòng · mất mạng · trả lời rơi ============ */
+  /* ============ S2 · tốc độ + lỗi ============ */
+  console.log('\n== S2 · tốc độ: xong ngay sau bước 1, đổi thẻ chạy nền ==');
+  reset({markDelay:3000}); a=await open(); page=a.page;
+  await toPick(page); await page.click('#pk-list .row:has-text("Doãn Quang")'); await page.waitForTimeout(1200);
+  await page.click('#cf-ns'); await page.waitForTimeout(500);
+  var t0=Date.now(); await page.click('#ns-go');
+  await page.waitForFunction(function(){ var e=document.querySelector('#p-confirm .lines .a'); return e && /đã vắng/.test(e.textContent) && document.getElementById('cf-go').textContent==='Về trang chủ'; }, null, {timeout:5000});
+  var dt=Date.now()-t0;
+  ck(dt<1500 && SRV.rows.B901DY.st==='Đã tập' && SRV.marks.length===1, 'T1 màn "đã vắng" hiện sau '+dt+' ms (< 1,5 s) dù Apps Script đổi thẻ mất 3 s — lúc này dòng đang "Đã tập", lệnh đổi thẻ đang chạy', [dt, SRV.rows.B901DY, SRV.marks.length]);
+  ck(await page.evaluate(function(){ return JSON.parse(localStorage.getItem('lb_nsq')||'[]').length===1; }), 'T2 trong lúc chờ: hàng đợi lb_nsq giữ 1 mục');
+  await page.waitForTimeout(3600);
+  ck(SRV.rows.B901DY.st==='Vắng' && await page.evaluate(function(){ return !localStorage.getItem('lb_nsq'); }), 'T3 3 giây sau: dòng thành "Vắng", hàng đợi trống');
+  await a.ctx.close();
+
   console.log('\n== S2 · lỗi ==');
   reset({mode:'wrong_ip'}); a=await open(); page=a.page;
   await toPick(page); await page.click('#pk-list .row:has-text("Doãn Quang")'); await page.waitForTimeout(1200);
-  await page.click('#cf-ns'); await page.waitForTimeout(500); await page.click('#ns-go'); await page.waitForTimeout(1500); await shot(page,'E-wrong-ip',200);
-  t=await page.textContent('#pill'); ck(/Chỉ ghi vắng được ở phòng/.test(t), 'E1 ngoài phòng → pill "Chỉ ghi vắng được ở phòng"', t);
+  await page.click('#cf-ns'); await page.waitForTimeout(500); await page.click('#ns-go'); await page.waitForTimeout(3600); await shot(page,'E-wrong-ip',200);
+  t=await page.textContent('#pill'); ck(/Chỉ ghi vắng được ở phòng/.test(t), 'E1 ngoài phòng (Worker + Apps Script cùng chặn) → pill "Chỉ ghi vắng được ở phòng"', t);
   ck(!(await G(page,'#nsheet')).hidden && !(await page.evaluate(function(){ return document.getElementById('ns-go').classList.contains('off') || NS_BUSY; })), 'E2 cửa sổ còn mở, nút bấm lại được');
-  ck(acts(SRV.gas,/noshow/).length===1 && Object.keys(SRV.rows).length===0, 'E3 đúng một lệnh, không dòng nào được ghi');
-  ck(await page.evaluate(function(){ var c=JSON.parse(localStorage.getItem('lb_ci')||'{}')['Bùi Doãn Quang']; return !c; }), 'E4 lb_ci không ghi gì khi lỗi');
+  ck(Object.keys(SRV.rows).length===0 && SRV.marks.length===0, 'E3 không dòng nào được ghi, không lệnh đổi thẻ nào');
+  ck(await page.evaluate(function(){ var c=JSON.parse(localStorage.getItem('lb_ci')||'{}')['Bùi Doãn Quang']; return !c && !localStorage.getItem('lb_nsq') && !localStorage.getItem('lb_nst'); }), 'E4 lb_ci / hàng đợi / dấu "đã thử" không ghi gì khi máy chủ từ chối');
+  var n0=acts(SRV.wk,/checkin/).length;
   SRV.mode='down'; await page.click('#ns-go'); await page.waitForTimeout(3500);
   t=await page.textContent('#pill'); ck(/Chưa ghi được vắng/.test(t), 'E5 mất mạng → pill "Chưa ghi được vắng"', t);
-  ck(acts(SRV.gas,/noshow/).length===2, 'E6 mất mạng: KHÔNG tự gửi lại (2 lệnh = 2 lần bấm)', acts(SRV.gas,/noshow/).length);
+  ck(acts(SRV.wk,/checkin/).length===n0+1 && Object.keys(SRV.rows).length===0, 'E6 mất mạng: KHÔNG tự gửi lại (thêm đúng 1 lệnh cho 1 lần bấm)', acts(SRV.wk,/checkin/).length-n0);
   SRV.mode='lost'; await page.click('#ns-go'); await page.waitForTimeout(2500);
-  ck(acts(SRV.gas,/noshow/).length===3 && SRV.rows.B901DY && SRV.rows.B901DY.st==='Vắng' && !(await G(page,'#nsheet')).hidden, 'E7 máy chủ đã ghi nhưng trả lời rơi → app báo lỗi, cửa sổ còn mở');
-  SRV.mode='ok'; await page.click('#ns-go'); await page.waitForTimeout(1500);
+  ck(SRV.rows.B901DY && SRV.rows.B901DY.st==='Đã tập' && !(await G(page,'#nsheet')).hidden && SRV.marks.length===0, 'E7 Worker đã ghi dòng nhưng trả lời rơi → app báo lỗi, cửa sổ còn mở, chưa đổi thẻ');
+  SRV.mode='ok'; await page.click('#ns-go'); await page.waitForTimeout(1800);
   t=await page.evaluate(function(){ return [].map.call(document.querySelectorAll('#p-confirm .lines > div'), function(e){ return e.textContent; }); });
-  ck(acts(SRV.gas,/noshow/).length===4 && (await G(page,'#nsheet')).hidden && t[0]==='Buổi thứ 15 đã vắng' && t[1]==='Còn 9 buổi' && SRV.members[0].done===15, 'E8 bấm lại → máy chủ trả da_checkin + Vắng → coi như xong, KHÔNG ghi dòng thứ hai (done vẫn 15)', [t, SRV.members[0].done]);
+  ck((await G(page,'#nsheet')).hidden && t[0]==='Buổi thứ 15 đã vắng' && t[1]==='Còn 9 buổi' && SRV.members[0].done===15 && SRV.marks.length===1 && SRV.rows.B901DY.st==='Vắng', 'E8 bấm lại → Worker trả da_checkin; máy này vừa thử nên chỉ gửi đổi thẻ → dòng đó thành "Vắng", KHÔNG có dòng thứ hai (done vẫn 15)', [t, SRV.members[0].done, SRV.marks.length]);
   await a.ctx.close();
-  /* khách đã check-in (máy khác) → không ghi đè */
   reset(); a=await open(); page=a.page;
   await toPick(page); await page.click('#pk-list .row:has-text("Doãn Quang")'); await page.waitForTimeout(1200);
-  SRV.rows.B901DY={st:'Đã tập', at:'16:30'}; SRV.members[0].done=15; SRV.members[0].left=9;
+  SRV.rows.B901DY={st:'Đã tập', at:'16:30', by:'Quyết Hán', row:7}; SRV.members[0].done=15; SRV.members[0].left=9;
   await page.click('#cf-ns'); await page.waitForTimeout(500); await page.click('#ns-go'); await page.waitForTimeout(1500);
-  t=await page.textContent('#pill'); ck(/Khách đã check-in hôm nay/.test(t) && (await G(page,'#nsheet')).hidden && SRV.rows.B901DY.st==='Đã tập', 'E9 khách đã check-in ở máy khác → "Khách đã check-in hôm nay", đóng cửa sổ, dòng giữ "Đã tập"', t);
+  t=await page.textContent('#pill'); ck(/Khách đã check-in hôm nay/.test(t) && (await G(page,'#nsheet')).hidden && SRV.rows.B901DY.st==='Đã tập' && SRV.marks.length===0, 'E9 khách đã check-in thật ở máy khác → "Khách đã check-in hôm nay", KHÔNG gửi đổi thẻ, dòng giữ "Đã tập"', t);
   await a.ctx.close();
-  /* máy chủ cũ (chưa có lệnh) */
-  reset({mode:'old'}); a=await open(); page=a.page;
+  reset({mark:'old'}); a=await open(); page=a.page;
   await toPick(page); await page.click('#pk-list .row:has-text("Doãn Quang")'); await page.waitForTimeout(1200);
   await page.click('#cf-ns'); await page.waitForTimeout(500); await page.click('#ns-go'); await page.waitForTimeout(1500);
-  t=await page.textContent('#pill'); ck(/Chưa ghi được vắng/.test(t) && Object.keys(SRV.rows).length===0, 'E10 máy chủ chưa có lệnh (unknown_action) → báo lỗi, không ghi gì', t);
+  ck(SRV.rows.B901DY.st==='Đã tập' && await page.evaluate(function(){ return JSON.parse(localStorage.getItem('lb_nsq')||'[]').length===1 && /đã vắng/.test(document.querySelector('#p-confirm .lines .a').textContent); }), 'E10 Apps Script chưa có noshow_mark → buổi vẫn đã tính (dòng "Đã tập"), mục đổi thẻ nằm trong hàng đợi');
+  SRV.mark='ok'; await page.reload(); await page.waitForTimeout(1800);
+  if(await page.evaluate(function(){ return state.screen==='p-pin'; })){ for(var k2 of '1234') await page.click('#pin-pad button:has-text("'+k2+'")'); await page.waitForTimeout(1500); }
+  await page.waitForTimeout(1200);
+  ck(SRV.rows.B901DY.st==='Vắng' && await page.evaluate(function(){ return !localStorage.getItem('lb_nsq'); }), 'E11 mở lại app → hàng đợi tự gửi → dòng thành "Vắng"', [SRV.rows.B901DY, SRV.marks.length]);
+  await a.ctx.close();
+  reset({mark:'down'}); a=await open(); page=a.page;
+  await toPick(page); await page.click('#pk-list .row:has-text("Doãn Quang")'); await page.waitForTimeout(1200);
+  await page.click('#cf-ns'); await page.waitForTimeout(500); await page.click('#ns-go'); await page.waitForTimeout(1500);
+  ck(SRV.rows.B901DY.st==='Đã tập' && await page.evaluate(function(){ return JSON.parse(localStorage.getItem('lb_nsq')||'[]')[0].n>=1; }), 'E12 đổi thẻ mất mạng → giữ trong hàng đợi (đếm lần thử)');
+  SRV.mark='ok'; await page.evaluate(function(){ nsFlush(); }); await page.waitForTimeout(1200);
+  ck(SRV.rows.B901DY.st==='Vắng' && await page.evaluate(function(){ return !localStorage.getItem('lb_nsq'); }), 'E13 có mạng lại → gửi lại → "Vắng"');
+  await a.ctx.close();
+  reset({mark:'reject'}); a=await open(); page=a.page;
+  await toPick(page); await page.click('#pk-list .row:has-text("Doãn Quang")'); await page.waitForTimeout(1200);
+  await page.click('#cf-ns'); await page.waitForTimeout(500); await page.click('#ns-go'); await page.waitForTimeout(1800);
+  t=await page.textContent('#pill');
+  ck(/Chưa gắn được thẻ Vắng/.test(t) && SRV.rows.B901DY.st==='Đã tập' && await page.evaluate(function(){ var c=JSON.parse(localStorage.getItem('lb_ci'))['Bùi Doãn Quang']; return c.status==='ok' && !c.absent && !localStorage.getItem('lb_nsq') && /đã xong/.test(document.querySelector('#p-confirm .lines .a').textContent); }), 'E14 máy chủ từ chối đổi thẻ → pill "Chưa gắn được thẻ Vắng", máy bỏ nhãn vắng (dòng là "Đã tập": "Buổi thứ 15 đã xong")', t);
   await a.ctx.close();
 
   /* ============ S3 · 1:2 — frame D → E → F → buổi 1:1 ============ */
@@ -177,14 +215,14 @@ function box(b, x, y, w, h, tol){ return !!b && near(b.x,x,tol) && near(b.y,y,to
   ck((await page.textContent('#ns-line'))==='Xác nhận Minh Anh vắng buổi hôm nay.', 'E11 cửa sổ ghi đúng tên khách vừa bấm (Minh Anh)');
   b=await G(page,'#nsheet'); ck(box(b,0,637,393,215), 'E12 cửa sổ 0,637 393×215', b);
   await page.click('#ns-go'); await page.waitForTimeout(1500); await shot(page,'F-duo-one',300);
-  t=acts(SRV.gas,/noshow/); ck(t.length===1 && t[0].pid==='B903DY' && acts(SRV.wk,/checkin/).length===0, 'F1 một lệnh noshow_coach cho Minh Anh, chưa check-in ai', t);
+  t=SRV.marks; ck(t.length===1 && t[0].pid==='B903DY' && acts(SRV.wk,/checkin/).length===1 && acts(SRV.wk,/checkin/)[0].pid==='B903DY' && SRV.rows.B903DY.st==='Vắng' && !SRV.rows.B902DY, 'F1 một lệnh noshow_coach cho Minh Anh, chưa check-in ai', t);
   t=await page.evaluate(function(){ return [].map.call(document.querySelectorAll('#p-confirm .half'), function(h){ var f=h.querySelector('.fill.b'); return {vg:h.querySelector('.card').classList.contains('vg'), fill:getComputedStyle(f).backgroundColor, pill:!!h.querySelector('.nsb'), n:h.querySelector('.n').textContent, lines:[].map.call(h.querySelectorAll('.lines > div'), function(e){ return [e.textContent, getComputedStyle(e).color, Math.round(e.getBoundingClientRect().top)]; })}; }); });
   ck(t[0].vg && t[0].fill===RED && !t[0].pill && t[0].n==='15' && t[0].lines.length===2 && t[0].lines[0][0]==='Buổi thứ 15 đã vắng' && t[0].lines[0][1]===RED && t[0].lines[0][2]===230 && t[0].lines[1][0]==='Còn 9 buổi' && t[0].lines[1][1]===GRAY && t[0].lines[1][2]===256, 'F2 nửa trên: thẻ đỏ · không còn nút · "Buổi thứ 15 đã vắng" 230 · "Còn 9 buổi" 256 (Figma F)', t[0]);
   ck(!t[1].vg && t[1].pill && t[1].n==='4' && t[1].lines[0][0]==='Buổi thứ 4' && t[1].lines[1][0]==='Đã tập 3, còn 9 buổi', 'F3 nửa dưới giữ nguyên + còn nút No-show', t[1]);
   b=await G(page,'#cf-go'); ck(b.text==='Check-in Thành Long' && near(b.x+b.w,369) && near(b.w,209,2) && b.bg===ACID && !/off/.test(await page.getAttribute('#cf-go','class')), 'F4 nút chính "Check-in Thành Long" 160,776 209×48, bấm được', b);
   ck(!(await G(page,'#cf-back')).hidden, 'F5 còn nút ←');
   await page.click('#cf-go'); await page.waitForTimeout(1600); await shot(page,'F-session-11',300);
-  t=acts(SRV.wk,/checkin/); ck(t.length===1 && t[0].pid==='B902DY' && acts(SRV.gas,/checkin/).length===0, 'F6 check-in đúng MỘT người (Thành Long), không check-in người vắng', t.map(function(x){return x.pid}));
+  t=acts(SRV.wk,/checkin/).filter(function(x){ return !x.ns; }); ck(t.length===1 && t[0].pid==='B902DY' && acts(SRV.wk,/checkin/).length===2 && SRV.marks.length===1 && acts(SRV.gas,/checkin/).length===0, 'F6 check-in đúng MỘT người (Thành Long), không check-in người vắng', t.map(function(x){return x.pid}));
   t=await page.evaluate(function(){ var s=state.session; return s && {kind:s.kind, people:s.people.map(function(p){ return p.name; }), screen:state.screen, no:s.people[0].no}; });
   ck(t && t.kind==='1:1' && t.people.join()==='Phạm Thành Long' && t.screen==='p-plan' && t.no===4, 'F7 buổi tập 1:1 chỉ có Thành Long (buổi 4), sang "Bài tập hôm nay"', t);
   ck(SRV.rows.B903DY.st==='Vắng' && SRV.rows.B902DY.st==='Đã tập', 'F8 máy chủ: Minh Anh "Vắng" · Thành Long "Đã tập"');
@@ -201,7 +239,7 @@ function box(b, x, y, w, h, tol){ return !!b && near(b.x,x,tol) && near(b.y,y,to
   t=await page.evaluate(function(){ return [].map.call(document.querySelectorAll('#p-confirm .half'), function(h){ return [h.querySelector('.card').classList.contains('vg'), !!h.querySelector('.nsb'), h.querySelector('.lines .a').textContent, h.querySelector('.lines .b').textContent]; }); });
   ck(t[0][0] && t[1][0] && !t[0][1] && !t[1][1] && t[0][2]==='Buổi thứ 15 đã vắng' && t[1][2]==='Buổi thứ 4 đã vắng' && t[1][3]==='Còn 8 buổi', 'G2 hai nửa đỏ · "Buổi thứ 4 đã vắng" · "Còn 8 buổi" (Figma G)', t);
   b=await G(page,'#cf-go'); ck(box(b,222,776,147,48) && b.bg===PAPER && b.text==='Về trang chủ' && (await G(page,'#cf-back')).hidden, 'G3 chỉ còn "Về trang chủ" 222,776 147×48', b);
-  ck(acts(SRV.gas,/noshow/).length===2 && acts(SRV.wk,/checkin/).length===0 && acts(SRV.gas,/checkin/).length===0, 'G4 hai lệnh ghi vắng, không check-in nào');
+  ck(SRV.marks.length===2 && acts(SRV.wk,/checkin/).length===2 && acts(SRV.wk,/checkin/).every(function(x){ return x.ns===1; }) && SRV.rows.B903DY.st==='Vắng' && SRV.rows.B902DY.st==='Vắng' && acts(SRV.gas,/checkin/).length===0, 'G4 hai lệnh ghi vắng, không check-in nào');
   await page.click('#cf-go'); await page.waitForTimeout(900);
   ck(await page.evaluate(function(){ return state.screen==='p-home' && !state.session && !state.sel.length; }), 'G5 về trang chủ, không có buổi tập');
   await a.ctx.close();
@@ -223,8 +261,8 @@ function box(b, x, y, w, h, tol){ return !!b && near(b.x,x,tol) && near(b.y,y,to
   ck(await page.evaluate(function(){ return state.admin===true; }), 'AD0 vào chế độ Admin');
   await toPick(page); await page.click('#pk-list .row:has-text("Khách Lẻ")'); await page.waitForTimeout(1300);
   await page.click('#cf-ns'); await page.waitForTimeout(500); await page.click('#ns-go'); await page.waitForTimeout(1500); await shot(page,'AD-absent',200);
-  t=acts(SRV.gas,/noshow/); ck(t.length===1 && t[0].action==='adm_noshow' && t[0].apin==='7788' && !t[0].pin && t[0].pid==='B904DY', 'AD1 Admin gửi adm_noshow kèm apin (không PIN coach) cho khách của coach khác', t);
-  ck(acts(SRV.wk,/noshow/).length===0, 'AD2 Worker không nhận lệnh ghi vắng');
+  t=SRV.marks; ck(acts(SRV.wk,/checkin/).length===1 && acts(SRV.wk,/checkin/)[0].action==='adm_checkin' && acts(SRV.wk,/checkin/)[0].apin==='7788' && SRV.rows.B904DY.st==='Vắng' && t.length===1 && t[0].action==='adm_noshow_mark' && t[0].apin==='7788' && !t[0].pin && t[0].pid==='B904DY', 'AD1 Admin gửi adm_noshow kèm apin (không PIN coach) cho khách của coach khác', t);
+  ck(acts(SRV.gas,/noshow_coach|adm_noshow$|checkin/).length===0, 'AD2 không dùng lệnh ghi vắng chậm trên Apps Script');
   t=await page.evaluate(function(){ return [].map.call(document.querySelectorAll('#p-confirm .lines > div'), function(e){ return e.textContent; }); });
   ck(t[0]==='Buổi thứ 2 đã vắng' && t[1]==='Còn 10 buổi', 'AD3 màn sau khi ghi: "Buổi thứ 2 đã vắng" · "Còn 10 buổi"', t);
   await a.ctx.close();
@@ -238,7 +276,7 @@ function box(b, x, y, w, h, tol){ return !!b && near(b.x,x,tol) && near(b.y,y,to
   ck(t && t[0] && /VẮNG HÔM NAY · 09:10/.test(t[1]) && !t[2], 'X1 máy khác ghi vắng: dòng khoá + "VẮNG HÔM NAY · 09:10" (từ stats.absent, không có lb_ci)', t);
   await a.ctx.close();
   /* (b) máy này còn dữ liệu cũ → bấm Check-in → Worker trả da_checkin (có status Vắng) → không vào buổi */
-  reset({wkStatus:true}); a=await open(); page=a.page;
+  reset(); a=await open(); page=a.page;
   await toPick(page); await page.click('#pk-list .row:has-text("Doãn Quang")'); await page.waitForTimeout(1200);
   SRV.rows.B901DY={st:'Vắng', at:'09:10'}; SRV.members[0].done=15; SRV.members[0].left=9;
   await page.click('#cf-go'); await page.waitForTimeout(1800); await shot(page,'X-stale-checkin',200);
