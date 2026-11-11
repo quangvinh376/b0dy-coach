@@ -170,13 +170,17 @@ function statsApi_(body){
     for (var i = 0; i < vals.length; i++) {
       var r = vals[i], d = statsIso_(r[L.d], tz), name = String(r[L.n] || '').trim(), st = String(r[L.st] || '');
       if (!d || !name || statsCoachKey_(r[L.co]) !== key) continue;
-      if (st.indexOf('ã tập') < 0) continue;                       // chỉ buổi đã tập (cột K)
+      /* v2.14 (11/11/2026): "Vắng" (khách đặt lịch mà không đến) = buổi tính tiền như "Đã tập" — cùng luật file BA:
+         vào số buổi đã dạy (days · monthTotal) và hoa hồng (sess có v:1 · comMon). KHÔNG vào nhịp tập của khách
+         (perClient m · last · w8 · n28 — trang Tempo, "buổi tập gần nhất": chỉ buổi tập thật). absent = khách vắng HÔM NAY. */
+      var vg = lbIsAbsent_(st);
+      if (st.indexOf('ã tập') < 0 && !vg) continue;                // chỉ buổi đã tập / vắng (cột Trạng thái)
       var who = idKeyOf_(keyOf, idOfLog_(I, L.mr >= 0 ? r[L.mr] : '', L.q >= 0 ? r[L.q] : '', name), name);
       var pc = out.perClient[who] || (out.perClient[who] = { m: 0, last: '' });
-      if (d.slice(0, 7) === month) { out.days[d] = (out.days[d] || 0) + 1; out.monthTotal++; pc.m++; }
-      if (d < today && d > pc.last) pc.last = d;
-      statsPcAdd_(pc, d, ctx);
-      if (d >= cFrom && d <= today) raw.push({ d: d, t: statsSigned_(r[L.sig]), n: name, id: String(r[L.id] || '').trim(), co: String(r[L.co] || '').trim(), r: i });
+      if (d.slice(0, 7) === month) { out.days[d] = (out.days[d] || 0) + 1; out.monthTotal++; if (!vg) pc.m++; }
+      if (vg) { if (d === today) (out.absent || (out.absent = [])).push(who); }
+      else { if (d < today && d > pc.last) pc.last = d; statsPcAdd_(pc, d, ctx); }
+      if (d >= cFrom && d <= today) raw.push({ d: d, t: statsSigned_(r[L.sig]), n: name, id: String(r[L.id] || '').trim(), co: String(r[L.co] || '').trim(), r: i, v: vg ? 1 : 0 });
     }
   }
 
@@ -188,7 +192,8 @@ function statsApi_(body){
     raw.forEach(function (x) {
       var m = mem ? (mem.byId[x.id] || statsMemByName_(mem, x.n, key)) : null;
       var c = (m ? m.price : 0) * statsPctOf_(pct, x.co || coach, myPct);
-      sess.push({ d: x.d, t: x.t, n: x.n, c: Math.round(c), r: x.r });
+      var e1 = { d: x.d, t: x.t, n: x.n, c: Math.round(c), r: x.r }; if (x.v) e1.v = 1;
+      sess.push(e1);
       mon[x.d.slice(0, 7)] = (mon[x.d.slice(0, 7)] || 0) + c;
     });
     if (mem) mem.rows.forEach(function (m) {

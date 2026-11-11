@@ -92,7 +92,8 @@ function recalc() {
     r[MRC] = P; r[5] = P ? mr[P - 1][7] : ''; r[8] = P ? mr[P - 1][1] : ''; r[1] = name ? String(i - 3) : '';
     if (NEW) { r[DISP] = P ? mr[P - 1][20] : ''; r[KHC] = P ? mr[P - 1][23] : ''; }
   }
-  mr.forEach(function (x) { x[12] = log.g.slice(4).filter(function (r) { return r && r[8] === x[1] && r[11] === 'Đã tập'; }).length; x[13] = x[4] - x[12]; });
+  /* 11/11/2026: file BA đếm "Vắng" như "Đã tập" (MEMBERS!M = COUNTIFS Đã tập + COUNTIFS Vắng) */
+  mr.forEach(function (x) { x[12] = log.g.slice(4).filter(function (r) { return r && r[8] === x[1] && (r[11] === 'Đã tập' || r[11] === 'Vắng'); }).length; x[13] = x[4] - x[12]; });
   busy = false;
 }
 function fmt(d, tz, f) { var t = new RD(d.getTime() + 7 * 3600e3); function p(n) { return ('0' + n).slice(-2); }
@@ -211,6 +212,74 @@ r = C('lbCoach_', { pin: 'BBBB' });
 x = byName(r.members, 'Trùng Tên')[0];
 check(x && x.checked === true && x.pid === 'B069DY' && r.snapshot['Trùng Tên'] && r.snapshot['Trùng Tên'].measures[0].weight === 55, 'G2 sau đổi tên: vẫn đã tập hôm nay + hồ sơ (theo P / Q / S)', x);
 check(memRow('069')[12] === 1, 'G3 MEMBERS 069 đã tập vẫn 1 (không rơi buổi khi đổi tên)');
+
+console.log('\n== N. v2.14 — NO-SHOW: dòng "Vắng" (lbNoshow_ / admNoshow_) ==');
+build();
+var SIGN = function (rr) { return String(rr[14] == null ? '' : rr[14]); }, ST = function (rr) { return String(rr[11]); };
+check(C('lbNoshow_', { pin: 'SAI', name: 'Khách Một' }).error === 'sai_pin', 'N1 sai PIN → sai_pin');
+check(C('lbNoshow_', { pin: 'AAAA', name: 'Khách Một', ip: 'ngoai' }).error === 'wrong_ip' && today().length === 0, 'N2 ngoài phòng → wrong_ip, không ghi dòng nào');
+check(C('lbNoshow_', { pin: 'BBBB', name: 'Khách Một' }).error === 'khong_phai_khach_cua_ban' && today().length === 0, 'N3 khách của coach khác → khong_phai_khach_cua_ban, không ghi');
+check(C('lbNoshow_', { pin: 'AAAA' }).error === 'thieu_ten', 'N3b thiếu tên + pid → thieu_ten');
+var d0 = memRow('001')[12], l0 = memRow('001')[13];
+r = C('lbNoshow_', { pin: 'AAAA', name: 'Khách Một', pid: 'B001DY', key: 'Khách Một' });
+var t = today();
+check(r.ok && r.absent === true && /^\d\d:\d\d$/.test(r.at) && t.length === 1, 'N4 Quyết ghi vắng Khách Một → ok, absent, đúng MỘT dòng hôm nay', [r, t.length]);
+check(ST(t[0]) === 'V\u1eafng' && ST(t[0]).normalize('NFC') === ST(t[0]) && ST(t[0]).length === 4, 'N5 trạng thái = "Vắng" (NFC, 4 ký tự — đúng chữ công thức file BA)', ST(t[0]));
+check(/^app \d\d:\d\d · ký: Quyết Hán$/.test(SIGN(t[0])), 'N6 Ký điện tử "app HH:mm · ký: Quyết Hán"', SIGN(t[0]));
+check(t[0][2] instanceof RD && isoOf(t[0][2]) === TODAY && t[0][7] === 'Khách Một' && t[0][IN] === 'B001DY' && t[0][8] === '001' && t[0][5] === 'Quyết Hán', 'N7 ngày (chuỗi M/d/yyyy → ngày hôm nay) · tên · _makh B001DY → Mã HV 001 · Coach', t[0]);
+check(memRow('001')[12] === d0 + 1 && memRow('001')[13] === l0 - 1, 'N8 MEMBERS: Đã tập +1, Còn lại −1 (Vắng tính như Đã tập)', [d0, memRow('001')[12], l0, memRow('001')[13]]);
+check(r.member && r.member.done === d0 + 1 && r.member.left === l0 - 1 && r.member.pid === 'B001DY' && r.member.key === 'Khách Một', 'N9 member trả về: done / left sau buổi vắng', r.member);
+r = C('lbNoshow_', { pin: 'AAAA', name: 'Khách Một', pid: 'B001DY' });
+check(r.error === 'da_checkin' && r.status === 'V\u1eafng' && today().length === 1, 'N10 ghi vắng lần 2 → da_checkin + status Vắng, không thêm dòng', r);
+r = C('lbCheckin_', { pin: 'AAAA', name: 'Khách Một', pid: 'B001DY' });
+check(r.error === 'da_checkin' && r.status === 'V\u1eafng' && today().length === 1, 'N11 check-in sau khi đã vắng → da_checkin + status Vắng (không ghi đè, không thêm dòng)', r);
+r = C('lbCheckin_', { pin: 'AAAA', name: 'Trùng Tên', pid: 'B004DY' });
+check(r.ok && today().length === 2, 'N12 check-in khách khác vẫn bình thường');
+r = C('lbNoshow_', { pin: 'AAAA', name: 'Trùng Tên', pid: 'B004DY' });
+check(r.error === 'da_checkin' && r.status === 'Đã tập' && today().length === 2 && ST(today()[1]) === 'Đã tập', 'N13 ghi vắng khách ĐÃ check-in → da_checkin + status Đã tập, dòng giữ nguyên', r);
+r = C('lbCoach_', { pin: 'AAAA' });
+x = byName(r.members, 'Khách Một')[0];
+check(x && x.checked === true && x.absent === true && /^\d\d:\d\d$/.test(x.signed), 'N14 lbCoach_: khách vắng → checked + absent + giờ ký', x);
+x = byName(r.members, 'Trùng Tên')[0];
+check(x && x.checked === true && x.absent === undefined, 'N15 lbCoach_: khách đã tập → checked, không absent', x);
+var s0 = C('statsApi_', { pin: 'AAAA', month: '2026-10' });
+check(s0.ok && s0.days[TODAY] === 2 && s0.absent && s0.absent.join() === 'Khách Một', 'N16 stats: hôm nay 2 buổi (1 tập + 1 vắng) · absent = [Khách Một]', [s0.days, s0.absent]);
+check(s0.perClient['Khách Một'] && s0.perClient['Khách Một'].m === 0 && !s0.perClient['Khách Một'].n28 && s0.perClient['Khách Một'].lastAll === '2026-06-20' && s0.perClient['Khách Một'].last === '2026-06-20', 'N17 stats: buổi vắng KHÔNG vào nhịp tập của khách (m 0 · không n28 · lastAll / last vẫn là buổi tập thật 20/06)', s0.perClient['Khách Một']);
+x = (s0.sess || []).filter(function (e) { return e.d === TODAY; });
+check(x.length === 2 && x.filter(function (e) { return e.v === 1; }).length === 1 && x.filter(function (e) { return e.v === 1; })[0].n === 'Khách Một' && x.every(function (e) { return e.c >= 0; }) && x.filter(function (e) { return !e.v; })[0].v === undefined, 'N18 stats: danh sách hoa hồng có buổi vắng (v:1), buổi tập không có cờ v', x);
+/* Admin */
+r = C('admNoshow_', { apin: 'SAI', name: 'Khách Hai' });
+check(r.error === 'sai_pin', 'N19 Admin sai PIN → sai_pin');
+r = C('admNoshow_', { apin: 'ZZZZ', name: 'Không Có' });
+check(r.error === 'khong_thay_khach', 'N20 Admin khách lạ → khong_thay_khach', r);
+r = C('admNoshow_', { apin: 'ZZZZ', name: 'Trùng Cùng Coach', pid: 'B071DY', ip: 'ngoai' });
+t = today();
+check(r.ok && r.absent === true && r.coach === 'Quyết Hán' && t.length === 3 && ST(t[2]) === 'V\u1eafng' && t[2][IN] === 'B071DY' && /^app \d\d:\d\d · ký: Admin$/.test(SIGN(t[2])), 'N21 Admin ghi vắng theo pid (hai người trùng tên) → đúng người B071DY, ký Admin, không khoá IP', [r, t[2]]);
+check(memRow('071')[12] === 1 && memRow('070')[12] === 0, 'N22 chỉ 071 bị trừ buổi, 070 (trùng tên) không đổi');
+r = C('admNoshow_', { apin: 'ZZZZ', name: 'Trùng Cùng Coach', pid: 'B071DY' });
+check(r.error === 'da_checkin' && r.status === 'V\u1eafng', 'N23 Admin ghi vắng lần 2 → da_checkin', r);
+r = C('admCheckin_', { apin: 'ZZZZ', name: 'Trùng Cùng Coach', pid: 'B071DY' });
+check(r.error === 'da_checkin' && r.status === 'V\u1eafng' && today().length === 3, 'N24 Admin check-in sau khi vắng → da_checkin + status Vắng', r);
+r = C('admData_', { apin: 'ZZZZ' });
+x = r.members.filter(function (m) { return m.pid === 'B071DY'; })[0];
+check(x && x.checked === true && x.absent === true && r.members.filter(function (m) { return m.absent; }).length === 2, 'N25 adm_data: 2 khách absent (001 · 071), khách đã tập không absent', r.members.filter(function (m) { return m.absent; }).map(function (m) { return m.pid; }));
+r = C('admStats_', { apin: 'ZZZZ', month: '2026-10' });
+check(r.ok && r.days[TODAY] === 3 && r.absent && r.absent.slice().sort().join() === 'B071DY,Khách Một' && (r.sess || []).filter(function (e) { return e.d === TODAY && e.v === 1; }).length === 2, 'N26 adm_stats: hôm nay 3 buổi · 2 vắng (v:1) · absent theo khoá app', [r.days, r.absent]);
+/* dòng Hủy không chặn; dòng vắng bị xoá (chủ studio tha) → lại ghi được */
+build();
+var LG = BA.getSheetByName('SESSION LOG');
+(function () { var rr = []; for (var i = 0; i < 19; i++) rr.push(''); rr[2] = D(TODAY); rr[7] = 'Khách Một'; rr[11] = 'Hủy'; rr[14] = 'kiosk 08:00 · hủy: Quyết Hán'; rr[IN] = 'B001DY'; LG.g.push(rr); })();
+r = C('lbNoshow_', { pin: 'AAAA', name: 'Khách Một', pid: 'B001DY' });
+check(r.ok && today().length === 2 && ST(today()[1]) === 'V\u1eafng', 'N27 dòng Hủy hôm nay không chặn ghi vắng', r);
+LG.g.splice(LG.g.length - 1, 1);                                     /* chủ studio xoá cả dòng vắng */
+check(memRow('001')[12] === d0, 'N28 xoá dòng vắng → Đã tập về như cũ', [d0, memRow('001')[12]]);
+r = C('lbCoach_', { pin: 'AAAA' });
+x = byName(r.members, 'Khách Một')[0];
+check(x && x.absent === undefined, 'N29 xoá dòng vắng → lbCoach_ không còn absent', x);
+r = C('lbCheckin_', { pin: 'AAAA', name: 'Khách Một', pid: 'B001DY' });
+check(r.ok && ST(today().slice(-1)[0]) === 'Đã tập', 'N30 xoá dòng vắng → check-in lại bình thường (Đã tập)', r);
+/* check-in thường không đổi trạng thái ghi */
+check(today().filter(function (rr) { return ST(rr) !== 'Đã tập' && ST(rr) !== 'Hủy'; }).length === 0, 'N31 lbCheckin_ vẫn ghi đúng "Đã tập"');
 
 check(!ALL.some(function (j) { return JSON.stringify(j).indexOf('090000') >= 0; }), 'H1 ' + ALL.length + ' phản hồi không chứa SĐT');
 console.log('\n' + pass + ' PASS, ' + fail + ' FAIL');

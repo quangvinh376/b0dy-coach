@@ -205,3 +205,27 @@ Tách để phân loại dữ liệu: kiosk dùng cho khách không ghi buổi t
 - Chỗ đọc: `statsSigned_` (Stats.gs, giờ ký ở trang Hoa hồng / Doanh thu) nhận `app` hoặc `kiosk`; `lbSignedToday_` · Admin.gs · Worker chỉ đọc `HH:mm` nên không phụ thuộc chữ đầu. Công thức file BA, card KPI Discord, trang đặt lịch không đọc cột này (rà 01/11).
 - Thêm nguồn mới: sửa cả `statsSigned_`.
 - Test: `test/gas_stats.js` (dòng `kiosk 15:01 · duyệt`) · `GAS_CODE=… node test/gas_admin.js` mục 8 · Worker `test_v12.mjs` (doc dự án `claude/b0dy-kiosk-worker-v12.md`).
+
+## 12. No-show: dòng "Vắng" — `Logbook.gs` v2.14 · `Admin.gs` · `Stats.gs` (11/11/2026)
+
+Chủ studio 11/11: khách đặt lịch mà không đến → coach bấm **No-show** trên app → buổi hôm đó ghi lên SESSION LOG với trạng thái **"Vắng"** và **tính như buổi đã tập** (trừ buổi, có doanh thu, có hoa hồng). Cuối tháng chủ studio xem thủ công: khách tập chăm thì **xoá cả dòng** "Vắng" đó để trả lại buổi (chuột phải số hàng → Xoá hàng; không bấm Delete trên ô).
+
+Thêm 2 case trong `api_()` của `Code.gs`:
+
+```js
+case 'noshow_coach': out = lbNoshow_(p);  break;
+case 'adm_noshow':   out = admNoshow_(p); break;
+```
+
+| Lệnh | Ai | Khoá IP | Ghi |
+|---|---|---|---|
+| `noshow_coach` `{pin, name, pid, key, ip}` | coach, khách phải thuộc coach | có (như `checkin_coach`) | ngày (chuỗi `M/d/yyyy`) · tên · **"Vắng"** · `app HH:mm · ký: <coach>` · `_makh` |
+| `adm_noshow` `{apin, name, pid, key}` | Admin, mọi khách | không | như trên, `· ký: Admin` |
+
+- Cùng đường ghi với check-in (`idCheckinWrite_(I, P, tag, st)`): khoá `LockService`, dòng trống đầu tiên, đọc lại chính dòng vừa ghi. **Chặn trùng theo NGƯỜI trong ngày** không đổi: đã có dòng hôm nay (trừ "Hủy") → `da_checkin` kèm `status` của dòng đó. App: `status` "Vắng" = lần trước đã ghi (coi như xong); khác = khách đã check-in (không ghi đè). `checkin_coach` gặp dòng "Vắng" cũng trả `da_checkin` + `status` → app không mở buổi tập.
+- Trả về `{ok, row, member, coach, at, absent:true}` (`member` = dòng gói sau khi tính buổi vắng với coach; Admin = trước lượt này, app tự cộng 1 — như check-in).
+- `coach` / `adm_data`: khách có dòng "Vắng" hôm nay thêm `absent:true` (cùng `checked` + `signed`). Worker `b0dy-kiosk-api` v12 chưa gửi cờ này → app lấy từ `stats.absent`.
+- `stats` / `adm_stats`: dòng "Vắng" **vào** `days` · `monthTotal` (số buổi đã dạy) và `sess` (cờ `v:1`) · `comMon` (hoa hồng / doanh thu) — khớp file BA; **không vào** `perClient` `m` · `last` · `w8` · `n28` · `lastAll` (nhịp tập / Tempo / "buổi tập gần nhất" chỉ tính buổi tập thật). Thêm `absent: [khoá app…]` = khách vắng hôm nay.
+- File BA (11/11): mọi công thức lọc "Đã tập" trên SESSION LOG nay cộng thêm "Vắng" (MEMBERS Đã tập / Ngày kết thúc · P&L · COM · CHART · CAPACITY · DASHBOARD · 🚂 1 · 🚂 2). `'🚂 2'!D7` (đếm Huỷ + Vắng) giữ nguyên.
+- Test: `node test/gas_identity.js` mục N (32 ca) · `node test/noshow.js` (app, máy chủ giả).
+

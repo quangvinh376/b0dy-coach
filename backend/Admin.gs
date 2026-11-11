@@ -8,6 +8,7 @@
 
      case 'adm_data':    out = admData_(p);    break;
      case 'adm_checkin': out = admCheckin_(p); break;
+     case 'adm_noshow':  out = admNoshow_(p);  break;   (v2.14 · 11/11/2026 — dòng "Vắng")
      case 'adm_log':     out = admLog_(p);     break;
      case 'adm_stats':   out = admStats_(p);   break;
      case 'iplist':      out = admIpList_(p);  break;
@@ -103,7 +104,7 @@ function admLogB_() {
 }
 
 /* SESSION LOG hôm nay → {pid: 'HH:mm'} — cùng kết quả lbSignedToday_ nhưng chỉ đọc cột ngày + khối dòng hôm nay */
-function admSignedToday_(ix, I) {
+function admSignedToday_(ix, I, abs) {
   var out = {};
   try {
     if (!ix || ix.last < ix.R1) return out;
@@ -124,6 +125,7 @@ function admSignedToday_(ix, I) {
       var P = idOfLog_(I, L.mr >= 0 ? v[L.mr] : '', L.q >= 0 ? v[L.q] : '', name); if (!P) continue;
       var m = String(v[L.sig] || '').match(/(\d{1,2}):(\d{2})/);                          /* Ký điện tử */
       out[P.pid] = m ? (('0' + m[1]).slice(-2) + ':' + m[2]) : '';
+      if (abs) { if (L.st >= 0 && lbIsAbsent_(v[L.st])) abs[P.pid] = 1; else delete abs[P.pid]; }   /* v2.14: dòng "Vắng" hôm nay */
     }
   } catch (e) {}
   return out;
@@ -141,8 +143,8 @@ function admData_(p) {
   if (!mem || !mem.ok) return { ok: false, error: (mem && mem.error) || 'members_failed' };
   var keyOf = idKeys_(mem.members);                                   /* v2.12: pid + key (trùng tên → pid) */
   var snap = lbSnapshot_(lbReadAll_(), I, keyOf); T.lap('snapshot');
-  var sg = admSignedToday_(admLogB_(), I); T.lap('signed');
-  mem.members.forEach(function (m) { var t = m._P ? sg[m._P.pid] : undefined; if (t !== undefined) { m.checked = true; m.signed = t; } });
+  var ab = {}, sg = admSignedToday_(admLogB_(), I, ab); T.lap('signed');
+  mem.members.forEach(function (m) { var t = m._P ? sg[m._P.pid] : undefined; if (t !== undefined) { m.checked = true; m.signed = t; if (ab[m._P.pid]) m.absent = true; } });
   var lib = lbLibrary_(); T.lap('library');
   T.done('data');
   return { ok: true, coach: ADM_NAME, admin: true, members: mem.members, snapshot: snap, library: lib,
@@ -177,6 +179,30 @@ function admCheckin_(p) {
   if (me) { me.pid = f.P.pid; if (p.key) me.key = String(p.key); }
   T.done('checkin');
   return { ok: true, row: w.row, member: me, coach: f.P.owner, by: ADM_NAME, at: w.at };
+}
+
+/* =====================================================================
+   action 'adm_noshow' (v2.14) — Admin ghi khách vắng: MỘT dòng SESSION LOG "Vắng" · "app HH:mm · ký: Admin",
+   mọi khách, không khoá IP. Cùng đường ghi + chặn trùng với admCheckin_ (idCheckinWrite_), chỉ khác trạng thái.
+   KHÔNG BAO GIỜ auto-retry lệnh này từ client.
+   ===================================================================== */
+function admNoshow_(p) {
+  if (!adminOk_(p)) return { ok: false, error: 'sai_pin' };
+  var name = String(p.name || '').trim();
+  if (!name && !p.pid) return { ok: false, error: 'thieu_ten' };
+  var T = admT_();
+  var mr = admMemRead_(); T.lap('members');
+  if (!mr || !mr.ok) return { ok: false, error: (mr && mr.error) || 'members_failed' };
+  var I = idRead_(), f = idFind_(I, p);
+  if (!f.P) return { ok: false, error: f.n > 1 ? 'trung_ten' : 'khong_thay_khach' };
+  var w = idCheckinWrite_(I, f.P, ' · ký: ' + ADM_NAME, LB_ST_ABSENT); T.lap('write');
+  if (!w.ok) { T.done('noshow'); return w; }
+  var me = null;
+  var mm = admMembers_(false, mr, I);                                  /* số buổi TRƯỚC lượt này (như admCheckin_) — client tự cộng 1 */
+  if (mm && mm.ok) mm.members.forEach(function (x) { if (x._P === f.P) me = x; });
+  if (me) { me.pid = f.P.pid; if (p.key) me.key = String(p.key); }
+  T.done('noshow');
+  return { ok: true, row: w.row, member: me, coach: f.P.owner, by: ADM_NAME, at: w.at, absent: true };
 }
 
 /* =====================================================================
@@ -255,13 +281,14 @@ function admStats_(p) {
     for (var i = 0; i < vals.length; i++) {
       var r = vals[i], d = statsIso_(r[L.d], tz), name = String(r[L.n] || '').trim(), st = String(r[L.st] || '');
       if (!d || !name) continue;
-      if (st.indexOf('ã tập') < 0) continue;
+      var vg = lbIsAbsent_(st);                                        /* v2.14: "Vắng" = buổi tính tiền như "Đã tập" (file BA 11/11) */
+      if (st.indexOf('ã tập') < 0 && !vg) continue;
       var who = idKeyOf_(keyOf, idOfLog_(I, L.mr >= 0 ? r[L.mr] : '', L.q >= 0 ? r[L.q] : '', name), name);
       var pc = out.perClient[who] || (out.perClient[who] = { m: 0, last: '' });
-      if (d.slice(0, 7) === month) { out.days[d] = (out.days[d] || 0) + 1; out.monthTotal++; pc.m++; }
-      if (d < today && d > pc.last) pc.last = d;
-      statsPcAdd_(pc, d, ctx);
-      if (d >= cFrom && d <= today) raw.push({ d: d, t: statsSigned_(r[L.sig]), n: name, id: String(r[L.id] || '').trim(), co: String(r[L.co] || '').trim(), r: i });
+      if (d.slice(0, 7) === month) { out.days[d] = (out.days[d] || 0) + 1; out.monthTotal++; if (!vg) pc.m++; }
+      if (vg) { if (d === today) (out.absent || (out.absent = [])).push(who); }
+      else { if (d < today && d > pc.last) pc.last = d; statsPcAdd_(pc, d, ctx); }   /* nhịp tập (Tempo) · buổi gần nhất: chỉ buổi tập THẬT */
+      if (d >= cFrom && d <= today) raw.push({ d: d, t: statsSigned_(r[L.sig]), n: name, id: String(r[L.id] || '').trim(), co: String(r[L.co] || '').trim(), r: i, v: vg ? 1 : 0 });
     }
   }
   try {                                                               /* v2.7: buổi/tuần đăng ký (MEMBERS) mọi khách */
@@ -272,7 +299,8 @@ function admStats_(p) {
     var sessA = [], monA = {}; monA[statsPrevMonth_(month)] = 0; monA[month] = 0;
     raw.forEach(function (x) {
       var m = memA ? (memA.byId[x.id] || statsMemByName_(memA, x.n, statsCoachKey_(x.co))) : null, c = m ? m.price : 0;
-      sessA.push({ d: x.d, t: x.t, n: x.n, c: Math.round(c), r: x.r });
+      var eA = { d: x.d, t: x.t, n: x.n, c: Math.round(c), r: x.r }; if (x.v) eA.v = 1;
+      sessA.push(eA);
       monA[x.d.slice(0, 7)] = (monA[x.d.slice(0, 7)] || 0) + c;
     });
     sessA.sort(function (a, b) { return a.d < b.d ? -1 : a.d > b.d ? 1 : a.r - b.r; });

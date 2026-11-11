@@ -6,6 +6,7 @@
      case 'coach':         out = lbCoach_(p);   break;
      case 'checkin_coach': out = lbCheckin_(p); break;
      case 'log':           out = lbLog_(p);     break;
+     case 'noshow_coach':  out = lbNoshow_(p);  break;   (v2.14 · 11/11/2026)
 
    Dữ liệu cá nhân ghi vào file "[B0DY Studio] Customer database",
    sheet "Khách của <Coach>", 1 dòng = 1 sự kiện (append-only, có id
@@ -20,12 +21,17 @@
    lấy từ MEMBERS "_kh" (sheet tính) khi có — cùng luật Worker v11. README mục 10.
    Người = mọi dòng MEMBERS cùng SĐT; SESSION LOG cột Q "Mã KH" (ghi lúc check-in),
    Customer database cột S "Mã KH" (ghi kèm từng sự kiện). README mục 10.
+   v2.14 (11/11/2026): NO-SHOW — action 'noshow_coach' ghi MỘT dòng SESSION LOG trạng thái "Vắng" (khách đặt lịch mà
+   không đến). File BA tính "Vắng" y như "Đã tập" (trừ buổi · doanh thu · hoa hồng); muốn tha thì chủ studio xoá cả dòng.
+   Cùng luật check-in: khoá IP phòng, chặn trùng theo NGƯỜI trong ngày, không bao giờ tự gửi lại. README mục 11.
    ===================================================================== */
 var LB_DB_ID  = '19iWnTT5eWFKCJ9Mnzuv_pcF1MMH4XGnx60Uc0OXMmeM';
 var LB_PREFIX = 'Khách của ';
 var LB_LIB    = 'Bài tập';
 var LB_TZ     = 'Asia/Ho_Chi_Minh';
 var LB_HEAD   = ['id','Ghi lúc','Ngày','Khách','Buổi #','Loại','Buổi tập','Bài tập','Set #','KG','REP','Đạt','Bài chính','Chỉ số','Giá trị','Form','Ghi chú','Coach','Mã KH'];
+var LB_ST_ABSENT = 'V\u1eafng';   /* "Vắng" (NFC) — đúng chữ trong danh sách chọn cột Trạng thái + công thức file BA */
+function lbIsAbsent_(st) { return lbNorm_(st) === 'vang'; }
 var LB_W      = LB_HEAD.length; /* v2.12: 19 cột A..S (S = Mã KH của người tại ngày sự kiện) */
 
 /* ---------- coach theo PIN: đọc thẳng Script Property COACH_PINS ---------- */
@@ -371,17 +377,18 @@ function lbCoach_(p) {
   var keyOf = idKeys_(mine);
   var snap = lbSnapshot_(lbReadAll_(), I, keyOf);
   /* đã check-in hôm nay (bất kỳ thiết bị/kiosk nào) → checked + giờ ký — chỉ khi người ĐANG thuộc coach này (v2.11) */
-  var sg = lbSignedToday_(I);
+  var ab = {}, sg = lbSignedToday_(I, ab);
   mine.forEach(function (m) {
     var P = m._P, t = P ? sg[P.pid] : undefined;
-    if (t !== undefined && lbNorm_(P.owner) === cn) { m.checked = true; m.signed = t; }
+    if (t !== undefined && lbNorm_(P.owner) === cn) { m.checked = true; m.signed = t; if (ab[P.pid]) m.absent = true; }   /* v2.14: dòng hôm nay là "Vắng" */
   });
   return { ok: true, coach: coach, members: mine, snapshot: snap, library: lbLibrary_(), today: lbToday_(),
            server: Utilities.formatDate(new Date(), LB_TZ, 'yyyy-MM-dd HH:mm') };
 }
 
-/* SESSION LOG hôm nay → {pid: 'HH:mm'} (giờ lấy từ cột "Ký điện tử" "app HH:MM · ký: …", không có thì ''). Lỗi → {} */
-function lbSignedToday_(I) {
+/* SESSION LOG hôm nay → {pid: 'HH:mm'} (giờ lấy từ cột "Ký điện tử" "app HH:MM · ký: …", không có thì ''). Lỗi → {}
+   v2.14: abs (tuỳ chọn) nhận {pid: 1} cho người có dòng "Vắng" hôm nay. */
+function lbSignedToday_(I, abs) {
   try {
     var ss = chkSS_(), sh = ss.getSheetByName('SESSION LOG'); if (!sh) return {};
     I = I || idRead_(ss);
@@ -396,6 +403,7 @@ function lbSignedToday_(I) {
       var P = idOfLog_(I, L.mr >= 0 ? v[i][L.mr] : '', L.q >= 0 ? v[i][L.q] : '', name); if (!P) continue;
       var m = String(v[i][L.sig] || '').match(/(\d{1,2}):(\d{2})/);      /* Ký điện tử */
       out[P.pid] = m ? (('0' + m[1]).slice(-2) + ':' + m[2]) : '';
+      if (abs) { if (L.st >= 0 && lbIsAbsent_(v[i][L.st])) abs[P.pid] = 1; else delete abs[P.pid]; }
     }
     return out;
   } catch (e) { return {}; }
@@ -405,9 +413,12 @@ function lbSignedToday_(I) {
    v2.12 — ghi MỘT dòng check-in (đã ký) cho người P: ngày (CHUỖI M/d/yyyy) · tên (như MEMBERS) · "Đã tập" ·
    "app HH:mm<tag>" · cột Q "Mã KH" (gói hiệu lực hôm nay). Chặn trùng theo NGƯỜI (dòng Hủy coi như chưa).
    Dùng chung cho lbCheckin_ (coach) và admCheckin_ (Admin). Ghi xong đọc lại chính dòng đó.
+   v2.14: st (tuỳ chọn) = trạng thái ghi — mặc định "Đã tập"; lbNoshow_ / admNoshow_ truyền "Vắng". Chặn trùng không đổi:
+   người đã có dòng hôm nay (Đã tập / Vắng / Chờ xác nhận) → da_checkin kèm status của dòng đó.
    ===================================================================== */
-function idCheckinWrite_(I, P, tag) {
+function idCheckinWrite_(I, P, tag, st) {
   chkInit_();
+  st = st || CHECKIN.ST_OK;
   var today = Utilities.formatDate(new Date(), CHECKIN.TZ, 'yyyy-MM-dd');
   var code = idCodeAt_(P, today), row0 = code ? I.byCode[code] : null, name = row0 ? row0.name : P.name;
   var lock = LockService.getScriptLock();
@@ -435,12 +446,12 @@ function idCheckinWrite_(I, P, tag) {
     /* Ghi dạng chuỗi M/d/yyyy để Sheets (locale US) tự parse thành ngày — giống nhập tay, KHÔNG setValue(Date) */
     log.getRange(firstEmpty, CHECKIN.COL_DATE).setValue(Utilities.formatDate(now, CHECKIN.TZ, 'M/d/yyyy'));
     log.getRange(firstEmpty, CHECKIN.COL_NAME).setValue(name);
-    log.getRange(firstEmpty, CHECKIN.COL_STATUS).setValue(CHECKIN.ST_OK);
+    log.getRange(firstEmpty, CHECKIN.COL_STATUS).setValue(st);
     log.getRange(firstEmpty, CHECKIN.COL_NOTE).setValue('app ' + hm + tag);
     if (L.q >= 0) log.getRange(firstEmpty, L.q + 1).setValue(code);
     SpreadsheetApp.flush();
     var back = log.getRange(firstEmpty, 1, 1, W).getValues()[0];
-    if (String(back[CHECKIN.COL_NAME - 1]).trim() !== name || String(back[CHECKIN.COL_STATUS - 1]).trim() !== CHECKIN.ST_OK) {
+    if (String(back[CHECKIN.COL_NAME - 1]).trim() !== name || String(back[CHECKIN.COL_STATUS - 1]).trim() !== st) {
       return { ok: false, error: 'dong_bi_chiem', row: firstEmpty };     /* máy khác ghi đè đúng lúc — client báo lỗi, thử lại sẽ chặn trùng */
     }
     return { ok: true, row: firstEmpty, at: hm, code: code, mrow: row0 ? row0.mrow : 0, name: name };
@@ -474,6 +485,31 @@ function lbCheckin_(p) {
   try { var mem2 = lbMembers_(true); if (mem2 && mem2.ok) mem2.members.forEach(function (x) { if (w.mrow ? x._r === w.mrow : x.name === w.name) me = x; }); } catch (e) {}
   if (me) { me.pid = f.P.pid; if (p.key) me.key = String(p.key); }
   return { ok: true, row: w.row, member: me, coach: coach, at: w.at };
+}
+
+/* =====================================================================
+   action 'noshow_coach' (v2.14) — khách đặt lịch mà không đến: ghi MỘT dòng SESSION LOG "Vắng" + ký PIN coach.
+   Y hệt lbCheckin_ (khoá IP phòng, khách phải thuộc coach, chặn trùng theo NGƯỜI trong ngày), chỉ khác trạng thái.
+   Người đã có dòng hôm nay → da_checkin + status của dòng đó (app: "Vắng" = đã ghi rồi; khác = đã check-in, không ghi đè).
+   KHÔNG BAO GIỜ auto-retry lệnh này từ client.
+   ===================================================================== */
+function lbNoshow_(p) {
+  var coach = lbCoachByPin_(p && p.pin);
+  if (!coach) return { ok: false, error: 'sai_pin' };
+  if (!ipOk_(p)) return { ok: false, error: 'wrong_ip' };
+  var name = String(p.name || '').trim();
+  if (!name && !p.pid) return { ok: false, error: 'thieu_ten' };
+  var I = idRead_(), cn = lbNorm_(coach);
+  var f = idFind_(I, p, function (X) { return lbNorm_(X.owner) === cn; });
+  if (!f.P) return { ok: false, error: f.n > 1 ? 'trung_ten' : 'khong_phai_khach_cua_ban' };
+  if (lbNorm_(f.P.owner) !== cn) return { ok: false, error: 'khong_phai_khach_cua_ban' };
+  var w = idCheckinWrite_(I, f.P, ' · ký: ' + coach, LB_ST_ABSENT);
+  if (!w.ok) return w;
+  idReset_();
+  var me = null;
+  try { var mem2 = lbMembers_(true); if (mem2 && mem2.ok) mem2.members.forEach(function (x) { if (w.mrow ? x._r === w.mrow : x.name === w.name) me = x; }); } catch (e) {}
+  if (me) { me.pid = f.P.pid; if (p.key) me.key = String(p.key); }
+  return { ok: true, row: w.row, member: me, coach: coach, at: w.at, absent: true };
 }
 
 /* =====================================================================
