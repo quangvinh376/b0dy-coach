@@ -295,6 +295,7 @@
   <div class="body" id="cf-body"></div>
   <div class="nav">
     <button class="ghost" id="cf-back" onclick="go('p-pick','back')" aria-label="Quay lại"><svg class="ic s24"><use href="#i-back"/></svg></button>
+    <button class="cta ns" id="cf-ns" onclick="nsOpen()" hidden>No-show</button>
     <button class="cta" id="cf-go" onclick="doCheckin()">Check-in</button>
   </div>
 </section>
@@ -343,6 +344,16 @@
   <div class="search g"><svg class="ic"><use href="#i-search"/></svg><input id="cs-q" type="search" placeholder="Tìm khách" autocomplete="off" oninput="renderClientSheet(false)"></div>
   <div class="scroll list ex" id="cs-list"></div>
   <div class="foot"><button class="cta paper" id="cs-go" onclick="closeClientSheet()">Đóng</button></div>
+</div>
+
+<!-- v2.22.0 window "Khách không đến?" (Figma 1915:306 · 1:2 1921:276): xác nhận ghi buổi hôm nay của MỘT khách là "Vắng".
+     Đóng = display:none (hidden) — nút đỏ không nằm sẵn ở mép dưới màn (luật Safari 26). -->
+<div class="dimmer" id="ns-dim" onclick="nsClose()" hidden></div>
+<div class="sheet ns" id="nsheet" role="dialog" aria-modal="true" aria-labelledby="ns-tt" hidden>
+  <div class="handle" id="ns-handle"><i></i></div>
+  <div class="nst" id="ns-tt">Khách không đến?</div>
+  <div class="nsl" id="ns-line"></div>
+  <button class="cta red" id="ns-go" onclick="nsConfirm()">Xác nhận</button>
 </div>
 
 <!-- ================= 5–9 · VÒNG LẶP SET ================= -->

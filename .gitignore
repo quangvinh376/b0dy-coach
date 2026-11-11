@@ -13,3 +13,5 @@ gas_live/
 lab/
 test/out_*.png
 test/out_sell/
+test/out_ns/
+test/out_rsp/
