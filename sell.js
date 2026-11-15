@@ -59,6 +59,7 @@ var SVE=(function(){
   function vnd(v){ return String(Math.round(v)).replace(/\B(?=(\d{3})+(?!\d))/g,'.'); }
   function tr(v){ return String(Math.round(v/1000)/1000).replace('.',','); }            /* triệu, đủ tới nghìn (chủ studio 14/10 — rà công thức): 7.200.000 → 7,2 · 5.905.000 → 5,905
                                                                                           (mọi số tiền của luồng Bán đều tròn nghìn → luôn đúng tuyệt đối; bản cũ làm tròn 10.000 ₫: 5,91) */
+  function ty(v){ return String(Math.round(v/1000000)/1000).replace('.',','); }   /* tỷ, đủ tới triệu: 1.500.000.000 → 1,5 */
   function pctTxt(f){ return String(f/1000).replace('.',','); }                          /* 1815 → 1,815 */
   /* gói khớp nguyện vọng: mọi tổ hợp buổi/tuần × số tháng (1 tháng = 4 tuần) trong khoảng, làm tròn lên gói có sẵn, trần 72 */
   function match(f0,f1,m0,m1){
@@ -92,6 +93,30 @@ var SVE=(function(){
   function split(total,n){ if(!(n>1)) return [total]; var b=Math.floor(total/n/1000)*1000, a=[total-b*(n-1)]; for(var i=1;i<n;i++) a.push(b); return a; }
   /* số quẹt để phòng nhận đủ V: T = ⌈V × 100000 ÷ (100000 − f)⌉ (số nguyên, không sai số dấu phẩy động) */
   function gross(v,f){ var num=v*100000, den=100000-f, q=Math.floor(num/den); while(q*den<num) q++; while((q-1)*den>=num) q--; return q; }
+  /* ---------- CÔNG CỤ TÍNH (v2.25.0 · 15/11) — vào từ chỗ trống đối diện nút ⌂ ở màn đầu luồng bán, chỉ Admin ----------
+     Ba công cụ dùng lại đúng số liệu của luồng bán: thời hạn hợp đồng · phí quẹt thẻ (CARDS) · tài khoản nhận (lệnh 'bank'). */
+  function p2(n){ return ('0'+n).slice(-2); }
+  /* hết hạn hợp đồng = ngày bắt đầu + số tuần × 7, cùng thứ trong tuần (chủ studio chốt 15/11). Trả null nếu ngày không có thật
+     (31.02) — tự dựng Date rồi đối chiếu lại ba thành phần, không tin JS tự tràn tháng */
+  var WDAY=['CHỦ NHẬT','THỨ HAI','THỨ BA','THỨ TƯ','THỨ NĂM','THỨ SÁU','THỨ BẢY'];
+  function dateOk(d,m,y){ if(!(y>=1900 && y<=2200) || !(m>=1 && m<=12) || !(d>=1)) return false;
+    var t=new Date(y, m-1, d); return t.getDate()===d && t.getMonth()===m-1 && t.getFullYear()===y; }
+  function expiry(d,m,y,w){ if(!dateOk(d,m,y) || !(w>=1)) return null;
+    var e=new Date(y, m-1, d+w*7); return {d:e.getDate(), m:e.getMonth()+1, y:e.getFullYear(), wd:WDAY[e.getDay()], days:w*7}; }
+  function dmy(o){ return o ? p2(o.d)+'.'+p2(o.m)+'.'+o.y : ''; }
+  /* phí quẹt thẻ hai chiều (chủ studio chốt 15/11 — một số tiền, hai câu trả lời):
+       quẹt T    → ngân hàng trừ phí = ⌈T × f⌉ → phòng nhận T − phí
+       nhận đủ T → phải quẹt gross(T, f) = ⌈T ÷ (1 − f)⌉
+     Phí làm tròn LÊN tới đồng (chênh tối đa 1 ₫): số "phòng nhận" luôn là số TỐI THIỂU phòng thực nhận — không bao giờ
+     hứa nhiều hơn thực tế. Nhờ vậy hai chiều khớp nhau: netOf(gross(V, f), f) ≥ V với mọi V (đã quét toàn dải, test gross_fee.js).
+     AMAX — TRẦN AN TOÀN 9.999.999.999 ₫: mọi phép nhân ở đây (V × 100000 ≤ 1e15 · V × f ≤ 3,8e13) còn nằm dưới 2^53 nên
+     số nguyên tuyệt đối không sai số. VƯỢT TRẦN THÌ gross() SAI 1 ₫ (đã dựng được phản ví dụ ở dải > 90 tỉ: v*100000 vượt
+     2^53, vòng sửa trong gross so với một num đã bị làm tròn) — đừng nới trần nếu chưa đổi sang BigInt. */
+  var AMAX=9999999999;
+  function idivUp(n,d){ var q=Math.ceil(n/d); while((q-1)*d>=n) q--; while(q*d<n) q++; return q; }   /* ⌈n ÷ d⌉ chắc chắn đúng: sửa lại sai số của phép chia double */
+  function feeOf(t,f){ return idivUp(t*f, 100000); }
+  function netOf(t,f){ return t-feeOf(t,f); }
+
   /* chữ không dấu, viết hoa, chỉ A–Z 0–9 và khoảng trắng (đ → D) — đúng bộ ký tự nội dung chuyển khoản */
   var COMB=new RegExp('['+String.fromCharCode(0x300)+'-'+String.fromCharCode(0x36f)+']','g');
   function ascii(s){ return String(s==null?'':s).normalize('NFD').replace(COMB,'').replace(/đ/g,'d').replace(/Đ/g,'D').toUpperCase().replace(/[^A-Z0-9 ]+/g,' ').replace(/\s+/g,' ').trim(); }
@@ -119,8 +144,9 @@ var SVE=(function(){
   function c128(s){ s=String(s); var c=[104], m=104;
     for(var i=0;i<s.length;i++){ var v=s.charCodeAt(i)-32; if(v<0 || v>94) throw new Error('c128'); c.push(v); m+=v*(i+1); }
     c.push(m%103, 106); return c.map(function(k){ return C128[k]; }).join(''); }
-  return {PKG:PKG, PRICE:PRICE, CAP:CAP, WEEKS:WEEKS, INST:INST, CARDS:CARDS, FREQ:FREQ, MONTHS:MONTHS, BANKS:BANKS,
-          vnd:vnd, tr:tr, pctTxt:pctTxt, pcTxt:pcTxt, match:match, price:price, giftMax:giftMax, PSTEP:PSTEP, pMax:pMax, pCap:pCap, dOf:dOf, locked:locked,
+  return {PKG:PKG, PRICE:PRICE, CAP:CAP, WEEKS:WEEKS, INST:INST, CARDS:CARDS, FREQ:FREQ, MONTHS:MONTHS, BANKS:BANKS, WDAY:WDAY,
+          dateOk:dateOk, expiry:expiry, dmy:dmy, feeOf:feeOf, netOf:netOf, idivUp:idivUp, AMAX:AMAX,
+          vnd:vnd, tr:tr, ty:ty, pctTxt:pctTxt, pcTxt:pcTxt, match:match, price:price, giftMax:giftMax, PSTEP:PSTEP, pMax:pMax, pCap:pCap, dOf:dOf, locked:locked,
           quote:quote, split:split, gross:gross, ascii:ascii, memo:memo, tlv:tlv, crc16:crc16, vietqr:vietqr, c128:c128};
 })();
 
@@ -270,6 +296,22 @@ if(typeof window!=='undefined' && typeof document!=='undefined') SVX=(function()
   var PGS=['p-sv','p-sv2'], PI=1, ST=null, HIST=[], STEP=null, LOCK=0, NAVT=0, ON=false, BANK=null, BANK_P=null, ADV=0, LASTQR='';
   var GEO={cx:196.5, cy:377, rx:128, gap:8, s:1};
   function fresh(){ return {mode:null, f:null, m:null, S:null, b:0, pc:0, split:null, pay:null, card:null, name:''}; }
+  /* ---------- CÔNG CỤ TÍNH (v2.25.0 · 15/11) — trạng thái riêng, không chạm trạng thái bán hàng ----------
+     Vào từ chỗ trống đối diện nút ⌂ ở màn đầu (chỉ Admin): tx (danh sách) · txw hết hạn hợp đồng · txc + txf phí quẹt thẻ ·
+     txa + txn + txq mã QR nhận tiền. Số vào bằng bàn số của app (ô .mt + phím .key của màn "Nhập số đo mới"), không bàn phím hệ thống. */
+  var TX=null;
+  function adm(){ try{ return document.body.classList.contains('adm'); }catch(e){ return false; } }
+  function txToday(){ var t=new Date(); return pad2(t.getDate())+pad2(t.getMonth()+1)+t.getFullYear(); }
+  function txFresh(){ return {ds:txToday(), ws:'12', as:'', aq:'', cf:null, mm:'', fld:'ds', arm:'ds'}; }
+  function txAf(){ return STEP==='txf' ? 'as' : 'aq'; }   /* mỗi công cụ một ô số tiền riêng: số quẹt thẻ ('as') · số nhận qua QR ('aq') */
+  function txDate(){ var q=TX.ds; if(q.length!==8) return null; var d=+q.slice(0,2), m=+q.slice(2,4), y=+q.slice(4,8);
+    return SVE.dateOk(d,m,y) ? {d:d, m:m, y:y} : null; }
+  function txExp(){ var D=txDate(), w=TX.ws ? +TX.ws : 0; return (D && w>=1) ? SVE.expiry(D.d, D.m, D.y, w) : null; }
+  function txAmt(){ var v=TX[txAf()]; return v ? +v : 0; }
+  function txF(){ return TX.cf!=null ? SVE.CARDS[TX.cf].f : 0; }
+  /* ngày đang gõ: 15112026 → 15.11.2026 — gõ dở thì nhóm tới đâu hiện tới đó */
+  function txDsp(q){ if(!q) return ''; var o=q.slice(0,2); if(q.length>2) o+='.'+q.slice(2,4); if(q.length>4) o+='.'+q.slice(4); return o; }
+  function txMemo(){ return SVE.ascii(TX.mm).slice(0,25).trim(); }   /* EMVCo cho tối đa 25 ký tự; cắt giữa chừng thì bỏ khoảng trắng đuôi */
   function Q(){ return SVE.quote(ST.mode||'1:1', ST.S, ST.b, ST.pc); }
   function kyList(){ var q=Q(); return (ST.split && q.kys>1) ? SVE.split(q.total, q.kys) : [q.total]; }
   var vnd=SVE.vnd;
@@ -513,7 +555,7 @@ if(typeof window!=='undefined' && typeof document!=='undefined') SVX=(function()
      đếm lên cùng nhịp các tuần sáng dần trên số 0 (như hạt rụng đúng lúc số giây nhảy trong loop) ---------- */
   var CTR_KIND='', CTR_HTML='';
   /* bề ngang lòng số 0 (trừ 3 làn hạt); số Mono rộng 0,6 em/ký tự → biết trước số có lọt không */
-  function inner(){ var G=GEO; if(SMALL || !STEP || G.run || /^(bill|name|qr)$/.test(STEP)) return Math.min(document.body.clientWidth,600)-48; return 2*(G.rx-14*G.s)-8; }   /* v2.23.0: màn rộng — trang là cột 600 đứng giữa (app.css "MÀN RỘNG") */
+  function inner(){ var G=GEO; if(SMALL || !STEP || G.run || /^(bill|name|qr|tx)/.test(STEP)) return Math.min(document.body.clientWidth,600)-48; return 2*(G.rx-14*G.s)-8; }   /* v2.23.0: màn rộng — trang là cột 600 đứng giữa (app.css "MÀN RỘNG") */
   function monoW(t, size, ls){ return t.length*(0.6*size+ls); }
   function N(cls, t, extra){ return '<span class="'+cls+'" data-t="'+t+'"'+(extra||'')+'>'+t+'</span>'; }
   function ctrRows(kind){
@@ -529,6 +571,24 @@ if(typeof window!=='undefined' && typeof document!=='undefined') SVX=(function()
       case 'pay': var k=kyList(), tv=SVE.tr(k.length>1 ? k[1] : k[0]), lb=L(k.length>1 ? 'TRẢ MỖI KỲ' : 'THANH TOÁN');
         return monoW(tv,72,-2.16)+32<=W ? [[-57, lb], [-34, N('n72', tv)+'<span class="u20">TR</span>']] : [[-44, lb], [-21, N('n44', tv)+'<span class="u20">TR</span>']];
       case 'fee': return [[-44, L('PHÍ QUẸT THẺ')], [-21, N('n44', SVE.pctTxt(SVE.CARDS[ST.card].f))+'<span class="u20">%</span>']];
+      /* ---- công cụ tính: kết quả ở tâm, đổi chữ TẠI CHỖ khi bấm bàn số (txSync) — không dựng lại lớp, không chuyển động
+         (phím bấm hàng chục lần mỗi lượt tính · nhánh design-audit 6.1) ---- */
+      /* không lặp lại chữ của tiêu đề: tiêu đề đã nói "Hết hạn hợp đồng" nên ở tâm chỉ còn ngày + dòng đọc thêm */
+      case 'txw': var E=txExp();
+        return [[-33, N('n44'+(E?' ac':''), E ? SVE.dmy(E) : '—', ' data-k="exp"')],
+                [19, '<span class="m12" data-k="sub">'+(E ? E.wd+' · '+E.days+' NGÀY' : txWhy())+'</span>']];
+      case 'txfee': return [[-44, L('PHÍ QUẸT THẺ')], [-21, N('n44', SVE.pctTxt(txF()), ' data-k="pct"')+'<span class="u20">%</span>']];
+      /* hai chiều trên một màn (chủ studio chốt 15/11): quẹt đúng số đã nhập thì phòng nhận bao nhiêu (số lớn) · muốn nhận đủ
+         số đó thì phải quẹt bao nhiêu (dòng cuối) */
+      case 'txval': var V=txAmt(), f=txF();
+        return [[-56, L('PHÒNG NHẬN')], [-33, N('n44'+(V?' ac':''), vnd(V?SVE.netOf(V,f):0), ' data-k="net"')+'<span class="u20">₫</span>'],
+                [19, '<span class="rw" data-k="fee">'+txFeeHTML(V,f)+'</span>'],
+                [42, '<span class="rw" data-k="grs">'+txGrsHTML(V,f)+'</span>']];
+      /* số đang gõ CHÍNH LÀ số ở tâm — không có ô nhập riêng, không lặp chữ của tiêu đề; dòng dưới đọc theo triệu / tỷ để
+         không đếm nhầm số 0 (cùng cách đọc với bước Phương thức trả của luồng bán) */
+      case 'txamt': var A=txAmt();
+        return [[-33, N('n44'+(A?' ac':''), vnd(A), ' data-k="amt"')+'<span class="u20">₫</span>'],
+                [19, '<span class="m12" data-k="read">'+txRead(A)+'</span>']];
       case 'val': var v=kyList()[0], lab=(kyList().length>1 ? 'THANH TOÁN KỲ 1' : 'THANH TOÁN'), rows=[[-44, L(lab)]];
         if(ST.pay==='card'){ var T=SVE.gross(v, SVE.CARDS[ST.card].f); rows.push([-21, N('n44 ac', vnd(T))+'<span class="u20">₫</span>']);
           rows.push([31, '<span class="m14">+ '+vnd(T-v)+'</span><span class="m12">₫</span><span class="lb">PHÍ QUẸT THẺ</span>']); }
@@ -537,6 +597,14 @@ if(typeof window!=='undefined' && typeof document!=='undefined') SVX=(function()
     }
     return [];
   }
+  /* ba dòng phụ của công cụ — thay CẢ CỤM (số Paper + đơn vị mono xám + nhãn) nên giữ đúng quy ước của luồng,
+     và chưa nhập gì thì dòng trống hẳn thay vì hiện số 0 vô nghĩa */
+  /* chưa tính được thì nói ĐÚNG chỗ thiếu, không nhắc chung chung */
+  function txWhy(){ if(TX.ds.length<8) return 'NHẬP ĐỦ NGÀY BẮT ĐẦU'; if(!txDate()) return 'NGÀY KHÔNG CÓ THẬT';
+    return (TX.ws && +TX.ws>=1) ? '' : 'NHẬP SỐ TUẦN'; }
+  function txRead(A){ return A>=1000000000 ? SVE.ty(A)+' TỶ' : (A>=1000000 ? SVE.tr(A)+' TRIỆU' : ''); }
+  function txFeeHTML(V,f){ return V ? '<span class="m14">− '+SVE.vnd(SVE.feeOf(V,f))+'</span><span class="m12">₫</span><span class="lb">PHÍ '+SVE.pctTxt(f)+' %</span>' : ''; }
+  function txGrsHTML(V,f){ return V ? '<span class="m14">QUẸT '+SVE.vnd(SVE.gross(V,f))+'</span><span class="m12">₫</span><span class="lb">ĐỂ NHẬN ĐỦ</span>' : ''; }
   function rowsHTML(kind){ return kind ? ctrRows(kind).map(function(r){ return '<div class="k" style="top:'+r[0]+'px">'+r[1]+'</div>'; }).join('') : ''; }
   /* o.count: đếm theo tuần sáng (tần suất → khoảng buổi) · o.delay: lớp mới vào trễ (câu 02: vào cùng tuần đầu sáng)
      cùng họ số thì đổi tại chỗ (ctrMorph) · khác họ: lớp cũ rời, lớp mới vào — trừ hàng giống hệt chữ (36 BUỔI → 36 BUỔI, THANH TOÁN →
@@ -714,7 +782,8 @@ if(typeof window!=='undefined' && typeof document!=='undefined') SVX=(function()
   }
 
   /* ---------- dựng từng bước ---------- */
-  var TITLE={q1:'Hình thức tập?', q2:'Tần suất tập?', q3:'Thời gian tập?', pk:'Gói tập?', bill:'Đề xuất cho khách', pm:'Phương thức trả?', pf:'Hình thức trả?', card:'Loại thẻ của khách?', val:'Giá trị phải trả', name:'Họ tên khách?', qr:'Quét mã QR'};
+  var TITLE={q1:'Hình thức tập?', q2:'Tần suất tập?', q3:'Thời gian tập?', pk:'Gói tập?', bill:'Đề xuất cho khách', pm:'Phương thức trả?', pf:'Hình thức trả?', card:'Loại thẻ của khách?', val:'Giá trị phải trả', name:'Họ tên khách?', qr:'Quét mã QR',
+    tx:'Công cụ', txw:'Hết hạn hợp đồng', txc:'Loại thẻ quẹt?', txf:'Phí quẹt thẻ', txa:'Số tiền nhận?', txn:'Nội dung?', txq:'Quét mã QR'};   /* tiêu đề luôn gọn 1 dòng như mọi bước của luồng; nhãn mono dưới ô đã nói rõ "NỘI DUNG CHUYỂN KHOẢN" */
   function title(id){ return id==='deal' ? 'Ưu đãi cho gói <span class="ac">'+ST.S+' buổi</span>' : TITLE[id]; }
   /* dãy số: chạm = một mức · kéo qua nhiều số = một khoảng · viên Acid dưới số chọn (2 đầu tròn + thân 1 pt co giãn bằng transform) */
   function nums(list, unit, wide){
@@ -784,13 +853,34 @@ if(typeof window!=='undefined' && typeof document!=='undefined') SVX=(function()
         '<svg class="bc" viewBox="0 0 '+bar.n+' 1" preserveAspectRatio="none" aria-hidden="true"><path d="'+bar.d+'"/></svg><div class="cd">'+code+'</div>'+tkShade('s')+'</div></div>'+
       '<i class="sv-shade" aria-hidden="true"></i></div></div>';   /* mặt máy in + khe (sau giấy) · khung cắt rộng cả màn, đáy ở mép dưới khe · bóng tối vào khe (trên giấy) */
   }
+  /* ô nhập của công cụ: đúng ô .mt và phím .key của màn "Nhập số đo mới" — ô đang nhập viền Acid, số Acid */
+  function txCell(f, name, val, unit, bad){
+    return '<button class="mt'+(TX.fld===f?' on':'')+(bad?' bad':'')+'" data-f="'+f+'" aria-label="'+name+'"><div class="h"><span>'+name+'</span></div>'+
+      '<div class="v'+(val?'':' none')+'"><span>'+(val||'—')+'</span><i>'+unit+'</i></div></button>';
+  }
+  /* bàn số 3 × 4; phím thứ 10 riêng theo công cụ: HÔM NAY (ngày) · 000 (tiền) */
+  function txPad(k10){
+    var K=['1','2','3','4','5','6','7','8','9', k10, '0', '⌫'];
+    return '<div class="sv-pad">'+K.map(function(k){
+      var cls=k==='⌫' ? ' bks' : (k==='000' ? ' comma' : (k===k10 ? ' mut' : ''));
+      return '<button class="key'+cls+'" data-k="'+esc(k)+'" aria-label="'+(k==='⌫'?'Xoá':k)+'">'+(k==='⌫' ? ico('i-bks') : k)+'</button>';
+    }).join('')+'</div>';
+  }
+  function txDateBox(){ return '<div class="sv-ans sv-tx"><div class="sv-tg two">'+
+    txCell('ds','Ngày bắt đầu', txDsp(TX.ds), '', TX.ds.length===8 && !txDate())+txCell('ws','Số tuần', TX.ws, 'TUẦN')+'</div>'+txPad('HÔM NAY')+'</div>'; }
+  function txAmtBox(name){ var f=txAf(); return '<div class="sv-ans sv-tx"><div class="sv-tg">'+
+    txCell(f, name, TX[f] ? vnd(txAmt()) : '', '₫')+'</div>'+txPad('000')+'</div>'; }
+  function txMemoBox(){
+    return '<div class="sv-nm"><input class="sv-in" id="sv-in" type="text" value="'+esc(TX.mm)+'" placeholder="Nội dung tuỳ chọn" autocomplete="off" autocorrect="off" autocapitalize="characters" spellcheck="false" enterkeyhint="next" aria-label="Nội dung chuyển khoản">'+
+      '<i class="sv-ul"></i><div class="lab">NỘI DUNG CHUYỂN KHOẢN</div><div class="sv-memo" id="sv-memo"></div></div>';
+  }
   function nameBox(){
     return '<div class="sv-nm"><input class="sv-in" id="sv-in" type="text" value="'+esc(ST.name)+'" placeholder="Họ và tên đầy đủ" autocomplete="off" autocorrect="off" autocapitalize="words" spellcheck="false" enterkeyhint="next" aria-label="Họ tên khách">'+
       '<i class="sv-ul"></i><div class="lab">NỘI DUNG CHUYỂN KHOẢN</div><div class="sv-memo" id="sv-memo"></div></div>';
   }
   var WMQ='<svg class="wmq" viewBox="0 0 1000 1000" fill-rule="evenodd" aria-hidden="true"><path class="b" d="M204.875 430V570H283.625C316.875 570 337.875 550.75 337.875 526.25C337.875 508.75 325.625 493 308.125 487.75C322.125 482.5 330.875 468.5 330.875 454.5C330.875 433.5 311.625 430 285.375 430H204.875ZM239.875 456.25H278.375C290.625 456.25 297.625 461.5 297.625 472C297.625 482.5 290.625 487.75 278.375 487.75H239.875V456.25ZM239.875 514H283.625C297.625 514 304.625 521 304.625 533.25C304.625 545.5 297.625 543.75 281.875 543.75H239.875V514Z"/><path class="z" d="M359.75 500C359.75 473.313 367.862 447.718 382.303 428.847C396.743 409.977 416.328 399.375 436.75 399.375C457.172 399.375 476.757 409.977 491.197 428.847C505.638 447.718 513.75 473.313 513.75 500C513.75 513.214 511.758 526.299 507.889 538.508C504.019 550.716 498.347 561.809 491.197 571.153C484.047 580.497 475.559 587.908 466.217 592.965C456.875 598.022 446.862 600.625 436.75 600.625C416.328 600.625 396.743 590.023 382.303 571.153C367.862 552.282 359.75 526.687 359.75 500ZM401.75 500C401.75 484.452 405.437 469.54 412.001 458.546C418.565 447.552 427.467 441.375 436.75 441.375C446.033 441.375 454.935 447.552 461.499 458.546C468.063 469.54 471.75 484.452 471.75 500C471.75 515.548 468.063 530.46 461.499 541.454C454.935 552.448 446.033 558.625 436.75 558.625C427.467 558.625 418.565 552.448 412.001 541.454C405.437 530.46 401.75 515.548 401.75 500ZM419.25 500C419.25 495.359 421.094 490.908 424.376 487.626C427.658 484.344 432.109 482.5 436.75 482.5C441.391 482.5 445.842 484.344 449.124 487.626C452.406 490.908 454.25 495.359 454.25 500C454.25 504.641 452.406 509.092 449.124 512.374C445.842 515.656 441.391 517.5 436.75 517.5C432.109 517.5 427.658 515.656 424.376 512.374C421.094 509.092 419.25 504.641 419.25 500Z"/><path class="d" d="M535.625 430V570H605.625C658.125 570 693.125 542 693.125 500C693.125 458 658.125 430 605.625 430H535.625ZM570.625 461.5H603.875C635.375 461.5 658.125 479 658.125 500C658.125 521 635.375 538.5 603.875 538.5H570.625V461.5Z"/><path class="y" d="M693.125 430H731.625L763.125 491.25L794.625 430H833.125L780.625 526.25V570H745.625V526.25L693.125 430Z"/></svg>';
-  function qrBox(){
-    var v=kyList()[0];
+  function qrBox(v){
+    if(v==null) v=kyList()[0];
     return '<div class="sv-qrw"><div class="sv-card"><div class="sv-qq"><canvas class="sv-qrc" id="sv-qrc" aria-label="Mã VietQR"></canvas><div class="sv-badge" role="img" aria-label="B0DY">'+WMQ+'</div><div class="sv-qe lab" id="sv-qe" hidden></div></div>'+
       '<div class="sv-strip"><div class="sv-amt"><b data-t="'+vnd(v)+'">'+vnd(v)+'</b><em>₫</em></div><div class="sv-mm" id="sv-mm"><span></span></div></div></div><div class="lab sv-bank" id="sv-bank"></div></div>';
   }
@@ -811,18 +901,33 @@ if(typeof window!=='undefined' && typeof document!=='undefined') SVX=(function()
       case 'val': return sp;
       case 'name': return nameBox()+sp;
       case 'qr': return qrBox()+sp;
+      /* ---- công cụ tính ---- */
+      case 'tx': return sp+rows([{l:'Hết hạn hợp đồng', sub:'NGÀY BẮT ĐẦU + SỐ TUẦN'},
+                                 {l:'Mã QR nhận tiền', sub:'SỐ TIỀN + NỘI DUNG TUỲ CHỌN'},
+                                 {l:'Phí quẹt thẻ', sub:'TECHCOMBANK 08.2026'}], 'L', null);
+      case 'txw': return sp+txDateBox();
+      case 'txc': return sp+rows(SVE.CARDS.map(function(c){ return {l:c.n, v:SVE.pctTxt(c.f), u:'%', logo:c.logo}; }), 'S', TX.cf);
+      case 'txf': return sp+txAmtBox('Số tiền quẹt');
+      case 'txa': return sp+'<div class="sv-ans sv-tx">'+txPad('000')+'</div>';
+      case 'txn': return txMemoBox()+sp;
+      case 'txq': return qrBox(txAmt())+sp;
     }
     return sp;
   }
   /* nút chính luôn ở giữa: ← · nút chính · ⌂ (màn không có ⌂ thì ghost giữ chỗ). Họ tên: Tiếp luôn hiện, kể cả khi bàn phím mở (chủ studio
      12/10 18:50). Nút chính có ở cả hai bước thì giữ chỗ và đổi chữ (navFlow) */
   function navOf(id){
-    var back=id!=='q1', cta=null, home=true;
+    var back=id!=='q1', cta=null, home=true, tool=(id==='q1' && adm());
     if(id==='deal') cta={t:'Chốt ưu đãi'};
     else if(id==='bill') cta={t:'Khách đồng ý'};
     else if(id==='name') cta={t:'Tiếp', c:'sv-tiep'+(/[A-Z]/.test(SVE.ascii(ST.name||'')) ? '' : ' off')};   /* dựng sẵn xám: không loé Acid rồi mới xám */
     else if(id==='qr' || id==='val'){ cta={t:'Xong', c:'paper'}; home=false; }
-    return '<div class="nav sv-nav">'+(back ? '<button class="ghost svb" aria-label="Quay lại" onclick="SVX.back()">'+ico('i-back24','s24')+'</button>' : '<span class="gh0"></span>')+
+    else if(id==='txa') cta={t:'Tiếp', c:'sv-tiep'+(txAmt()>0 ? '' : ' off')};
+    else if(id==='txn') cta={t:'Tiếp', c:'sv-tiep'+(/[A-Z0-9]/.test(txMemo()) ? '' : ' off')};
+    else if(id==='txw' || id==='txf' || id==='txq') cta={t:'Xong', c:'paper'};
+    return '<div class="nav sv-nav">'+
+      (back ? '<button class="ghost svb" aria-label="Quay lại" onclick="SVX.back()">'+ico('i-back24','s24')+'</button>'
+            : (tool ? '<button class="ghost svt" aria-label="Công cụ tính" onclick="SVX.tools()">'+ico('i-calc24','s24')+'</button>' : '<span class="gh0"></span>'))+
       (cta ? '<button class="cta svc '+(cta.c||'')+'" onclick="SVX.cta()"><span>'+cta.t+'</span></button>' : '')+
       (home ? '<button class="ghost svh" aria-label="Về trang chủ" onclick="SVX.home()">'+ico('i-home24','s24')+'</button>' : '<span class="gh0"></span>')+'</div>';
   }
@@ -933,6 +1038,15 @@ if(typeof window!=='undefined' && typeof document!=='undefined') SVX=(function()
       /* Chuyển khoản → Họ tên: số 0 hít vào rồi tan; chấm Acid của lựa chọn bay lên thành gạch dưới ô họ tên (dotToLine) */
       case 'name': dial('none', FOLD); if(prev==='pf' && !back) dotToLine(oldPg, pg); ctr('', null); break;
       case 'qr': dial('none', {dp:.2, da:.2}); ctr('', null); break;
+      /* ---- công cụ tính ---- danh sách giữ nguyên đám mây hạt của màn đầu (chỉ hàng chữ đổi — liền mạch như v2.13);
+         vào một công cụ thì số 0 hít vào rồi tan như bước Họ tên, kết quả hiện ở tâm */
+      case 'tx': cdot(true); dial('cloud'); ctr('', G.cy); break;
+      case 'txw': cdot(false); dial('none', FOLD); ctr('txw', G.cy); break;
+      case 'txc': cdot(false); dial('none', FOLD); ctr(TX.cf!=null ? 'txfee' : '', G.cy); break;
+      case 'txf': cdot(false); dial('none', FOLD); ctr('txval', G.cy); break;
+      case 'txa': cdot(false); dial('none', FOLD); ctr('txamt', G.cy); break;
+      case 'txn': cdot(false); dial('none', FOLD); ctr('', null); break;
+      case 'txq': cdot(false); dial('none', {dp:.2, da:.2}); ctr('', null); break;
     }
   }
   /* ---------- hai chuyển tiếp bằng phần tử chung (chủ studio 23:08: không dùng vành làm đường kẻ — "dùng các element có liên quan") ---------- */
@@ -1121,7 +1235,7 @@ if(typeof window!=='undefined' && typeof document!=='undefined') SVX=(function()
   function chipDot(){ var c=$id('h-sell'), s=c && c.querySelector('svg'); if(!c || !c.offsetParent || !s) return null; var r=layRect(c);
     return [r.left+parseFloat(getComputedStyle(c).paddingLeft||12)+s.getBoundingClientRect().width/2, r.top+r.height/2]; }
   function capAt(pg){ var c=pg.querySelector('.sv-cap.on .cl'); if(!c) return null; var r=c.getBoundingClientRect(); return [r.left+4, r.top+4]; }
-  function advance(delay){ LOCK=1; clearTimeout(ADV); ADV=setTimeout(function(){ LOCK=0; var n=nextOf(STEP); if(n) render(n, 'fwd', true); }, rm() ? 120 : (delay==null ? 200 : delay)); }
+  function advance(delay, to){ LOCK=1; clearTimeout(ADV); ADV=setTimeout(function(){ LOCK=0; var n=to||nextOf(STEP); if(n) render(n, 'fwd', true); }, rm() ? 120 : (delay==null ? 200 : delay)); }
   function nextOf(id){
     switch(id){
       case 'q1': return 'q2'; case 'q2': return 'q3'; case 'q3': return 'pk';
@@ -1132,6 +1246,7 @@ if(typeof window!=='undefined' && typeof document!=='undefined') SVX=(function()
       case 'pf': return ST.pay==='card' ? 'card' : (ST.pay==='ck' ? 'name' : 'val');
       case 'card': return 'val';
       case 'name': return 'qr';
+      case 'txc': return 'txf'; case 'txa': return 'txn'; case 'txn': return 'txq';
     }
     return null;
   }
@@ -1164,6 +1279,14 @@ if(typeof window!=='undefined' && typeof document!=='undefined') SVX=(function()
     else if(id==='deal') bindDeal(pg);
     else if(id==='name') bindName(pg);
     else if(id==='qr'){ qrFit(pg); qrFill(pg, how==='reveal' ? oldPg : null); }
+    /* ---- công cụ tính ---- */
+    else if(id==='tx') bindRows(pg, function(i){
+        if(i===0){ TX.fld='ds'; TX.arm='ds'; } else if(i===1){ TX.aq=''; TX.mm=''; TX.fld='aq'; TX.arm='aq'; } else { TX.as=''; TX.cf=null; TX.fld='as'; TX.arm='as'; }
+        advance(null, ['txw','txa','txc'][i]); });
+    else if(id==='txc') bindRows(pg, function(i){ TX.cf=i; advance(); });
+    else if(id==='txw' || id==='txf' || id==='txa') txBind(pg);
+    else if(id==='txn'){ txBindMemo(pg); }
+    else if(id==='txq'){ qrFit(pg); qrFill(pg, how==='reveal' ? oldPg : null); }
     /* chạm bất kỳ đâu trên trang → số 0 thở lại (rảnh 10 s thì thôi) */
     if(!pg._ik){ pg._ik=1; pg.addEventListener('pointerdown', function(){ if(ON){ idleKick(); motWake(); } }, true); }
   }
@@ -1252,6 +1375,82 @@ if(typeof window!=='undefined' && typeof document!=='undefined') SVX=(function()
   }
 
   /* ---------- Họ tên khách: dòng NỘI DUNG CHUYỂN KHOẢN viết theo từng chữ; Tiếp luôn hiện (xám tới khi có tên); Return = Tiếp ---------- */
+  /* ---------- công cụ tính: bàn số, đồng bộ kết quả, nút Xong ----------
+     Ô đang nhập được "nạp sẵn" (TX.arm): phím số đầu tiên xoá giá trị cũ rồi mới ghi — gõ lại ngày / số tiền không phải xoá từng số. */
+  /* chỗ cho kết quả ở tâm: cao của khối + 12 pt hở mỗi đầu (phí thẻ 4 hàng · hết hạn 3 hàng · số tiền 2 hàng) */
+  var TXN={txf:155, txw:110, txa:110};   /* chỗ cho kết quả ở tâm: 4 hàng (phí thẻ) · 2 hàng (hết hạn · số tiền) + hở 2 đầu */
+  function txFit(pg){
+    var body=pg.querySelector('.body'), tg=pg.querySelector('.sv-tg'), pad=pg.querySelector('.sv-pad'); if(!body || !pad) return;
+    var H=body.clientHeight, need=TXN[STEP]||110, cell=tg?74:0, fixed=24+28+(tg?12:0), row;   /* 3 khe bàn số · lề dưới khối trả lời · khe ô↔bàn số */
+    row=Math.floor((H-need-fixed-cell)/4);
+    if(tg && row<48){ cell=58; row=Math.floor((H-need-fixed-cell)/4); }           /* còn chật: ô nhập thấp xuống trước, phím co sau */
+    row=Math.max(42, Math.min(58, row));
+    if(tg) tg.style.gridAutoRows=cell+'px';
+    pad.style.gridAutoRows=row+'px';
+  }
+  /* KHÔNG gọi txSync ở đây: lúc bind, #sv-ctr còn là lớp số của bước TRƯỚC (ctr() chạy sau bind trong render) — ô nhập và
+     các hàng số đều đã được dựng đúng sẵn bởi txCell / ctrRows, txSync chỉ là việc của bàn số từ lần chạm đầu trở đi */
+  function txBind(pg){
+    txFit(pg);
+    [].forEach.call(pg.querySelectorAll('.sv-tg .mt'), function(b){ b.onclick=function(){ TX.fld=b.dataset.f; TX.arm=TX.fld; txSync(pg); }; });
+    [].forEach.call(pg.querySelectorAll('.sv-pad .key'), function(b){ b.onclick=function(){ txKey(pg, b.dataset.k); }; });
+  }
+  function txKey(pg, k){
+    var f=TX.fld;
+    if(STEP==='txw'){
+      if(k==='HÔM NAY'){ TX.ds=txToday(); TX.fld='ws'; TX.arm='ws'; }
+      else if(k==='⌫'){ TX.arm=''; if(f==='ds') TX.ds=TX.ds.slice(0,-1); else TX.ws=TX.ws.slice(0,-1); }
+      else if(f==='ds'){ var d=(TX.arm==='ds' ? '' : TX.ds); if(d.length>=8) return; TX.arm=''; TX.ds=d+k;
+        if(TX.ds.length===8){ TX.fld='ws'; TX.arm='ws'; } }                                   /* đủ 8 số → tự sang ô số tuần */
+      else { var w=(TX.arm==='ws' ? '' : TX.ws); if(w.length>=3) return; TX.arm=''; TX.ws=(w==='0'?'':w)+k; }
+    } else {
+      var F=txAf();
+      if(k==='⌫'){ TX.arm=''; TX[F]=TX[F].slice(0,-1); }
+      else { var a=(TX.arm===F ? '' : TX[F]);
+        if(k==='000'){ if(!a || a.length>7) return; TX.arm=''; TX[F]=a+'000'; }          /* trần 10 chữ số = SVE.AMAX: trên đó phép nhân vượt 2^53 */
+        else { if(a.length>=10 || (!a && k==='0')) return; TX.arm=''; TX[F]=a+k; } }
+    }
+    txSync(pg);
+  }
+  /* đổi chữ tại chỗ: ô nhập + các số ở tâm. Không gọi lại ctr() → không có chuyển động nào ở bàn số (design-audit 6.1) */
+  function txSync(pg){
+    pg=pg||$id(PGS[PI]);
+    [].forEach.call(pg.querySelectorAll('.sv-tg .mt'), function(b){ var f=b.dataset.f, v;
+      if(f==='ds') v=txDsp(TX.ds); else if(f==='ws') v=TX.ws; else v=(TX[f] ? vnd(txAmt()) : '');
+      b.classList.toggle('on', TX.fld===f);
+      b.classList.toggle('bad', f==='ds' && TX.ds.length===8 && !txDate());                   /* ngày không có thật (31.02) → số đỏ */
+      var box=b.querySelector('.v'); box.classList.toggle('none', !v); box.firstChild.textContent=v||'—';
+    });
+    var cta=pg.querySelector('.svc'); if(cta && STEP==='txa') cta.classList.toggle('off', !(txAmt()>0));
+    var ly=$id('sv-ctr').querySelector('.ly:not(.out)'); if(!ly) return;
+    function put(k, t, lit){ var e=ly.querySelector('[data-k="'+k+'"]'); if(!e) return;
+      e.textContent=t; if(e.dataset.t!=null) e.dataset.t=t; if(lit!=null) e.classList.toggle('ac', !!lit); }
+    function html(k, h){ var e=ly.querySelector('[data-k="'+k+'"]'); if(e && e.innerHTML!==h) e.innerHTML=h; }
+    if(STEP==='txw'){ var E=txExp();
+      put('exp', E ? SVE.dmy(E) : '—', !!E); put('sub', E ? E.wd+' · '+E.days+' NGÀY' : txWhy()); }
+    else if(STEP==='txf'){ var V=txAmt(), f2=txF();
+      put('net', vnd(V?SVE.netOf(V,f2):0), !!V); html('fee', txFeeHTML(V,f2)); html('grs', txGrsHTML(V,f2)); }
+    else if(STEP==='txa'){ var A=txAmt(); put('amt', vnd(A), !!A); put('read', txRead(A)); }
+    ctrFit(ly);                                                                                /* số dài ra (hàng tỉ) → lớp thu lại cho vừa bề ngang trang */
+  }
+  function txBindMemo(pg){
+    var inp=pg.querySelector('#sv-in'), cta=pg.querySelector('.sv-tiep');
+    function sync(){ TX.mm=inp.value; $id('sv-memo').textContent=txMemo(); if(cta) cta.classList.toggle('off', !/[A-Z0-9]/.test(txMemo())); }
+    inp.addEventListener('input', sync);
+    inp.addEventListener('focus', kbFit); inp.addEventListener('blur', function(){ setTimeout(function(){ if(STEP==='txn' && inp.isConnected && $id(PGS[PI]).contains(inp)) kbFit(); }, 60); });
+    inp.addEventListener('keydown', function(e){ if(e.key==='Enter'){ e.preventDefault(); txMemoNext(); } });
+    sync();
+  }
+  function txMemoNext(){
+    var inp=$id('sv-in'); if(!inp) return;
+    if(!/[A-Z0-9]/.test(SVE.ascii(inp.value))){ var u=inp.parentNode.querySelector('.sv-ul'); u.classList.remove('err'); void u.offsetWidth; u.classList.add('err'); focusName(); return; }
+    TX.mm=inp.value.trim(); inp.blur(); render('txq', 'fwd', true, 'reveal');
+  }
+  /* ô nhập trống mà bấm Tiếp: ô rung như gạch dưới ô họ tên */
+  function txBump(pg){ var b=pg.querySelector('.sv-tg .mt.on') || pg.querySelector('.sv-tg .mt'); if(!b) return;
+    b.classList.remove('err'); void b.offsetWidth; b.classList.add('err'); }
+  /* Xong ở một công cụ → về danh sách công cụ, bỏ các bước của công cụ đó khỏi lịch sử (← ở danh sách vẫn về màn đầu luồng bán) */
+  function txDone(){ var i=HIST.lastIndexOf('tx'); if(i<0){ exit(); return; } HIST=HIST.slice(0, i); render('tx', 'back', false); }
   function bindName(pg){
     var inp=pg.querySelector('#sv-in'), cta=pg.querySelector('.sv-tiep');
     function sync(){ ST.name=inp.value; $id('sv-memo').textContent=SVE.memo(inp.value, ST.S, kyList().length>1); cta.classList.toggle('off', !/[A-Z]/.test(SVE.ascii(inp.value))); }
@@ -1268,7 +1467,7 @@ if(typeof window!=='undefined' && typeof document!=='undefined') SVX=(function()
   }
   /* bàn phím hệ thống mở → hàng điều hướng (← · Tiếp · ⌂) đi lên theo, cách mép bàn phím 12 pt (Figma 811:499) */
   function kbFit(){
-    var pg=STEP==='name' && $id(PGS[PI]); if(!pg) return; var nav=pg.querySelector('.sv-nav'), vv=window.visualViewport;
+    var pg=(STEP==='name' || STEP==='txn') && $id(PGS[PI]); if(!pg) return; var nav=pg.querySelector('.sv-nav'), vv=window.visualViewport;
     var kb=vv ? Math.max(0, window.innerHeight-vv.height-vv.offsetTop) : 0;
     nav.style.transform= kb>80 ? 'translateY('+(-(kb-16)).toFixed(0)+'px)' : '';
   }
@@ -1293,20 +1492,20 @@ if(typeof window!=='undefined' && typeof document!=='undefined') SVX=(function()
     w.style.marginTop=mt+'px'; card.style.width=(q+32)+'px'; card.style.marginLeft='auto'; card.style.marginRight='auto';
   }
   function qrFill(pg, src){
-    var mm=SVE.memo(ST.name, ST.S, kyList().length>1), amt=kyList()[0];
+    var tool=STEP==='txq', mm=tool ? txMemo() : SVE.memo(ST.name, ST.S, kyList().length>1), amt=tool ? txAmt() : kyList()[0];
     pg.querySelector('#sv-mm>span').textContent=mm;
     var rev=!!src && !rm() && reveal(pg, src);
     function paint(play){
       var cvs=pg.querySelector('#sv-qrc'), qe=pg.querySelector('#sv-qe'), lab=pg.querySelector('#sv-bank'); if(!cvs) return;
       if(!BANK || (!BANK.demo && !BANK.acc)){ cvs.hidden=true; qe.hidden=false; qe.textContent='CHƯA CÓ TÀI KHOẢN NHẬN'; lab.textContent='';
-        notify('Chưa cài tài khoản nhận chuyển khoản', {err:true, action:{label:'Thử lại', fn:function(){ bankLoad().then(function(){ if(STEP==='qr') paint(false); }); }}}); return; }
+        notify('Chưa cài tài khoản nhận chuyển khoản', {err:true, action:{label:'Thử lại', fn:function(){ bankLoad().then(function(){ if(STEP==='qr' || STEP==='txq') paint(false); }); }}}); return; }
       cvs.hidden=false; qe.hidden=true;
       var text=BANK.demo ? 'B0DY DEMO KHONG CHUYEN KHOAN' : SVE.vietqr(BANK.bin, BANK.acc, amt, mm);
       var r=play ? qrStart(cvs, text, 'in', .74) : qrDraw(cvs, text); LASTQR=text; cvs.dataset.v=r.v;
       var bt=[BANK.bank, BANK.name].filter(Boolean).join(' · ').toUpperCase();
       if(play) typeOn(lab, bt, 1.2, .012); else lab.textContent=bt;
     }
-    if(BANK) paint(rev); else { busyLine(true); bankLoad().then(function(){ busyLine(false); if(STEP==='qr') paint(false); }); }
+    if(BANK) paint(rev); else { busyLine(true); bankLoad().then(function(){ busyLine(false); if(STEP==='qr' || STEP==='txq') paint(false); }); }
   }
   /* chấm tròn 0,86 mô-đun, ba mắt bo 2,2 / 1,4 / 1 mô-đun, vùng trống giữa mã cho ô logo (24,5 % bề rộng mã) — Figma 812:535 */
   function qrGeo(cvs, text){
@@ -1418,7 +1617,7 @@ if(typeof window!=='undefined' && typeof document!=='undefined') SVX=(function()
   }
   function open(){
     if(ON && STEP) return; ensureMarks(); flyClear(true);   /* chữ 0 còn đang bay về nút Sell → về chỗ ngay */
-    ST=fresh(); HIST=[]; STEP=null; ON=true; CTR_KIND=''; CTR_HTML=''; CTRP=null; CTRY=null; CTRT=null; twKill('svcy'); SZ=1; FXL=[]; RW=null; IDLE.amp=0; CD.d=0; CD.m=1; CD.to=0;
+    ST=fresh(); TX=txFresh(); HIST=[]; STEP=null; ON=true; CTR_KIND=''; CTR_HTML=''; CTRP=null; CTRY=null; CTRT=null; twKill('svcy'); SZ=1; FXL=[]; RW=null; IDLE.amp=0; CD.d=0; CD.m=1; CD.to=0;
     SL.forEach(function(s){ s.A=null; s.B=null; s.code=null; s.path=null; s.M=null; });
     $id('sv-dial').hidden=false; $id('sv-ctr').hidden=false; $id('sv-ctr').innerHTML=''; canvas(); ctx.clearRect(0,0,CW,CH); BB=null;   /* cấp bộ nhớ canvas ngay lúc chạm (trước khi các chuyển động bắt đầu), không giữa khung đầu */
     bankLoad();
@@ -1450,21 +1649,27 @@ if(typeof window!=='undefined' && typeof document!=='undefined') SVX=(function()
     else if(STEP==='name') nameNext();
     else if(STEP==='qr') outro();
     else if(STEP==='val') exit();
+    else if(STEP==='txa'){ if(txAmt()>0) render('txn', 'fwd', true); else txBump($id(PGS[PI])); }
+    else if(STEP==='txn') txMemoNext();
+    else if(STEP==='txw' || STEP==='txf' || STEP==='txq') txDone();
   }
   /* chữ "thật" của một nút số ở tâm (bỏ lớp lăn, ô đếm) — dùng cho test */
   function txtOf(n){ if(n.nodeType===3) return n.textContent; if(n.nodeType!==1) return ''; if(n.dataset && n.dataset.t!=null) return n.dataset.t;
     if(n.classList.contains('z') || n.classList.contains('rr') || n.classList.contains('nr')) return ''; var s=''; [].forEach.call(n.childNodes, function(c){ s+=txtOf(c); }); return s; }
   return {
     open:open, back:back, home:home, cta:cta, hide:hide,
+    /* chỗ trống đối diện nút ⌂ ở màn đầu (chỉ Admin) → danh sách công cụ tính */
+    tools:function(){ if(LOCK===2 || STEP!=='q1' || !adm() || !guard()) return; render('tx', 'fwd', true); },
     draw:function(dv){ if(TKS.length) tkStep(dv); if(NEED) draw(dv); if(window.VE3D) VE3D.frame(); },   /* bánh xe chữ số (tickTo) + vé giấy thật đi cùng một rAF với số 0 */
     busy:function(){ return NEED || TKS.length>0 || !!(window.VE3D && VE3D.busy()); },
     onGo:function(id){ if(ON && !/^p-sv/.test(id||'')) hide(); else if(!ON && id!=='p-home') flyClear(true); },
     resize:function(){ SZ=1; if(!ON || !STEP) return; var pg=$id(PGS[PI]); if(!pg || !pg.classList.contains('on')) return;
+      if(/^(txw|txf|txa)$/.test(STEP)) txFit(pg);                                                        /* công cụ tính: đo lại bàn số TRƯỚC khi tính hình học (khối trả lời đổi cao) */
       if(!/^(bill|name|qr)$/.test(STEP)){ GEO=geoOf(STEP, pg); SMALL=GEO.run ? GEO.small : GEO.rx<92; }   /* xoay máy / đổi cỡ: đủ chỗ trở lại thì biểu đồ hiện lại */
       else if(STEP==='bill'){ tkFit(pg); if(window.VE3D) VE3D.refit(pg); }   /* vé đặt lại dáng theo khoảng trống mới */
       dial(PLAN_WANT, {dp:0, da:0, force:true}); ctrMove(GEO.cy, true); },
     /* test / chẩn đoán */
-    _st:function(){ return ST; }, _step:function(){ return STEP; }, _geo:function(){ return GEO; }, _bank:function(v){ if(v!==undefined) BANK=v; return BANK; }, _qr:function(){ return LASTQR; }, _kb:function(){ kbFit(); }, _small:function(){ return SMALL; },
+    _st:function(){ return ST; }, _step:function(){ return STEP; }, _tx:function(v){ if(v) for(var k in v) TX[k]=v[k]; return TX; }, _geo:function(){ return GEO; }, _bank:function(v){ if(v!==undefined) BANK=v; return BANK; }, _qr:function(){ return LASTQR; }, _kb:function(){ kbFit(); }, _small:function(){ return SMALL; },
     _fade:function(){ var n=0, bad=0; SL.forEach(function(s){ if(!s.A || !s.B || !s.fade) return; var P=cur(s); if(!P || P===s.B) return; n++;
       var on=function(Q){ return Math.abs(P.x-Q.x)<.01 && Math.abs(P.y-Q.y)<.01; }; if(!on(s.A) && !on(s.B)) bad++; }); return {n:n, bad:bad}; },
     _dots:function(){ var o={}; SL.forEach(function(s){ var P=s.B; if(P && P.a>0.004 && s.code){ var k=s.code==='q'?'o':(s.code==='cloud'?'p':s.code); o[k]=(o[k]||0)+1; } }); return o; },

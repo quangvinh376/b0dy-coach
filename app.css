@@ -852,6 +852,7 @@ body.adm .tab-adm{display:flex}
 .svctr .m12{font-family:var(--mono);font-size:12px;line-height:14px;letter-spacing:.48px;color:var(--gray)}
 .svctr .m14{font-family:var(--mono);font-size:14px;line-height:17px}
 .svctr .m14+.m12,.svctr .m12+.lb{margin-left:-2px}
+.svctr .rw{display:flex;align-items:baseline;gap:8px}   /* công cụ tính: cả cụm "số + đơn vị + nhãn" thay một lượt khi bấm bàn số */
 .svctr .ac{color:var(--acid)}
 .svctr .pp{color:var(--paper)}
 .svctr .cb{display:inline-block;position:relative}   /* đếm theo tuần: ô cố định bằng bề ngang số cuối, số canh phải → không xô lệch, không chữ số giữ chỗ */
@@ -1041,6 +1042,17 @@ body.adm .tab-adm{display:flex}
 .sv-memo{margin-top:6px;min-height:17px;font-family:var(--mono);font-size:14px;line-height:17px;color:var(--paper);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 /* Quét mã QR (Figma 811:844 · thẻ 812:535): thẻ Paper bo 24, mã chấm tròn, dải Acid số tiền + nội dung (giữ đúng Figma — chủ studio 12/10 16:06).
    Ô giữa mã: nền Ink + chữ 0 có chấm Paper (chủ studio 12/10 21:28) — biểu tượng độc lập duy nhất của brand, cùng chữ 0 trên nút Sell */
+/* ---- CÔNG CỤ TÍNH (v2.25.0 · 15/11): ô nhập + bàn số dùng lại đúng ô .mt và phím .key của màn "Nhập số đo mới" —
+   khối trả lời cao cố định (flex:none) nên khoảng trống phía trên vẫn là chỗ của kết quả ở tâm ---- */
+.sv-tx{display:flex;flex-direction:column;gap:12px}
+.sv-tg{display:grid;grid-template-columns:minmax(0,1fr);grid-auto-rows:74px;gap:4px}
+.sv-tg.two{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+.sv-tg .mt.bad .v,.sv-tg .mt.bad.on .v{color:var(--red)}   /* ngày không có thật (31.02) */
+.sv-tg .mt.err{animation:shake .42s cubic-bezier(.36,.07,.19,.97)}
+.sv-pad{display:grid;grid-template-columns:repeat(3,1fr);grid-auto-rows:58px;gap:8px}
+.sv-pad .key{height:auto;min-height:0}
+.sv-pad .key.bks{background:none}
+.sv-pad .key.comma{background:rgba(250,250,250,.06)}
 .sv-qrw{flex:none;margin-top:78px}
 .sv-card{border-radius:24px;background:var(--paper);overflow:hidden;padding:16px 16px 0}
 .sv-qq{position:relative;width:100%;aspect-ratio:1/1}
