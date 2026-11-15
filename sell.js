@@ -580,10 +580,12 @@ if(typeof window!=='undefined' && typeof document!=='undefined') SVX=(function()
       case 'txfee': return [[-44, L('PHÍ QUẸT THẺ')], [-21, N('n44', SVE.pctTxt(txF()), ' data-k="pct"')+'<span class="u20">%</span>']];
       /* hai chiều trên một màn (chủ studio chốt 15/11): quẹt đúng số đã nhập thì phòng nhận bao nhiêu (số lớn) · muốn nhận đủ
          số đó thì phải quẹt bao nhiêu (dòng cuối) */
+      /* chủ studio chốt 20:58: thứ coach BIẾT là số phòng cần nhận, thứ phải tính là số khách quẹt — nhập V, hiện ⌈V ÷ (1−f)⌉.
+         Dòng cuối giữ chiều ngược lại: lỡ quẹt đúng V thì phòng hụt bao nhiêu. */
       case 'txval': var V=txAmt(), f=txF();
-        return [[-56, L('PHÒNG NHẬN')], [-33, N('n44'+(V?' ac':''), vnd(V?SVE.netOf(V,f):0), ' data-k="net"')+'<span class="u20">₫</span>'],
+        return [[-56, L('KHÁCH QUẸT')], [-33, N('n44'+(V?' ac':''), vnd(V?SVE.gross(V,f):0), ' data-k="grs"')+'<span class="u20">₫</span>'],
                 [19, '<span class="rw" data-k="fee">'+txFeeHTML(V,f)+'</span>'],
-                [42, '<span class="rw" data-k="grs">'+txGrsHTML(V,f)+'</span>']];
+                [42, '<span class="rw" data-k="net">'+txNetHTML(V,f)+'</span>']];
       /* số đang gõ CHÍNH LÀ số ở tâm — không có ô nhập riêng, không lặp chữ của tiêu đề; dòng dưới đọc theo triệu / tỷ để
          không đếm nhầm số 0 (cùng cách đọc với bước Phương thức trả của luồng bán) */
       case 'txamt': var A=txAmt();
@@ -603,8 +605,8 @@ if(typeof window!=='undefined' && typeof document!=='undefined') SVX=(function()
   function txWhy(){ if(TX.ds.length<8) return 'NHẬP ĐỦ NGÀY BẮT ĐẦU'; if(!txDate()) return 'NGÀY KHÔNG CÓ THẬT';
     return (TX.ws && +TX.ws>=1) ? '' : 'NHẬP SỐ TUẦN'; }
   function txRead(A){ return A>=1000000000 ? SVE.ty(A)+' TỶ' : (A>=1000000 ? SVE.tr(A)+' TRIỆU' : ''); }
-  function txFeeHTML(V,f){ return V ? '<span class="m14">− '+SVE.vnd(SVE.feeOf(V,f))+'</span><span class="m12">₫</span><span class="lb">PHÍ '+SVE.pctTxt(f)+' %</span>' : ''; }
-  function txGrsHTML(V,f){ return V ? '<span class="m14">QUẸT '+SVE.vnd(SVE.gross(V,f))+'</span><span class="m12">₫</span><span class="lb">ĐỂ NHẬN ĐỦ</span>' : ''; }
+  function txFeeHTML(V,f){ return V ? '<span class="m14">+ '+SVE.vnd(SVE.gross(V,f)-V)+'</span><span class="m12">₫</span><span class="lb">PHÍ '+SVE.pctTxt(f)+' %</span>' : ''; }
+  function txNetHTML(V,f){ return V ? '<span class="m14">QUẸT '+SVE.vnd(V)+'</span><span class="m12">₫</span><span class="lb">CHỈ NHẬN '+SVE.vnd(SVE.netOf(V,f))+'</span>' : ''; }
   function rowsHTML(kind){ return kind ? ctrRows(kind).map(function(r){ return '<div class="k" style="top:'+r[0]+'px">'+r[1]+'</div>'; }).join('') : ''; }
   /* o.count: đếm theo tuần sáng (tần suất → khoảng buổi) · o.delay: lớp mới vào trễ (câu 02: vào cùng tuần đầu sáng)
      cùng họ số thì đổi tại chỗ (ctrMorph) · khác họ: lớp cũ rời, lớp mới vào — trừ hàng giống hệt chữ (36 BUỔI → 36 BUỔI, THANH TOÁN →
@@ -904,10 +906,10 @@ if(typeof window!=='undefined' && typeof document!=='undefined') SVX=(function()
       /* ---- công cụ tính ---- */
       case 'tx': return sp+rows([{l:'Hết hạn hợp đồng', sub:'NGÀY BẮT ĐẦU + SỐ TUẦN'},
                                  {l:'Mã QR nhận tiền', sub:'SỐ TIỀN + NỘI DUNG TUỲ CHỌN'},
-                                 {l:'Phí quẹt thẻ', sub:'TECHCOMBANK 08.2026'}], 'L', null);
+                                 {l:'Phí quẹt thẻ', sub:'SỐ PHÒNG NHẬN → SỐ KHÁCH QUẸT'}], 'L tx', null);
       case 'txw': return sp+txDateBox();
       case 'txc': return sp+rows(SVE.CARDS.map(function(c){ return {l:c.n, v:SVE.pctTxt(c.f), u:'%', logo:c.logo}; }), 'S', TX.cf);
-      case 'txf': return sp+txAmtBox('Số tiền quẹt');
+      case 'txf': return sp+txAmtBox('Số tiền phòng nhận');
       case 'txa': return sp+'<div class="sv-ans sv-tx">'+txPad('000')+'</div>';
       case 'txn': return txMemoBox()+sp;
       case 'txq': return qrBox(txAmt())+sp;
@@ -1429,7 +1431,7 @@ if(typeof window!=='undefined' && typeof document!=='undefined') SVX=(function()
     if(STEP==='txw'){ var E=txExp();
       put('exp', E ? SVE.dmy(E) : '—', !!E); put('sub', E ? E.wd+' · '+E.days+' NGÀY' : txWhy()); }
     else if(STEP==='txf'){ var V=txAmt(), f2=txF();
-      put('net', vnd(V?SVE.netOf(V,f2):0), !!V); html('fee', txFeeHTML(V,f2)); html('grs', txGrsHTML(V,f2)); }
+      put('grs', vnd(V?SVE.gross(V,f2):0), !!V); html('fee', txFeeHTML(V,f2)); html('net', txNetHTML(V,f2)); }
     else if(STEP==='txa'){ var A=txAmt(); put('amt', vnd(A), !!A); put('read', txRead(A)); }
     ctrFit(ly);                                                                                /* số dài ra (hàng tỉ) → lớp thu lại cho vừa bề ngang trang */
   }

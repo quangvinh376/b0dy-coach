@@ -897,6 +897,9 @@ body.adm .tab-adm{display:flex}
 .sv-r{position:relative;width:100%;height:70px;display:flex;align-items:baseline;justify-content:space-between;gap:16px;border-top:1px solid var(--hair);padding-top:18px;color:var(--paper);
       transition:opacity .2s ease,transform .12s var(--eo)}
 .sv-rows.S .sv-r{height:57px;padding-top:15px}
+/* danh sách công cụ (v2.25.1): hàng nào cũng có dòng mô tả mono → 18 + 33 + 6 + 13 = đúng 70, chữ chạm sát vạch kẻ hàng dưới.
+   Nới cao để hở trên 18 / dưới 18 như hàng không có dòng mô tả. Không đụng .sv-r chung (bước "Phương thức trả" đã duyệt). */
+.sv-rows.tx .sv-r{height:88px}
 .sv-r:active{transform:scale(.985)}
 .sv-r .l{display:flex;flex-direction:column;gap:6px;min-width:0}
 .sv-r .t{display:flex;align-items:center;gap:6px;font-size:28px;line-height:33px;letter-spacing:-.56px;white-space:nowrap}
