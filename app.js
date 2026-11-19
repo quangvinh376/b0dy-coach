@@ -7,7 +7,7 @@
    ===================================================================== */
 'use strict';
 var $=function(id){ return document.getElementById(id); };
-var APP_VER='v2.25.1';
+var APP_VER='v2.26.0';
 
 /* ---------------- tiện ích ---------------- */
 function isoToday(d){ d=d||new Date(); return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2); }
@@ -1701,8 +1701,18 @@ function renderPerf(animate){
    Máy chủ chưa có w8 (bản cũ / cache cũ) → định nghĩa cũ (< 10 buổi trong tháng), dòng mở hồ sơ như trước.
    v2.20 — trang đổi tên TEMPO (ô trang chủ = tempo trung bình, xem tempoList): liệt kê MỌI khách còn buổi, 2 nhóm
    "Khách tập chậm" (định nghĩa trên) · "Khách tập đúng tiến độ" (còn lại). Id trang giữ p-slow.
+   v2.26 (19/11/2026) — SỬA CÔNG THỨC "TEMPO CẦN ĐẠT" (audit 19/11, chủ studio chốt). Bản cũ: need = còn lại ÷ ((hạn − hôm nay)/7)
+   → hyperbol không có trần (Nguyễn Anh Minh còn 8 buổi, hạn 20/11 → "cần 56,0 buổi/tuần"), ∞ từ ngày hết hạn, và phá
+   thang đo biểu đồ 8 tuần (cột 3 buổi cao 3px vì mx = max(cột, need)×1,25). Bản mới:
+     dOpen = số ngày CÒN TẬP ĐƯỢC (kể cả hôm nay, KỂ CẢ ngày hết hạn — luật đặt lịch chỉ chặn SAU hạn — trừ CN)
+     feasible = min(còn lại, dOpen) · lost = còn lại − feasible · need = feasible ÷ (dOpen/7) ≡ min(7·còn lại/dOpen, NEED_CAP)
+     nhịp dự báo = n28c (buổi BỊ TRỪ, gồm Vắng) vì "Còn lại" của MEMBERS cũng trừ Vắng; "Tempo hiện tại" vẫn là n28 (buổi tập thật)
+   Nhóm thứ ba "ĐÃ MẤT BUỔI": khách hết gói ≤ LOST_DAYS ngày mà còn buổi chưa dùng (MEMBERS "Buổi dư" → stats.dur).
    ===================================================================== */
-var SLOW_MIN=2;
+var SLOW_MIN=2, NEED_CAP=7, BOOK_CAP=4, LOST_DAYS=14;
+/* v2.26 — số ngày còn tập được từ a tới b (gồm cả hai đầu), trừ Chủ nhật. 0 nếu b < a hoặc ngày sai. */
+function openDays(a, b){ var x=isoN(a), y=isoN(b); if(isNaN(x) || isNaN(y) || y<x) return 0;
+  var n=0, lim=Math.min(y, x+3650); for(var d=x; d<=lim; d++) if(new Date(d*864e5).getUTCDay()!==0) n++; return n; }
 function isoN(iso){ var m=String(iso||'').match(/^(\d{4})-(\d{2})-(\d{2})/); return m ? Date.UTC(+m[1],+m[2]-1,+m[3])/864e5 : NaN; }
 function nIso(n){ var d=new Date(n*864e5); return d.getUTCFullYear()+'-'+pad2(d.getUTCMonth()+1)+'-'+pad2(d.getUTCDate()); }
 function dayIso(v){ var s=String(v||'').trim(), m;
@@ -1718,15 +1728,20 @@ function slowInfo(c){
   var exp=dayIso(c.exp||c.end); if(!exp) return null;
   var p=(s.perClient && s.perClient[KEY(c)])||{}, tN=isoN(TODAY_ISO), st=isoN(dayIso(c.start));
   var since=isNaN(st) ? 28 : tN-st+1; if(since<14) return null;
-  var rate=(+p.n28||0)/(Math.min(28, since)/7), days=isoN(exp)-tN, wl=Math.max(0, days/7);
+  var win=Math.min(28, since)/7;
+  var rate=(+p.n28||0)/win;                                             /* nhịp TẬP (chỉ buổi tập thật) — dòng "Tempo hiện tại" */
+  var rateUse=(+(p.n28c!=null ? p.n28c : p.n28)||0)/win;                /* nhịp TIÊU gói (gồm Vắng) — dùng cho dự báo; máy chủ cũ không có n28c → lui về n28 */
+  var days=isoN(exp)-tN, dOpen=openDays(TODAY_ISO, exp), wl=dOpen/7;
+  var feas=Math.min(c.left, dOpen), lost=Math.max(0, c.left-feas);
   var plan=+((s.plan && s.plan[KEY(c)])||0);
-  return {m:c, rate:rate, need: wl>0 ? c.left/wl : Infinity, wl:wl, exp:exp, days:days, extra:Math.max(0, c.left-rate*wl),
+  return {m:c, rate:rate, rateUse:rateUse, need: dOpen>0 ? feas/wl : null, cap: dOpen>0 && 7*c.left/dOpen>NEED_CAP+1e-9,
+          wl:wl, dOpen:dOpen, feas:feas, lost:lost, exp:exp, days:days, extra:Math.max(0, c.left-rateUse*wl),
           plan:plan, extraPlan: plan>0 && wl>0 ? c.left-plan*wl : null, w8:p.w8||[0,0,0,0,0,0,0,0], last:p.lastAll||p.last||''};
 }
 function slowList(){
   var s=state.stats; if(!s || !s.perClient) return null;
   if(!slowWeeks()) return state.clients.filter(function(c){ var p=s.perClient[KEY(c)]; return c.left>0 && p && (+p.m||0)<10; }).map(function(c){ return {m:c, old:1}; });
-  return state.clients.map(slowInfo).filter(function(i){ return i && Math.round(i.extra)>=SLOW_MIN; }).sort(function(a,b){ return b.extra-a.extra || a.days-b.days; });
+  return state.clients.map(slowInfo).filter(function(i){ return i && slowIs(i); }).sort(slowSort);
 }
 function slowClients(){ var l=slowList(); return l ? l.map(function(i){ return i.m; }) : null; }
 /* v2.20 — TEMPO. Phạm vi = state.clients: coach = khách của mình · Admin = cả phòng. Chỉ khách còn buổi (left > 0).
@@ -1738,32 +1753,52 @@ function tempoList(){
   var act=state.clients.filter(function(c){ return c.left>0; });
   if(!slowWeeks()){ var o=slowList(), on={}; o.forEach(function(i){ on[KEY(i.m)]=1; });
     return {avg:null, slow:o, ok:act.filter(function(c){ return !on[KEY(c)]; }).map(function(c){ return {m:c, old:1}; })}; }
-  var slow=[], ok=[], fresh=[], sum=0, n=0, tN=isoN(TODAY_ISO);
+  var slow=[], ok=[], fresh=[], gone=[], sum=0, n=0, tN=isoN(TODAY_ISO);
   act.forEach(function(c){ var i=slowInfo(c);
     if(!i){ var st=isoN(dayIso(c.start)); fresh.push({m:c, fresh:1, exp:dayIso(c.exp||c.end), isNew:!isNaN(st) && tN-st+1<14}); return; }
-    sum+=i.rate; n++; (Math.round(i.extra)>=SLOW_MIN ? slow : ok).push(i); });
-  slow.sort(function(a,b){ return b.extra-a.extra || a.days-b.days; });
+    sum+=i.rate; n++; (slowIs(i) ? slow : ok).push(i); });
+  /* v2.26 — nhóm thứ ba: gói vừa kết thúc mà còn buổi chưa dùng (MEMBERS "Buổi dư"). Không vào tempo trung bình. */
+  state.clients.forEach(function(c){ if(c.left>0) return;
+    var g=+((s.dur && s.dur[KEY(c)])||0); if(!(g>0)) return;
+    var e=dayIso(c.end||c.exp), eN=isoN(e); if(!e || isNaN(eN) || eN>tN || tN-eN>LOST_DAYS) return;
+    gone.push({m:c, gone:g, exp:e, days:eN-tN}); });
+  slow.sort(slowSort);
   ok.sort(function(a,b){ return a.rate-b.rate || a.days-b.days; });
-  return {avg:n ? sum/n : null, slow:slow, ok:ok.concat(fresh)};
+  gone.sort(function(a,b){ return b.gone-a.gone || b.days-a.days; });
+  return {avg:n ? sum/n : null, slow:slow, ok:ok.concat(fresh), gone:gone};
 }
 function tempoAvg(){ var t=tempoList(); return t ? t.avg : null; }
 var SL_OPEN={};
 HOOK['p-slow']=function(dir, quiet){ if(!quiet){ $('sl-q').value=''; SL_OPEN={}; } renderSlow(!quiet); if(!slowWeeks() && !state.loading) refreshStats(true); };
-function slowIs(i){ return !i.old && !i.fresh && Math.round(i.extra)>=SLOW_MIN; }
+/* v2.26 — chậm = CHẮC CHẮN mất buổi (lost ≥ 1) HOẶC giữ nhịp tiêu gói này thì tới hạn còn dư ≥ SLOW_MIN */
+function slowIs(i){ return !i.old && !i.fresh && !i.gone && ((i.lost||0)>=1 || Math.round(i.extra)>=SLOW_MIN); }
+function slowSort(a,b){ return (b.lost||0)-(a.lost||0) || b.extra-a.extra || a.days-b.days; }
 function slowMeta(i){
   if(i.old) return clientMeta(i.m);
   if(i.fresh) return i.isNew ? 'GÓI MỚI'+(i.exp ? ' · HẾT '+ddmm(i.exp) : '') : 'CHƯA CÓ HẠN GÓI';
+  if(i.gone) return 'ĐÃ MẤT '+i.gone+' BUỔI · HẾT '+ddmm(i.exp);
+  if(i.dOpen<=0) return (i.days>=0 ? 'HẾT HẠN HÔM NAY' : 'QUÁ HẠN '+(-i.days)+' NGÀY')+' · CÒN '+i.m.left+' BUỔI';
+  if(i.lost>=1) return 'MẤT '+i.lost+' BUỔI · HẾT '+ddmm(i.exp);
   return slowIs(i) ? 'DƯ ~'+Math.round(i.extra)+' BUỔI · HẾT '+ddmm(i.exp) : 'TEMPO '+fmt1(i.rate)+' · HẾT '+ddmm(i.exp); }
 function slowDetail(i){
-  var w=i.w8, fin=isFinite(i.need), mx=Math.max.apply(null, w.concat([fin?i.need:0, 1]))*1.25, H=64, bars='', nums='';
+  var w=i.w8, fin=i.need!=null, mx=Math.max.apply(null, w.concat([fin?i.need:0, 1]))*1.25, H=64, bars='', nums='';
   w.forEach(function(v,k){ var c= k===7 ? 'cur' : (v?'':'z');
     bars+='<i class="'+c+'" style="height:'+(v?Math.max(2,Math.round(v/mx*H)):1)+'px;transition-delay:'+(k*24)+'ms"></i>';
     nums+='<span class="'+c+'">'+v+'</span>'; });
   var w0=(state.stats && state.stats.w0) || nIso(isoN(wkStart(TODAY_ISO))-49);
-  var kv=[['Tempo hiện tại', (i.rate ? fmt1(i.rate) : '0')+' BUỔI/TUẦN'], ['Tempo cần đạt', fin ? fmt1(i.need)+' BUỔI/TUẦN' : '—']];
-  if(i.extraPlan!=null && Math.round(i.extraPlan)>=1) kv.push(['Tập đúng lịch '+i.plan+' buổi/tuần', 'VẪN DƯ ~'+Math.round(i.extraPlan)+' BUỔI']);
-  kv.push(['Hết hạn', vnFull(i.exp)], ['Buổi gần nhất', i.last ? ddmm(i.last) : 'CHƯA CÓ'], slowIs(i) ? ['Dự báo', 'DƯ ~'+Math.round(i.extra)+' BUỔI', 'er'] : ['Dự báo', 'ĐÚNG TIẾN ĐỘ']);
-  return '<div class="wkc"><div class="wkh"><span class="lab">8 TUẦN GẦN NHẤT</span>'+(fin?'<span class="lab acid">CẦN '+fmt1(i.need)+' BUỔI/TUẦN</span>':'')+'</div>'
+  var kv=[['Tempo hiện tại', (i.rate ? fmt1(i.rate) : '0')+' BUỔI/TUẦN']];
+  /* v2.26 — còn ≤ 10 ngày tập thì một tỷ lệ theo tuần là ngoại suy từ cửa sổ ngắn hơn chính đơn vị của nó → nói bằng số tuyệt đối */
+  if(!fin) kv.push(['Tempo cần đạt', '—']);
+  else if(i.dOpen<=10) kv.push(['Cần dùng hết', i.m.left+' BUỔI TRONG '+i.dOpen+' NGÀY TẬP']);
+  else kv.push(['Tempo cần đạt', fmt1(i.need)+' BUỔI/TUẦN'+(i.cap?' · TRẦN':'')]);
+  if(i.dOpen<=0) kv.push([i.days>=0 ? 'Hết hạn hôm nay' : 'Quá hạn', (i.days>=0 ? '' : (-i.days)+' NGÀY · ')+'CÒN '+i.m.left+' BUỔI CHƯA DÙNG', 'er']);
+  else if(i.lost>=1) kv.push(['Không kịp', 'MẤT '+i.lost+' BUỔI', 'er']);
+  else if(i.need>BOOK_CAP) kv.push(['Vượt trần đặt lịch', fmt1(i.need)+' > '+BOOK_CAP+' BUỔI/TUẦN', 'er']);
+  if(i.lost<1 && i.dOpen>0 && i.extraPlan!=null && Math.round(i.extraPlan)>=1) kv.push(['Tập đúng lịch '+i.plan+' buổi/tuần', 'VẪN DƯ ~'+Math.round(i.extraPlan)+' BUỔI']);   /* v2.26: đã nói "MẤT n BUỔI" thì dòng này thành nhiễu */
+  kv.push(['Hết hạn', vnFull(i.exp)], ['Buổi gần nhất', i.last ? ddmm(i.last) : 'CHƯA CÓ'],
+    (i.lost>=1 || i.dOpen<=0) ? ['Dự báo', 'CẦN GIA HẠN', 'er']
+      : slowIs(i) ? ['Dự báo', 'DƯ ~'+Math.round(i.extra)+' BUỔI', 'er'] : ['Dự báo', 'ĐÚNG TIẾN ĐỘ']);
+  return '<div class="wkc"><div class="wkh"><span class="lab">8 TUẦN GẦN NHẤT</span>'+(fin?'<span class="lab acid">'+(i.cap?'TRẦN ':'CẦN ')+fmt1(i.need)+' BUỔI/TUẦN</span>':'')+'</div>'
     +'<div class="wkb">'+bars+(fin?'<b class="need" style="bottom:'+Math.round(i.need/mx*H)+'px"></b>':'')+'</div>'
     +'<div class="wkn">'+nums+'</div><div class="wka"><span class="lab">'+ddmm(w0)+'</span><span class="lab">TUẦN NÀY</span></div></div>'
     +kv.map(function(r){ return '<div class="kv"><span>'+esc(r[0])+'</span><span class="v'+(r[2]?' '+r[2]:'')+'">'+r[1]+'</span></div>'; }).join('');
@@ -1774,15 +1809,15 @@ function slowOpen(b, x, i, anim){
   void c.offsetWidth; requestAnimationFrame(function(){ c.classList.add('in'); });
 }
 function renderSlow(animate){
-  var el=$('sl-list'), q=norm($('sl-q').value), t=tempoList(), all=t ? t.slow.concat(t.ok) : null, k=0; el.innerHTML='';
+  var el=$('sl-list'), q=norm($('sl-q').value), t=tempoList(), all=t ? t.slow.concat(t.ok, t.gone||[]) : null, k=0; el.innerHTML='';
   $('sl-q').closest('.search').hidden=!(all && all.length);
   var hit=function(i){ return !q || norm(i.m.name).indexOf(q)>=0; };
-  var groups=t ? [['KHÁCH TẬP CHẬM', t.slow.filter(hit)], ['KHÁCH TẬP ĐÚNG TIẾN ĐỘ', t.ok.filter(hit)]] : [];   /* v2.20: thay 2 nhóm theo hạn gói */
+  var groups=t ? [['KHÁCH TẬP CHẬM', t.slow.filter(hit)], ['KHÁCH TẬP ĐÚNG TIẾN ĐỘ', t.ok.filter(hit)], ['ĐÃ MẤT BUỔI · 14 NGÀY QUA', (t.gone||[]).filter(hit)]] : [];   /* v2.20: 2 nhóm thay cách chia theo hạn gói · v2.26: thêm nhóm đã mất buổi */
   if(!groups.some(function(g){ return g[1].length; })){ var e=document.createElement('div'); e.className='lab empty'; e.textContent= !all ? 'ĐANG TẢI SỐ LIỆU' : (q && all.length ? 'KHÔNG TÌM THẤY TÊN NÀY' : state.loading ? 'ĐANG TẢI DANH SÁCH…' : 'CHƯA CÓ KHÁCH ĐANG TẬP'); el.appendChild(e); fogUpdate(el); return; }
   groups.forEach(function(g){ if(!g[1].length) return;
     var d=document.createElement('div'); d.className='lab sec'; d.textContent=g[0]+' · '+g[1].length; el.appendChild(d);
     g[1].forEach(function(i){
-      if(i.old || i.fresh){ el.appendChild(clientRow(i.m, animate, k++, slowMeta(i), function(){ var h=FX.heroPrep(this.querySelector('.nm'), firstName(i.m.name)); state.client=i.m; state.back='p-slow'; go('p-profile','fwd'); FX.heroFly(h, $('pf-name')); })); return; }
+      if(i.old || i.fresh || i.gone){ el.appendChild(clientRow(i.m, animate, k++, slowMeta(i), function(){ var h=FX.heroPrep(this.querySelector('.nm'), firstName(i.m.name)); state.client=i.m; state.back='p-slow'; go('p-profile','fwd'); FX.heroFly(h, $('pf-name')); })); return; }
       var b=clientRow(i.m, animate, k++, slowMeta(i), null, 'i-chev', 'dn'), x=document.createElement('div'); x.className='xp';
       el.appendChild(b); el.appendChild(x);
       if(SL_OPEN[KEY(i.m)]) slowOpen(b, x, i, false);
