@@ -298,13 +298,16 @@ function admStats_(p) {
       var pc = out.perClient[who] || (out.perClient[who] = { m: 0, last: '' });
       if (d.slice(0, 7) === month) { out.days[d] = (out.days[d] || 0) + 1; out.monthTotal++; if (!vg) pc.m++; }
       if (vg) { if (d === today) (out.absent || (out.absent = [])).push(who); }
-      else { if (d < today && d > pc.last) pc.last = d; statsPcAdd_(pc, d, ctx); }   /* nhịp tập (Tempo) · buổi gần nhất: chỉ buổi tập THẬT */
+      else { if (d < today && d > pc.last) pc.last = d; }
+      statsPcAdd_(pc, d, ctx, vg);   /* nhịp tập (w8/n28) · buổi gần nhất: chỉ buổi tập THẬT · v2.26: Vắng vào w8c/n28c (nhịp tiêu gói) */
       if (d >= cFrom && d <= today) raw.push({ d: d, t: statsSigned_(r[L.sig]), n: name, id: String(r[L.id] || '').trim(), co: String(r[L.co] || '').trim(), r: i, v: vg ? 1 : 0 });
     }
   }
   try {                                                               /* v2.7: buổi/tuần đăng ký (MEMBERS) mọi khách */
     var memA = statsMem_(ba);
-    if (memA) { out.plan = {}; memA.rows.forEach(function (m) { var x = I.byMrow[m.r], k = idKeyOf_(keyOf, x ? x.P : null, m.name); if (!(k in out.plan) || m.left > 0) out.plan[k] = m.plan; }); }
+    if (memA) { out.plan = {}; out.dur = {}; memA.rows.forEach(function (m) { var x = I.byMrow[m.r], k = idKeyOf_(keyOf, x ? x.P : null, m.name);
+      if (!(k in out.plan) || m.left > 0) out.plan[k] = m.plan;
+      if (!(m.left > 0) && m.dur > 0) out.dur[k] = Math.max(out.dur[k] || 0, m.dur);   /* v2.26: buổi mất của gói đã kết thúc (nhóm "Đã mất buổi") */ }); }
     /* v2.7.1 — Doanh thu từng buổi = đơn giá buổi (MEMBERS theo mã HV) — cùng công thức cột "Doanh thu" tab COM.
        sess giữ thứ tự dòng SESSION LOG trong ngày; comMon = doanh thu theo tháng (ô Doanh thu trang chủ + trang chi tiết). */
     var sessA = [], monA = {}; monA[statsPrevMonth_(month)] = 0; monA[month] = 0;

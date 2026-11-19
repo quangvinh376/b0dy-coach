@@ -87,12 +87,20 @@ function statsNIso_(n){ var d = new Date(n * 864e5); return d.getUTCFullYear() +
 /* cửa sổ 8 tuần (thứ Hai → Chủ nhật), tuần cuối = tuần chứa hôm nay. s0 = thứ Hai của tuần đầu. */
 function statsCtx_(today){ var tN = statsDayN_(today), dow = (new Date(tN * 864e5).getUTCDay() + 6) % 7, s0 = tN - dow - 49; return { today: today, tN: tN, s0: s0, w0: statsNIso_(s0) }; }
 function statsPrevMonth_(month){ var y = +month.slice(0, 4), m = +month.slice(5, 7) - 1; if (m < 1) { m = 12; y--; } return y + '-' + ('0' + m).slice(-2); }
-/* một buổi "Đã tập" ngày d của khách → w8 (số buổi mỗi tuần, 8 tuần) · n28 (28 ngày tính cả hôm nay) · lastAll (buổi gần nhất, tính cả hôm nay) */
-function statsPcAdd_(pc, d, ctx){
+/* một buổi ngày d của khách → w8 (số buổi mỗi tuần, 8 tuần) · n28 (28 ngày tính cả hôm nay) · lastAll (buổi gần nhất, tính cả hôm nay)
+   v2.26 (19/11/2026): tham số vg = dòng "Vắng". Hai bộ đếm:
+     w8 · n28 · lastAll  = NHỊP TẬP, chỉ buổi tập thật (hiển thị "Tempo hiện tại" + biểu đồ 8 tuần — giữ nguyên luật v2.14)
+     w8c · n28c          = NHỊP TIÊU GÓI, gồm cả Vắng (dùng cho dự báo dư/mất buổi, vì MEMBERS "Còn lại" = Số buổi − (Đã tập + Vắng)) */
+function statsPcAdd_(pc, d, ctx, vg){
   var n = statsDayN_(d); if (!(n <= ctx.tN)) return;
   if (!pc.w8) pc.w8 = [0, 0, 0, 0, 0, 0, 0, 0];
-  if (n >= ctx.s0) pc.w8[Math.floor((n - ctx.s0) / 7)]++;
-  if (n > ctx.tN - 28) pc.n28 = (pc.n28 || 0) + 1;
+  if (!pc.w8c) pc.w8c = [0, 0, 0, 0, 0, 0, 0, 0];
+  var k = n >= ctx.s0 ? Math.floor((n - ctx.s0) / 7) : -1, in28 = n > ctx.tN - 28;
+  if (k >= 0) pc.w8c[k]++;
+  if (in28) pc.n28c = (pc.n28c || 0) + 1;
+  if (vg) return;
+  if (k >= 0) pc.w8[k]++;
+  if (in28) pc.n28 = (pc.n28 || 0) + 1;
   if (!pc.lastAll || d > pc.lastAll) pc.lastAll = d;
 }
 /* v2.7.1: giờ KÝ THẬT trên app — cột "Ký điện tử" "app 08:12 · ký: Quyết" → "08:12" (dòng nhập tay, không có vết app → '')
@@ -107,7 +115,7 @@ function statsMem_(ba){
   var hdr = sh.getRange(hr, 1, 1, lastC).getValues()[0].map(function (h) { return lbNorm_(h); });
   function col(){ for (var a = 0; a < arguments.length; a++) { var i = hdr.indexOf(arguments[a]); if (i >= 0) return i; } return -1; }
   var iId = col('#', 'ma', 'ma hv'), iName = col('ten'), iPrice = col('don gia buoi', 'don gia'), iCoach = col('coach'), iPlan = col('buoi/tuan'),
-      iSeller = col('nguoi ban goi'), iSold = col('ngay ban ho', 'ngay ky'), iLeft = col('con lai');   /* 07/10: cột "Ngày bán hộ" đổi tên "Ngày ký" */
+      iSeller = col('nguoi ban goi'), iSold = col('ngay ban ho', 'ngay ky'), iLeft = col('con lai'), iDur = col('buoi du');   /* 07/10: cột "Ngày bán hộ" đổi tên "Ngày ký" · v2.26: "Buổi dư" = buổi mất khi hết hạn */
   if (iName < 0) return null;
   var out = { byId: {}, byName: {}, rows: [] };
   var last = (typeof admLastRow_ === 'function') ? admLastRow_(sh, iName + 1, hr + 1) : sh.getLastRow();
@@ -116,7 +124,8 @@ function statsMem_(ba){
   for (var r = 0; r < v.length; r++) {
     var x = v[r], name = String(x[iName] || '').trim(); if (!name) continue;
     var m = { r: r + 1, id: iId >= 0 ? String(x[iId]).trim() : '', name: name, price: iPrice >= 0 ? statsNum_(x[iPrice]) : 0, coach: iCoach >= 0 ? String(x[iCoach] || '').trim() : '',
-      plan: iPlan >= 0 ? statsNum_(x[iPlan]) : 0, seller: iSeller >= 0 ? String(x[iSeller] || '').trim() : '', sold: iSold >= 0 ? statsIso_(x[iSold], tz) : '', left: iLeft >= 0 ? statsNum_(x[iLeft]) : 0 };
+      plan: iPlan >= 0 ? statsNum_(x[iPlan]) : 0, seller: iSeller >= 0 ? String(x[iSeller] || '').trim() : '', sold: iSold >= 0 ? statsIso_(x[iSold], tz) : '', left: iLeft >= 0 ? statsNum_(x[iLeft]) : 0,
+      dur: iDur >= 0 ? statsNum_(x[iDur]) : 0 };
     if (m.id) out.byId[m.id] = m;
     (out.byName[name] = out.byName[name] || []).push(m);
     out.rows.push(m);
@@ -179,7 +188,8 @@ function statsApi_(body){
       var pc = out.perClient[who] || (out.perClient[who] = { m: 0, last: '' });
       if (d.slice(0, 7) === month) { out.days[d] = (out.days[d] || 0) + 1; out.monthTotal++; if (!vg) pc.m++; }
       if (vg) { if (d === today) (out.absent || (out.absent = [])).push(who); }
-      else { if (d < today && d > pc.last) pc.last = d; statsPcAdd_(pc, d, ctx); }
+      else { if (d < today && d > pc.last) pc.last = d; }
+      statsPcAdd_(pc, d, ctx, vg);                                     /* v2.26: Vắng vào w8c/n28c (nhịp tiêu gói), không vào w8/n28 */
       if (d >= cFrom && d <= today) raw.push({ d: d, t: statsSigned_(r[L.sig]), n: name, id: String(r[L.id] || '').trim(), co: String(r[L.co] || '').trim(), r: i, v: vg ? 1 : 0 });
     }
   }
@@ -208,7 +218,9 @@ function statsApi_(body){
     sess.forEach(function (x) { delete x.r; });
     for (var mk in mon) mon[mk] = Math.round(mon[mk]);
     out.sess = sess; out.comMon = mon;
-    if (mem) { out.plan = {}; mem.rows.forEach(function (m) { if (statsCoachKey_(m.coach) !== key) return; var x = I.byMrow[m.r], k = idKeyOf_(keyOf, x ? x.P : null, m.name); if (!(k in out.plan) || m.left > 0) out.plan[k] = m.plan; }); }
+    if (mem) { out.plan = {}; out.dur = {}; mem.rows.forEach(function (m) { if (statsCoachKey_(m.coach) !== key) return; var x = I.byMrow[m.r], k = idKeyOf_(keyOf, x ? x.P : null, m.name);
+      if (!(k in out.plan) || m.left > 0) out.plan[k] = m.plan;
+      if (!(m.left > 0) && m.dur > 0) out.dur[k] = Math.max(out.dur[k] || 0, m.dur);   /* v2.26: buổi mất của gói đã kết thúc (nhóm "Đã mất buổi") */ }); }
   } catch (err0) { out.comError = String(err0).slice(0, 200); }
 
   /* 2. COMMISSION: dòng của coach trong "TỔNG HỢP THEO COACH", cột Σ Hoa hồng (H). Tháng = ô "THÁNG:". */
